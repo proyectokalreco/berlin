@@ -6,6 +6,7 @@ const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
 
 const authRoutes     = require('./modules/auth/routes');
+const panelRoutes    = require('./modules/panel/routes');
 const berlinRoutes = require('./modules/berlin/routes');
 const errorHandler   = require('./middleware/errorHandler');
 
@@ -61,6 +62,7 @@ app.get('/health', (req, res) => {
 // ── Rutas API — SOLO auth + berlin (backend dedicado, no comparte
 // proceso ni rutas con kalreco_backend)
 app.use('/api/auth',     authLimiter, authRoutes);
+app.use('/api/panel',    apiLimiter,  panelRoutes);
 app.use('/api/berlin', apiLimiter,  berlinRoutes);
 
 // ── 404

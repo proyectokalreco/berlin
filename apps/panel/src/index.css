@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Pacifico&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-white font-sans;
+  }
+
+  /* Dropdown options — fondo oscuro en Windows/Chrome */
+  select option {
+    background-color: #0F0A1E;
+    color: #ffffff;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-brand-navy; }
+  ::-webkit-scrollbar-thumb { @apply bg-brand-card rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-brand-teal; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SCROLL TÁCTIL NATIVO — Pantalla táctil (Windows touch / tablet)
+   Permite desplazar con el dedo igual que en un celular,
+   sin necesidad de tocar la barra de desplazamiento.
+   ────────────────────────────────────────────────────────────── */
+
+/* html/body: permite tap + scroll, evita zoom con doble toque */
+html, body {
+  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scroll vertical con el dedo en cualquier contenedor */
+.overflow-y-auto,
+.overflow-y-scroll {
+  touch-action: pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;  /* no arrastra el scroll a la página */
+}
+
+/* Scroll horizontal con el dedo (ej. tabs de categorías en POS) */
+.overflow-x-auto,
+.overflow-x-scroll {
+  touch-action: pan-x pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Scroll en ambas direcciones */
+.overflow-auto,
+.overflow-scroll {
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   TOUCH TARGETS — Área mínima 44×44px en dispositivos táctiles
+   Solo aplica cuando el dispositivo NO tiene cursor (touch/pen).
+   No afecta desktop ni laptop con mouse.
+   ────────────────────────────────────────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  [role="button"],
+  a[href],
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Excepción: botones inline pequeños dentro de tablas/listas
+     que deben mantener su tamaño pero ampliar el área táctil */
+  td button,
+  .table-action-btn {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Inputs siempre 44px mínimo para fácil tap */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  textarea {
+    min-height: 44px;
+  }
+}
