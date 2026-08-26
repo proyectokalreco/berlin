@@ -1,0 +1,30 @@
+# ============================================================
+# EL BARRIL — Stack propio (VPS Contabo, mismo VPS que Kalreco)
+# Comparte la MISMA base de datos Supabase (kalreco_db) via la
+# red Docker externa "infra_kalreco" (verificada 2026-08-26 con
+# `docker inspect kalreco_backend`), pero corre en sus PROPIOS
+# contenedores — build, deploy y ciclo de vida totalmente
+# independientes del stack de Kalreco.
+#
+# Comando de deploy:
+#   cd /opt/elbarril/infra && docker compose up -d --build
+#
+# Requiere infra/.env (NO commiteado — copiar de infra/.env.example
+# y completar con los valores reales de kalreco/infra/.env)
+# ============================================================
+
+networks:
+  infra_kalreco:
+    external: true
+
+services:
+  backend:
+    build:
+      context: ../apps/backend
+      dockerfile: Dockerfile
+    container_name: elbarril_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - infra_kalreco
