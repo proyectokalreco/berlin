@@ -190,12 +190,12 @@ const crear = async (req, res, next) => {
 };
 
 // ── POST /api/panaderia/ventas/:id/anular
-// Solo admin_elbarril / admin / super_admin
+// Solo admin_berlin / admin / super_admin
 const anular = async (req, res, next) => {
   try {
     const { motivo } = req.body;
 
-    if (!['super_admin', 'admin', 'admin_elbarril'].includes(req.user.rol)) {
+    if (!['super_admin', 'admin', 'admin_berlin'].includes(req.user.rol)) {
       return res.status(403).json({ error: 'Solo el administrador puede anular facturas' });
     }
 

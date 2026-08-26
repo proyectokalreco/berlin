@@ -1,5 +1,5 @@
 # ============================================================
-# EL BARRIL — Stack propio (VPS Contabo, mismo VPS que Kalreco)
+# BERLÍN — Stack propio (VPS Contabo, mismo VPS que Kalreco)
 # Comparte la MISMA base de datos Supabase (kalreco_db) via la
 # red Docker externa "infra_kalreco" (verificada 2026-08-26 con
 # `docker inspect kalreco_backend`), pero corre en sus PROPIOS
@@ -13,17 +13,17 @@
 # Kalreco. Resultado: (proyecto=infra, servicio=backend) colisionó y
 # un `docker compose up` acá RECREÓ/REEMPLAZÓ kalreco_backend, tumbando
 # producción de Tulio/Hogar/Esquina por varios minutos.
-# El campo `name:` de abajo fija el proyecto en "elbarril" de forma
+# El campo `name:` de abajo fija el proyecto en "berlin" de forma
 # EXPLÍCITA -- ya no depende del nombre de la carpeta. NUNCA quitarlo.
 #
 # Comando de deploy:
-#   cd /opt/elbarril/infra && docker compose up -d --build
+#   cd /opt/berlin/infra && docker compose up -d --build
 #
 # Requiere infra/.env (NO commiteado — copiar de infra/.env.example
 # y completar con los valores reales de kalreco/infra/.env)
 # ============================================================
 
-name: elbarril
+name: berlin
 
 networks:
   infra_kalreco:
@@ -34,7 +34,7 @@ services:
     build:
       context: ../apps/backend
       dockerfile: Dockerfile
-    container_name: elbarril_backend
+    container_name: berlin_backend
     restart: unless-stopped
     env_file:
       - .env

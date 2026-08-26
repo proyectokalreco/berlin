@@ -106,7 +106,7 @@ const tomarMesa = async (req, res, next) => {
     const mesaId   = req.params.id
     const { id: userId, nombre, apellido, negocio_id: negocioId, rol } = req.user
     const hoy      = fechaColombia()
-    const ROLES_SIN_CAJA = ['admin_elbarril', 'admin', 'super_admin']
+    const ROLES_SIN_CAJA = ['admin_berlin', 'admin', 'super_admin']
 
     // 1. Verificar que haya caja abierta en este negocio (admin/superadmin exentos)
     const { data: negocioUsers } = await supabase.from('usuarios')

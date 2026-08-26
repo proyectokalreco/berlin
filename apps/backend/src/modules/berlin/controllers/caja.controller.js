@@ -220,7 +220,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { monto_final_real = 0, notas_cierre } = req.body;
-    const isAdmin = ['super_admin', 'admin', 'admin_elbarril'].includes(req.user.rol);
+    const isAdmin = ['super_admin', 'admin', 'admin_berlin'].includes(req.user.rol);
 
     const { data: turno, error: errTurno } = await supabase
       .from('br_turnos_caja')
@@ -319,7 +319,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
 const historial = async (req, res, next) => {
   try {
     const { limit = 30 } = req.query;
-    const isAdmin = ['super_admin','admin','admin_elbarril'].includes(req.user.rol);
+    const isAdmin = ['super_admin','admin','admin_berlin'].includes(req.user.rol);
 
     let query = supabase
       .from('br_turnos_caja')

@@ -7,7 +7,7 @@ const CARGO_A_ROL = {
   cajero:         'cajero',
   vendedor:       'vendedor',
   domicilios:     'domiciliario',
-  administrativo: 'admin_elbarril',
+  administrativo: 'admin_berlin',
   otro:           'vendedor',
 };
 
@@ -20,8 +20,8 @@ const listar = async (req, res, next) => {
       .eq('activo', activo !== 'false')
       .order('nombre');
 
-    // admin_elbarril solo ve su negocio
-    if (req.user.rol === 'admin_elbarril' && req.user.negocio_id) {
+    // admin_berlin solo ve su negocio
+    if (req.user.rol === 'admin_berlin' && req.user.negocio_id) {
       query = query.eq('negocio_id', req.user.negocio_id);
     }
 
@@ -42,8 +42,8 @@ const crear = async (req, res, next) => {
       usuario_email, usuario_password,
     } = req.body;
 
-    // negocio_id: admin_elbarril usa el suyo; super_admin/admin puede elegir
-    const negocio_id = req.user.rol === 'admin_elbarril'
+    // negocio_id: admin_berlin usa el suyo; super_admin/admin puede elegir
+    const negocio_id = req.user.rol === 'admin_berlin'
       ? req.user.negocio_id
       : (req.body.negocio_id || req.user.negocio_id || null);
 
@@ -157,7 +157,7 @@ const eliminar = async (req, res, next) => {
     const { id } = req.params;
 
     // Solo roles con permiso de gestión de personal
-    const rolesPermitidos = ['super_admin', 'admin', 'admin_elbarril'];
+    const rolesPermitidos = ['super_admin', 'admin', 'admin_berlin'];
     if (!rolesPermitidos.includes(req.user.rol)) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar empleados' });
     }
@@ -172,8 +172,8 @@ const eliminar = async (req, res, next) => {
     if (empErr) throw empErr;
     if (!emp) return res.status(404).json({ error: 'Empleado no encontrado' });
 
-    // admin_elbarril solo puede eliminar empleados de su propio negocio
-    if (req.user.rol === 'admin_elbarril' && emp.negocio_id !== req.user.negocio_id) {
+    // admin_berlin solo puede eliminar empleados de su propio negocio
+    if (req.user.rol === 'admin_berlin' && emp.negocio_id !== req.user.negocio_id) {
       return res.status(403).json({ error: 'No tienes permiso para eliminar este empleado' });
     }
 

@@ -1,9 +1,9 @@
 /**
  * Script: create-admin.js
- * Crea el usuario admin.elbarril@kalreco.com en la BD compartida (`usuarios`).
+ * Crea el usuario admin.berlin@kalreco.com en la BD compartida (`usuarios`).
  *
  * Uso (dentro del contenedor, una vez desplegado):
- *   docker exec -it elbarril_backend node src/scripts/create-admin.js
+ *   docker exec -it berlin_backend node src/scripts/create-admin.js
  *
  * O localmente (con las mismas env vars que usa el backend):
  *   node src/scripts/create-admin.js
@@ -23,19 +23,19 @@ const supabase = createClient(
   }
 );
 
-// ── Admin de El Barril ────────────────────────────────────────
+// ── Admin de Berlín ────────────────────────────────────────
 const ADMIN = {
-  email:      'admin.elbarril@kalreco.com',
+  email:      'admin.berlin@kalreco.com',
   nombre:     'Admin',
-  apellido:   'El Barril',
-  password:   'elbarril2026*',   // ← cambiar desde el panel después del primer login
-  rol:        'admin_elbarril',
-  negocio_id: '916a3918-6157-4b2a-9a30-36b42b1906d4',  // Tenant ID de El Barril (migración 082)
+  apellido:   'Berlín',
+  password:   'berlin2026*',   // ← cambiar desde el panel después del primer login
+  rol:        'admin_berlin',
+  negocio_id: '916a3918-6157-4b2a-9a30-36b42b1906d4',  // Tenant ID de Berlín (migración 082)
 };
 // ─────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('\n🍺 El Barril — Creación de usuario administrador\n');
+  console.log('\n🍺 Berlín — Creación de usuario administrador\n');
 
   const { data: existing } = await supabase
     .from('usuarios')

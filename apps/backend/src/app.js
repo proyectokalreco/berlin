@@ -6,7 +6,7 @@ const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
 
 const authRoutes     = require('./modules/auth/routes');
-const elbarrilRoutes = require('./modules/elbarril/routes');
+const berlinRoutes = require('./modules/berlin/routes');
 const errorHandler   = require('./middleware/errorHandler');
 
 const app  = express();
@@ -51,17 +51,17 @@ if (process.env.NODE_ENV !== 'test') {
 app.get('/health', (req, res) => {
   res.json({
     status:      'ok',
-    negocio:     'elbarril',
+    negocio:     'berlin',
     version:     '1.0.0',
     environment: process.env.NODE_ENV,
     timestamp:   new Date().toISOString(),
   });
 });
 
-// ── Rutas API — SOLO auth + elbarril (backend dedicado, no comparte
+// ── Rutas API — SOLO auth + berlin (backend dedicado, no comparte
 // proceso ni rutas con kalreco_backend)
 app.use('/api/auth',     authLimiter, authRoutes);
-app.use('/api/elbarril', apiLimiter,  elbarrilRoutes);
+app.use('/api/berlin', apiLimiter,  berlinRoutes);
 
 // ── 404
 app.use((req, res) => {
@@ -73,7 +73,7 @@ app.use(errorHandler);
 
 // ── Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`\n🍺 El Barril API corriendo en puerto ${PORT}`);
+  console.log(`\n🍺 Berlín API corriendo en puerto ${PORT}`);
   console.log(`🌍 Entorno: ${process.env.NODE_ENV}`);
   console.log(`📡 Health: http://localhost:${PORT}/health\n`);
 });

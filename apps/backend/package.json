@@ -1,7 +1,7 @@
 {
-  "name": "elbarril-backend",
+  "name": "berlin-backend",
   "version": "1.0.0",
-  "description": "API Backend - Restaurante Bar El Barril (negocio independiente, misma BD Supabase de Kalreco)",
+  "description": "API Backend - Restaurante Bar Berlín (negocio independiente, misma BD Supabase de Kalreco)",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",

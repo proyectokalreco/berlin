@@ -7,12 +7,12 @@ const { authenticate } = require('../../middleware/auth');
 
 const router = express.Router();
 
-// ⚠️ Roles permitidos a entrar por este login — El Barril es un negocio
-// aislado: SOLO admin_elbarril + super_admin (soporte de plataforma).
+// ⚠️ Roles permitidos a entrar por este login — Berlín es un negocio
+// aislado: SOLO admin_berlin + super_admin (soporte de plataforma).
 // A diferencia del login compartido de Kalreco, acá el candado va explícito
 // en el backend (no solo en el frontend) — así ningún otro rol con
 // negocio_id NULL (ej. admin_grupo) puede entrar aunque adivine la URL.
-const ROLES_PERMITIDOS = ['super_admin', 'admin_elbarril'];
+const ROLES_PERMITIDOS = ['super_admin', 'admin_berlin'];
 
 // ── POST /api/auth/login
 router.post('/login', [
@@ -40,7 +40,7 @@ router.post('/login', [
     return res.status(403).json({ error: 'Usuario inactivo. Contacte al administrador.' });
   }
 
-  // Candado de negocio: solo super_admin / admin_elbarril entran por este login.
+  // Candado de negocio: solo super_admin / admin_berlin entran por este login.
   if (!ROLES_PERMITIDOS.includes(user.rol)) {
     return res.status(403).json({ error: 'No tienes acceso a este negocio.' });
   }
