@@ -23,7 +23,7 @@ function BerlinLogo() {
   if (!imgError) {
     return (
       <img
-        src="/logos/berlin.png"
+        src={`${import.meta.env.BASE_URL}logos/berlin.png`}
         alt="Berlín Café Bar"
         onError={() => setImgError(true)}
         className="h-14 w-auto max-w-[220px] rounded-xl object-contain"

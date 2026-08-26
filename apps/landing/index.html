@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Berlín Café Bar — Restaurante · Bar · Cafetería</title>
+  <meta name="description" content="Berlín Café Bar — Restaurante, Bar y Cafetería. Reserva tu mesa, conoce nuestro horario y ubicación." />
+  <link rel="icon" href="/icons/berlin-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Pacifico&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark:   '#1A120B',
+            navy:   '#241811',
+            card:   '#2E1F15',
+            gold:   '#D9A652',
+            goldk:  '#A15F2F',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            script: ["'Pacifico'", 'cursive'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #1A120B; color: #fff; overflow-x: hidden; }
+    .hero-bg {
+      background:
+        radial-gradient(ellipse 90% 60% at 50% -10%, rgba(217,166,82,0.14) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 80% 80%, rgba(161,95,47,0.10) 0%, transparent 60%),
+        #1A120B;
+    }
+    .glass {
+      background: rgba(46,31,21,0.7);
+      border: 1px solid rgba(217,166,82,0.15);
+      backdrop-filter: blur(12px);
+    }
+    .lift { transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; }
+    .lift:hover { transform: translateY(-4px); border-color: rgba(217,166,82,0.4) !important; box-shadow: 0 16px 32px rgba(217,166,82,0.08); }
+  </style>
+</head>
+<body class="hero-bg min-h-screen">
+
+  <!-- ── Header ────────────────────────────────────────────── -->
+  <header class="max-w-6xl mx-auto flex items-center justify-between px-6 py-6">
+    <div class="flex items-center gap-3">
+      <img src="/logos/berlin.png" alt="Berlín Café Bar" class="h-12 w-auto object-contain" />
+      <span class="font-script text-xl text-gold">Berlín Café Bar</span>
+    </div>
+    <a href="/login"
+       class="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-white/70 hover:text-gold transition-colors">
+      Iniciar sesión →
+    </a>
+  </header>
+
+  <!-- ── Hero ──────────────────────────────────────────────── -->
+  <section class="max-w-4xl mx-auto text-center px-6 pt-10 pb-16">
+    <p class="text-xs font-bold tracking-[0.3em] uppercase text-goldk mb-4">Restaurante &bull; Bar &bull; Cafetería</p>
+    <h1 class="font-script text-5xl sm:text-6xl text-gold mb-5" style="text-shadow: 0 2px 12px rgba(0,0,0,0.4)">
+      Berlín Café Bar
+    </h1>
+    <p class="text-white/60 text-lg max-w-xl mx-auto">
+      Un lugar para disfrutar buena comida, buena cerveza y buena compañía.
+    </p>
+  </section>
+
+  <!-- ── Info básica ───────────────────────────────────────── -->
+  <section class="max-w-4xl mx-auto px-6 pb-20 grid gap-4 sm:grid-cols-3">
+
+    <!-- Dirección — DATO FICTICIO, actualizar cuando el cliente lo confirme -->
+    <div class="glass lift rounded-2xl p-6 text-center">
+      <div class="text-2xl mb-3">📍</div>
+      <p class="text-xs font-bold uppercase tracking-wide text-goldk mb-1">Dirección</p>
+      <p class="text-sm text-white/70">Don Matías, Antioquia<br/>(pendiente confirmar)</p>
+    </div>
+
+    <!-- Teléfono — DATO FICTICIO -->
+    <div class="glass lift rounded-2xl p-6 text-center">
+      <div class="text-2xl mb-3">📞</div>
+      <p class="text-xs font-bold uppercase tracking-wide text-goldk mb-1">Teléfono</p>
+      <p class="text-sm text-white/70">300 000 0000<br/>(pendiente confirmar)</p>
+    </div>
+
+    <!-- Horario — DATO FICTICIO -->
+    <div class="glass lift rounded-2xl p-6 text-center">
+      <div class="text-2xl mb-3">🕒</div>
+      <p class="text-xs font-bold uppercase tracking-wide text-goldk mb-1">Horario</p>
+      <p class="text-sm text-white/70">Mar – Dom<br/>12:00 m. – 10:00 p.m.</p>
+    </div>
+
+  </section>
+
+  <!-- ── Footer ────────────────────────────────────────────── -->
+  <footer class="border-t border-white/5 py-8">
+    <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p class="text-xs text-white/30">Berlín Café Bar © 2026</p>
+      <a href="/login" class="text-xs text-white/30 hover:text-gold transition-colors">
+        Grupo DK Soluciones · Plataforma Kalreco
+      </a>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -51,3 +51,12 @@ services:
       - infra_kalreco
     depends_on:
       - backend
+
+  landing:
+    build:
+      context: ../apps/landing
+      dockerfile: Dockerfile
+    container_name: berlin_landing
+    restart: unless-stopped
+    networks:
+      - infra_kalreco

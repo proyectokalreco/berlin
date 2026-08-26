@@ -68,7 +68,7 @@ export default function Login() {
         <div className="text-center mb-8 select-none">
           {!imgError ? (
             <img
-              src="/logos/berlin.png"
+              src={`${import.meta.env.BASE_URL}logos/berlin.png`}
               alt="Berlín Café Bar"
               onError={() => setImgError(true)}
               className="h-28 w-auto mx-auto mb-5 object-contain drop-shadow-xl"

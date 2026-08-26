@@ -36,7 +36,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename="/login">
         <Routes>
           <Route path="/login" element={<Login />} />
 
