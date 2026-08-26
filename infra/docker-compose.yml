@@ -40,3 +40,14 @@ services:
       - .env
     networks:
       - infra_kalreco
+
+  panel:
+    build:
+      context: ../apps/panel
+      dockerfile: Dockerfile
+    container_name: berlin_panel
+    restart: unless-stopped
+    networks:
+      - infra_kalreco
+    depends_on:
+      - backend
