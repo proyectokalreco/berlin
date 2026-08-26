@@ -1,112 +1,316 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Berlín Café Bar — Restaurante · Bar · Cafetería</title>
-  <meta name="description" content="Berlín Café Bar — Restaurante, Bar y Cafetería. Reserva tu mesa, conoce nuestro horario y ubicación." />
-  <link rel="icon" href="/icons/berlin-192.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Pacifico&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            dark:   '#1A120B',
-            navy:   '#241811',
-            card:   '#2E1F15',
-            gold:   '#D9A652',
-            goldk:  '#A15F2F',
-          },
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            script: ["'Pacifico'", 'cursive'],
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Café Bar Berlín</title>
+<meta name="description" content="Café Bar Berlín — Donde la tradición se encuentra con el sabor. Café de especialidad, coctelería de autor y pastelería artesanal." />
+<link rel="icon" href="/icons/berlin-192.png" />
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#ebe1d6",
+                      "on-tertiary": "#353028",
+                      "on-primary-fixed": "#2c1600",
+                      "surface-container-highest": "#353535",
+                      "tertiary-fixed-dim": "#cec5bb",
+                      "secondary-fixed-dim": "#dec1af",
+                      "on-tertiary-fixed": "#1f1b14",
+                      "outline-variant": "#50453b",
+                      "on-surface": "#e5e2e1",
+                      "error": "#ffb4ab",
+                      "on-error-container": "#ffdad6",
+                      "inverse-primary": "#7d562d",
+                      "tertiary-container": "#b4aba1",
+                      "secondary": "#dec1af",
+                      "tertiary": "#cfc6bc",
+                      "secondary-container": "#574335",
+                      "primary-fixed-dim": "#f0bd8b",
+                      "on-primary-fixed-variant": "#623f18",
+                      "surface-container-low": "#1c1b1b",
+                      "on-secondary-fixed-variant": "#574335",
+                      "inverse-on-surface": "#313030",
+                      "on-secondary-fixed": "#28180d",
+                      "primary-fixed": "#ffdcbd",
+                      "on-secondary": "#3f2c20",
+                      "on-tertiary-fixed-variant": "#4c463e",
+                      "background": "#131313",
+                      "outline": "#9c8e82",
+                      "on-primary": "#482904",
+                      "on-background": "#e5e2e1",
+                      "on-surface-variant": "#d4c4b7",
+                      "surface-bright": "#393939",
+                      "surface-dim": "#131313",
+                      "surface-container-high": "#2a2a2a",
+                      "surface-container-lowest": "#0e0e0e",
+                      "on-tertiary-container": "#454038",
+                      "surface": "#131313",
+                      "surface-tint": "#f0bd8b",
+                      "surface-variant": "#353535",
+                      "on-primary-container": "#5b3912",
+                      "primary": "#f2be8c",
+                      "error-container": "#93000a",
+                      "surface-container": "#20201f",
+                      "on-secondary-container": "#ccb09f",
+                      "inverse-surface": "#e5e2e1",
+                      "primary-container": "#d4a373",
+                      "on-error": "#690005",
+                      "secondary-fixed": "#fbddca"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "2rem",
+                      "unit-lg": "2rem",
+                      "unit-xs": "0.25rem",
+                      "margin-mobile": "1.5rem",
+                      "unit-md": "1rem",
+                      "margin-desktop": "4rem",
+                      "container-max": "1280px",
+                      "unit-xl": "4rem",
+                      "unit-sm": "0.5rem"
+              },
+              "fontFamily": {
+                      "headline-xl": [
+                              "Libre Caslon Text"
+                      ],
+                      "body-md": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Manrope"
+                      ],
+                      "headline-lg": [
+                              "Libre Caslon Text"
+                      ],
+                      "label-md": [
+                              "Geist"
+                      ],
+                      "label-sm": [
+                              "Geist"
+                      ],
+                      "headline-md": [
+                              "Libre Caslon Text"
+                      ],
+                      "headline-lg-mobile": [
+                              "Libre Caslon Text"
+                      ]
+              },
+              "fontSize": {
+                      "headline-xl": [
+                              "60px",
+                              {
+                                      "lineHeight": "72px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "40px",
+                              {
+                                      "lineHeight": "48px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.08em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-md": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
           },
         }
-      }
-    }
-  </script>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Inter', system-ui, sans-serif; background: #1A120B; color: #fff; overflow-x: hidden; }
-    .hero-bg {
-      background:
-        radial-gradient(ellipse 90% 60% at 50% -10%, rgba(217,166,82,0.14) 0%, transparent 65%),
-        radial-gradient(ellipse 50% 40% at 80% 80%, rgba(161,95,47,0.10) 0%, transparent 60%),
-        #1A120B;
-    }
-    .glass {
-      background: rgba(46,31,21,0.7);
-      border: 1px solid rgba(217,166,82,0.15);
-      backdrop-filter: blur(12px);
-    }
-    .lift { transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; }
-    .lift:hover { transform: translateY(-4px); border-color: rgba(217,166,82,0.4) !important; box-shadow: 0 16px 32px rgba(217,166,82,0.08); }
-  </style>
+      </script>
+<style>
+        body { background-color: #1A1A1A; color: #e5e2e1; }
+        .coffee-pattern {
+            background-image: radial-gradient(#d4a373 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.05;
+        }
+      </style>
 </head>
-<body class="hero-bg min-h-screen">
-
-  <!-- ── Header ────────────────────────────────────────────── -->
-  <header class="max-w-6xl mx-auto flex items-center justify-between px-6 py-6">
-    <div class="flex items-center gap-3">
-      <img src="/logos/berlin.png" alt="Berlín Café Bar" class="h-12 w-auto object-contain" />
-      <span class="font-script text-xl text-gold">Berlín Café Bar</span>
-    </div>
-    <a href="/login"
-       class="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-white/70 hover:text-gold transition-colors">
-      Iniciar sesión →
-    </a>
-  </header>
-
-  <!-- ── Hero ──────────────────────────────────────────────── -->
-  <section class="max-w-4xl mx-auto text-center px-6 pt-10 pb-16">
-    <p class="text-xs font-bold tracking-[0.3em] uppercase text-goldk mb-4">Restaurante &bull; Bar &bull; Cafetería</p>
-    <h1 class="font-script text-5xl sm:text-6xl text-gold mb-5" style="text-shadow: 0 2px 12px rgba(0,0,0,0.4)">
-      Berlín Café Bar
-    </h1>
-    <p class="text-white/60 text-lg max-w-xl mx-auto">
-      Un lugar para disfrutar buena comida, buena cerveza y buena compañía.
-    </p>
-  </section>
-
-  <!-- ── Info básica ───────────────────────────────────────── -->
-  <section class="max-w-4xl mx-auto px-6 pb-20 grid gap-4 sm:grid-cols-3">
-
-    <!-- Dirección — DATO FICTICIO, actualizar cuando el cliente lo confirme -->
-    <div class="glass lift rounded-2xl p-6 text-center">
-      <div class="text-2xl mb-3">📍</div>
-      <p class="text-xs font-bold uppercase tracking-wide text-goldk mb-1">Dirección</p>
-      <p class="text-sm text-white/70">Don Matías, Antioquia<br/>(pendiente confirmar)</p>
-    </div>
-
-    <!-- Teléfono — DATO FICTICIO -->
-    <div class="glass lift rounded-2xl p-6 text-center">
-      <div class="text-2xl mb-3">📞</div>
-      <p class="text-xs font-bold uppercase tracking-wide text-goldk mb-1">Teléfono</p>
-      <p class="text-sm text-white/70">300 000 0000<br/>(pendiente confirmar)</p>
-    </div>
-
-    <!-- Horario — DATO FICTICIO -->
-    <div class="glass lift rounded-2xl p-6 text-center">
-      <div class="text-2xl mb-3">🕒</div>
-      <p class="text-xs font-bold uppercase tracking-wide text-goldk mb-1">Horario</p>
-      <p class="text-sm text-white/70">Mar – Dom<br/>12:00 m. – 10:00 p.m.</p>
-    </div>
-
-  </section>
-
-  <!-- ── Footer ────────────────────────────────────────────── -->
-  <footer class="border-t border-white/5 py-8">
-    <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-      <p class="text-xs text-white/30">Berlín Café Bar © 2026</p>
-      <a href="/login" class="text-xs text-white/30 hover:text-gold transition-colors">
-        Grupo DK Soluciones · Plataforma Kalreco
-      </a>
-    </div>
-  </footer>
-
-</body>
-</html>
+<body class="antialiased min-h-screen flex flex-col font-body-md text-body-md bg-background text-on-background">
+<!-- Navigation -->
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-primary/30">
+<nav class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
+<div class="font-headline-md text-headline-md font-bold text-primary">Café Bar Berlín</div>
+<ul class="hidden md:flex items-center gap-6">
+<li><a class="font-label-md text-label-md text-primary font-bold border-b-2 border-primary pb-1 cursor-pointer transition-transform active:scale-95" href="#inicio">Inicio</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer transition-transform active:scale-95" href="#nosotros">Nosotros</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer transition-transform active:scale-95" href="#menu">Menú</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer transition-transform active:scale-95" href="https://wa.me/573117085556">Reservas</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer transition-transform active:scale-95" href="#contacto">Contacto</a></li>
+</ul>
+<div class="hidden md:flex items-center gap-4">
+<a href="/login" class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" title="Acceso al panel del negocio">Iniciar sesión</a>
+<button class="bg-primary-container text-on-primary-fixed font-label-md text-label-md px-6 py-2 rounded-DEFAULT uppercase tracking-wider hover:bg-primary transition-colors">Reservar Mesa</button>
+</div>
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</nav>
+</header>
+<main class="flex-grow pt-24">
+<!-- Hero Section -->
+<section id="inicio" class="relative w-full h-[80vh] flex items-center justify-center overflow-hidden">
+<div class="absolute inset-0 z-0" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAPw5c_mzS-ZDB9N6Q8CnGDBqHxw6nxiZlN6rZw9C7nUHZZiwCWxYXZ10-J5Vn4a_QhU02Inj5sEQPo8dTe1U6FIppJxQllQN2Y5guh9B2NHY7RoEnnPRATeAAisDaE_ulb94zU9JNM8BULZbrh1weePXrs2xupatLgt6JidKv4aMqdCi9dbqFqrU_ll2_x_Fl1UcPjdarB1P_Lxriz1HnRcYyOI0VrrqV0lOm4e7XlXnea6-uYc0bv'); background-size: cover; background-position: center;">
+<div class="absolute inset-0 bg-background/60"></div>
+</div>
+<div class="relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mx-auto">
+<img alt="Café Bar Berlín Logo" class="w-64 md:w-96 mb-8 drop-shadow-2xl" src="/logos/berlin.png"/>
+<h1 class="font-headline-lg-mobile md:font-headline-xl text-headline-lg-mobile md:text-headline-xl text-primary mb-6">Café Bar Berlín: Donde la tradición se encuentra con el sabor</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-10 max-w-2xl">Experimente la mezcla perfecta del encanto del Viejo Berlín y la sofisticación moderna.</p>
+<a href="#menu" class="bg-primary-container text-on-primary-fixed font-label-md text-label-md px-8 py-3 rounded-DEFAULT uppercase tracking-wider hover:bg-primary transition-colors inline-block">Ver Menú</a>
+</div>
+</section>
+<!-- About Section -->
+<section id="nosotros" class="py-unit-xl px-margin-mobile md:px-margin-desktop bg-surface relative">
+<div class="absolute inset-0 coffee-pattern z-0"></div>
+<div class="max-w-container-max mx-auto relative z-10">
+<div class="flex flex-col md:flex-row gap-12 items-center">
+<div class="w-full md:w-1/2">
+<img class="w-full h-auto rounded-DEFAULT border border-primary/20 object-cover shadow-2xl shadow-black/50" alt="Barista preparando café" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqK9wBLU70rXgIAdigrMgCxQEga477T6TND1Uby0m5KGK2kBhYIKDoXtB8X6czV9Q-KY0qKNhGVeRaj-qiUGctl3JkxqFnH7RXp1QpzRDetNSTLBNuIRVBFB34sw6T5YlEMn3M9dnHNWjXUK78u8TnNT_Mbl712NjZQWYIpJycOwHsMjBQ1XqYpQN0ZM1JYm-9xYy6sexeHN6bRCixebyWgb_gimbCiOxigTxzLW3Sp_HBjjiy8Fte"/>
+</div>
+<div class="w-full md:w-1/2 flex flex-col justify-center">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-6">Nuestra Historia</h2>
+<div class="w-16 h-px bg-primary/30 mb-6"></div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4">
+                            En Café Bar Berlín, nuestra pasión nace de la profunda tradición cafetera europea, fusionada con la vibrante energía de la noche moderna. Cada taza cuenta una historia de meticulosa selección, tostado artesanal y un amor inquebrantable por el detalle.
+                        </p>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8">
+                            Nuestros maestros baristas y mixólogos trabajan en sinergia para ofrecer una experiencia táctil y sensorial incomparable, en un ambiente diseñado para sentirse tan sustancial como un asiento de cuero vintage y tan estimulante como un espresso recién molido.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Highlights (Grid) -->
+<section id="menu" class="py-unit-xl px-margin-mobile md:px-margin-desktop bg-surface-container-high border-t border-primary/10">
+<div class="max-w-container-max mx-auto">
+<div class="text-center mb-12">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-4">Nuestra Especialidad</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl mx-auto">Deléitese con nuestra cuidada selección de productos artesanales.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Card 1 -->
+<div class="bg-surface p-6 border border-primary/20 rounded-DEFAULT hover:border-primary/50 transition-colors group flex flex-col h-full">
+<div class="h-48 mb-6 overflow-hidden rounded-DEFAULT">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Café de especialidad" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUVuRYERntYQNvo5gK_0ykdqaf_W8cJ5q-HR9gAzcOjs9UDtWkrUUGohupWV0voZf8dRqRAgiNV0RKQpRKocacY2r5VwVaCYAUsojz3hnuyDGQEFalQ6tep7JdaW-AuVhjKa8WoqQK9ZUb-z-PZ2ifTcvNEpGobU7UbXlfqJ8Fe8AvWRjebghajvWYDo93NZGWa04YtZGZiUbGWkrdngrDsVS6ATWqj1OlYToYdywHCHPcITbVVFyw"/>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-2">Café de Especialidad</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 flex-grow">Granos seleccionados de las mejores fincas, tostados con precisión para revelar perfiles de sabor complejos y únicos en cada taza.</p>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface p-6 border border-primary/20 rounded-DEFAULT hover:border-primary/50 transition-colors group flex flex-col h-full">
+<div class="h-48 mb-6 overflow-hidden rounded-DEFAULT">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Coctel de autor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDALQ8W3wD3EdzFnnfv4p6NgMIpz3zdvcJZjsR1xLnO_91X0uQr4ItPDH6w6u5KkFxOfPGqv_SR_twz4lzkgSBlAHaYcLR1oQJqKnnBeJqhTCglY8EvxV2WBAaYE6m4nDSv9ZuJeFIYmj9iFqscefFVEMgHAw5XSqiDr8vorsXrXUAFMGEOPqN8agf6bt_w_QYgfATcxi-3azKFBAqVnFJ098XdYbMAJxxlN2dEyMPsnpP84I0H9lUG"/>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-2">Coctelería de Autor</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 flex-grow">Creaciones líquidas que desafían lo convencional. Mixología de vanguardia utilizando destilados premium e ingredientes frescos.</p>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface p-6 border border-primary/20 rounded-DEFAULT hover:border-primary/50 transition-colors group flex flex-col h-full">
+<div class="h-48 mb-6 overflow-hidden rounded-DEFAULT">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Pastelería artesanal" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCw2Qe8vfX5lbSC0YfRvBzG23lJd1OSzOXSUlPKiuQRU1eu733FEoOogrc_JXcrP8Z3XdtTBS0bwQFum19W0_yHH9vIZSrFhwTNu1Pm2FsA8IHMM6cOdDkivGtOACvyZxysM7LlKA2rDvs5B03GLJ8koDYB_vxbzOrdC6sp7fUUNzjM6k8AfDh5Vqra5hdJEr_cf95vSa8ogW9m1cU3BsjJEH5owvx-6gie6kKABteYBEVaAo6Nv2Rr"/>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-2">Pastelería Artesanal</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 flex-grow">Dulces elaborados a diario por nuestros maestros pasteleros. El acompañamiento perfecto para elevar su experiencia cafetera.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Social Media Section -->
+<section id="contacto" class="py-16 bg-surface-container-low">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop text-center flex flex-col items-center">
+<h3 class="font-headline-md text-headline-md text-primary mb-6">Síguenos en nuestras redes</h3>
+<div class="flex gap-6">
+<a class="w-12 h-12 rounded-full border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors" href="#">
+<span class="material-symbols-outlined">photo_camera</span>
+</a>
+<a class="w-12 h-12 rounded-full border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors" href="#">
+<span class="material-symbols-outlined">thumb_up</span>
+</a>
+<a class="w-12 h-12 rounded-full border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors" href="https://wa.me/573117085556">
+<span class="material-symbols-outlined">travel_explore</span>
+</a>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest border-t border-primary/20 w-full">
+<div class="flex flex-col md:flex-row justify-between items-center px-margin-mobile md:px-margin-desktop py-unit-xl w-full max-w-container-max mx-auto gap-8">
+<div class="font-headline-md text-headline-md text-primary text-center md:text-left">
+                Café Bar Berlín
+            </div>
+<ul class="flex flex-wrap justify-center gap-6">
+<li><a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Política de Privacidad</a></li>
+<li><a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Términos de Servicio</a></li>
+<li><a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Aviso Legal</a></li>
+<li><a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="/login">Iniciar sesión</a></li>
+</ul>
+<div class="font-body-md text-body-md text-on-surface-variant text-center md:text-right">
+                © 2026 Café Bar Berlín. El mejor espresso y cócteles de Berlín.
+            </div>
+</div>
+</footer>
+<!-- WhatsApp Floating Action Button -->
+<a class="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-[#25D366] text-white px-4 py-3 rounded-full shadow-lg hover:scale-105 transition-transform duration-300" href="https://wa.me/573117085556">
+<span class="font-label-md text-sm font-bold uppercase tracking-wide">¡Contáctanos!</span>
+<svg class="w-6 h-6" fill="currentColor" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12.031 0C5.385 0 .003 5.378.003 12.023c0 2.124.553 4.195 1.603 6.012L.063 23.992l6.104-1.6c1.745.955 3.69 1.458 5.864 1.458h.005c6.645 0 12.028-5.383 12.028-12.03C24.064 5.385 18.677 0 12.031 0zm.005 21.848c-1.8 0-3.56-.484-5.105-1.401l-.366-.217-3.791.994.998-3.696-.238-.378a10.038 10.038 0 0 1-1.529-5.309c0-5.541 4.512-10.05 10.053-10.05 2.684 0 5.207 1.045 7.106 2.945A10.007 10.007 0 0 1 22.062 12.03c-.001 5.541-4.513 10.05-10.056 10.05v-.832zm5.518-7.535c-.302-.151-1.792-.885-2.071-.986-.279-.1-.482-.151-.684.151-.202.302-.782.986-.958 1.188-.176.202-.353.227-.655.076-1.503-.762-2.613-1.488-3.648-2.988-.266-.388.263-.362.852-1.542.076-.151.038-.278-.019-.379-.057-.101-.684-1.65-.937-2.261-.247-.597-.497-.517-.684-.526-.176-.01-.379-.01-.581-.01-.202 0-.53.076-.807.379-.278.302-1.06 1.036-1.06 2.524s1.085 2.926 1.236 3.128c.151.202 2.133 3.257 5.166 4.567.722.312 1.285.498 1.724.638.724.23 1.383.197 1.902.12.581-.086 1.792-.733 2.044-1.439.252-.707.252-1.312.176-1.439-.075-.126-.278-.201-.58-.352z"></path>
+</svg>
+</a>
+</body></html>
