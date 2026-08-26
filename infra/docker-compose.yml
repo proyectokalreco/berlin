@@ -6,12 +6,24 @@
 # contenedores — build, deploy y ciclo de vida totalmente
 # independientes del stack de Kalreco.
 #
+# ⚠️ CRÍTICO — INCIDENTE REAL 2026-08-26: esta carpeta y la de Kalreco
+# (kalreco/infra/) se llaman IGUAL ("infra"). Docker Compose usa el
+# nombre de la carpeta como nombre de proyecto por defecto, y este
+# compose declaraba un servicio "backend" -- el MISMO nombre que usa
+# Kalreco. Resultado: (proyecto=infra, servicio=backend) colisionó y
+# un `docker compose up` acá RECREÓ/REEMPLAZÓ kalreco_backend, tumbando
+# producción de Tulio/Hogar/Esquina por varios minutos.
+# El campo `name:` de abajo fija el proyecto en "elbarril" de forma
+# EXPLÍCITA -- ya no depende del nombre de la carpeta. NUNCA quitarlo.
+#
 # Comando de deploy:
 #   cd /opt/elbarril/infra && docker compose up -d --build
 #
 # Requiere infra/.env (NO commiteado — copiar de infra/.env.example
 # y completar con los valores reales de kalreco/infra/.env)
 # ============================================================
+
+name: elbarril
 
 networks:
   infra_kalreco:
