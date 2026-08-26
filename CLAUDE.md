@@ -165,6 +165,18 @@ en todo el bundle JS/CSS. Fix: un único bloque `location /login/ { alias ...; t
 maneja todo, sin bloque de caché separado (se puede reintroducir después, con cuidado de
 heredar el mismo alias).
 
+### 6. Landing dependía de Tailwind CDN en tiempo real — reportado por un cliente del usuario
+El diseño de Google Stitch usa `<script src="cdn.tailwindcss.com">` para su preview — funciona
+mientras el script cargue, pero si el navegador del visitante lo bloquea (extensión de
+privacidad, adblocker, red corporativa; común en Incógnito) **toda la página pierde el
+estilo** porque no hay CSS local de respaldo. Confirmado con captura real de un cliente del
+usuario: página sin estilos, lista con bullets, sin tema oscuro. **Fix:** `tailwindcss` CLI
+compila `styles.css` en el build de Docker (`apps/landing/tailwind.config.js` +
+`src/input.css`); `index.html` ya no depende de ningún script de terceros para su estilo.
+**Lección: nunca dejar en producción un `<script>` de CDN que genere CSS en tiempo real — sirve
+para prototipar rápido (así lo entregan herramientas como Google Stitch), pero hay que
+compilarlo antes de desplegar.**
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
