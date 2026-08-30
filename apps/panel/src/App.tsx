@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import PrivateRoute from './components/PrivateRoute'
+import { useAuthStore } from './store/authStore'
 import Login from './pages/Login'
 
 // Berlín — app de un solo negocio, shell + páginas en la raíz
@@ -33,21 +33,21 @@ const queryClient = new QueryClient({
   },
 })
 
+// Con basename="/login", una ruta "/login" aparte quedaba en /login/login
+// (el basename ya aporta ese prefijo). Login vive en la raíz del router:
+// se muestra si no hay sesión, o el Shell si la hay — mismo candado que
+// antes daba PrivateRoute, sin sumar el prefijo dos veces.
+function RootGate() {
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated)
+  return isAuthenticated ? <BerlinShell /> : <Login />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename="/login">
         <Routes>
-          <Route path="/login" element={<Login />} />
-
-          <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <BerlinShell />
-              </PrivateRoute>
-            }
-          >
+          <Route path="/" element={<RootGate />}>
             <Route index                  element={<BerlinDashboard />} />
             <Route path="caja"            element={<CajaPage />} />
             <Route path="pos"             element={<POS />} />

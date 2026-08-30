@@ -197,7 +197,16 @@ export default function Login() {
 
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-3">
+            {/* <a> plano, no <Link> de React Router: la landing vive fuera
+                del basename "/login" de este SPA, en otro contenedor. */}
+            <a
+              href="/"
+              className="inline-block text-xs font-semibold"
+              style={{ color: GOLD }}
+            >
+              ← Ir a la página principal
+            </a>
             <p className="text-xs text-gray-600">
               Grupo DK Soluciones · Plataforma Kalreco v1.0
             </p>
