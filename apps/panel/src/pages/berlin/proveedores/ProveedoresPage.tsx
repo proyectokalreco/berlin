@@ -18,7 +18,7 @@ function imprimirProveedor(p: Proveedor) {
   table{width:100%;border-collapse:collapse;margin-top:4px}td{padding:2px 0;font-size:11px}.key{color:#555}.val{text-align:right;font-weight:bold}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-  <div class="c b" style="font-size:13px;margin:3px 0">*Panaderia de Berlín*</div>
+  <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div><div class="c b">FICHA PROVEEDOR</div>
   <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
   <div class="sep"></div>
@@ -45,7 +45,7 @@ function imprimirPedido(p: Pedido) {
   table{width:100%;border-collapse:collapse;margin-top:4px}td{padding:2px 0;font-size:11px}.key{color:#555}.val{text-align:right;font-weight:bold}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-  <div class="c b" style="font-size:13px;margin:3px 0">*Panaderia de Berlín*</div>
+  <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div><div class="c b">PEDIDO PROVEEDOR</div>
   <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
   <div class="sep"></div>
@@ -91,7 +91,7 @@ function imprimirFactura(f: Factura) {
     .items-table th:not(:first-child){text-align:right}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-  <div class="c b" style="font-size:13px;margin:3px 0">*Panaderia de Berlín*</div>
+  <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div>
   <div class="c b">FACTURA PROVEEDOR</div>
   <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
@@ -641,7 +641,7 @@ function ModalPagarFactura({ factura, onClose, onPagada }: {
     .key{color:#555}.val{text-align:right;font-weight:bold}
     </style></head><body>
     <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-    <div class="c b" style="font-size:13px;margin:3px 0">Panadería de Berlín</div>
+    <div class="c b" style="font-size:13px;margin:3px 0">Café Bar Berlín</div>
     <div class="c" style="font-size:10px">COMPROBANTE DE PAGO</div>
     <div class="sep"></div>
     <table><tbody>
@@ -859,7 +859,7 @@ export default function ProveedoresPage() {
       .footer{text-align:center;margin-top:20px;font-size:9px;color:#888}
     </style></head><body>
     <img class="logo" src="${window.location.origin}/logos/berlin.png" alt=""/>
-    <div class="titulo">Panadería de Berlín</div>
+    <div class="titulo">Café Bar Berlín</div>
     <div class="sub">FACTURA DE COMPRA A PROVEEDOR</div>
     <div class="sep"></div>
     <div class="header-grid">

@@ -81,7 +81,7 @@ function imprimirReporte(titulo: string, filas: string[][], columnas: string[]) 
   td:last-child, th:last-child { text-align:right }
 </style></head><body>
 <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-<div class="c b" style="font-size:12px;margin:3px 0">*Panaderia de Berlín*</div>
+<div class="c b" style="font-size:12px;margin:3px 0">*Café Bar Berlín*</div>
 <div class="sep2"></div>
 <div class="c b">${titulo.toUpperCase()}</div>
 <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
@@ -255,7 +255,7 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
   .total{font-size:14px;font-weight:bold}
 </style></head><body>
 <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-<div class="c b" style="font-size:13px;margin:3px 0">*Panaderia de Berlín*</div>
+<div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
 <div class="sep"></div>
 <div class="c">${v.numero_venta} · ${hora}</div>
 <div class="sep"></div>

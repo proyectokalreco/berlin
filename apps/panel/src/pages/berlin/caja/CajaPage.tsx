@@ -80,8 +80,10 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <body>
 <img class="logo" src="${origin}/logos/berlin.png" alt="Berlín Café Bar" />
 <div class="c" style="margin-bottom:4px">
-  <p class="b" style="font-size:13px">*Panaderia de Berlín*</p>
-  <p class="sm">NIT: [Por registrar ante DIAN]</p>
+  <p class="b" style="font-size:13px">*Café Bar Berlín*</p>
+  <p class="sm">NIT: 1035424712-4</p>
+  <p class="sm">Direccion: Calle 28 #30-19 - Don Matias, Antioquia</p>
+  <p class="sm">Tel: 3215994825</p>
 </div>
 <div class="sep2"></div>
 <div class="c">

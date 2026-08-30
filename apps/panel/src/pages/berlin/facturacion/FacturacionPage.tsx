@@ -86,12 +86,12 @@ function imprimirFactura(venta: Venta, anulada = false) {
 </style></head><body>
 <div class="c" style="padding:4px 0 2px">
   <img class="logo" src="${origin}/logos/berlin.png" alt="Berlín Café Bar"/>
-  <p class="biz-sub">*Panaderia de Berlín*</p>
+  <p class="biz-sub">*Café Bar Berlín*</p>
 </div>
 <div class="c" style="margin-bottom:4px">
-  <p class="sm">NIT: [Por registrar ante DIAN]</p>
-  <p class="sm">Direccion: [Direccion del local]</p>
-  <p class="sm">Tel: [Telefono de contacto]</p>
+  <p class="sm">NIT: 1035424712-4</p>
+  <p class="sm">Direccion: Calle 28 #30-19 - Don Matias, Antioquia</p>
+  <p class="sm">Tel: 3215994825</p>
 </div>
 <div class="sep2"></div>
 ${anuladaBanner}
@@ -240,7 +240,7 @@ export default function FacturacionPage() {
   img.logo { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:28mm }
 </style></head><body>
 <div class="c"><img class="logo" src="${origin}/logos/berlin.png" alt="Berlín Café Bar"/>
-<p style="font-size:13px;letter-spacing:1px;font-weight:bold">*Panaderia de Berlín*</p></div>
+<p style="font-size:13px;letter-spacing:1px;font-weight:bold">*Café Bar Berlín*</p></div>
 <div class="sep2"></div>
 <div class="c"><p class="b">RESUMEN DE FACTURACION</p><p class="sm">${labelRango}</p></div>
 <div class="sep2"></div>

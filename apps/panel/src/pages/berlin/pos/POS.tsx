@@ -208,14 +208,14 @@ function imprimirTicket(venta: {
 <!-- Logo + cabecera negocio -->
 <div class="c" style="padding:4px 0 2px">
   <img class="logo-img" src="${origin}/logos/berlin.png" alt="Berlín Café Bar" />
-  <p class="biz-sub">*Panaderia de Berlín*</p>
+  <p class="biz-sub">*Café Bar Berlín*</p>
 </div>
 
 <!-- Datos negocio -->
 <div class="c" style="margin-bottom:4px">
-  <p class="sm">NIT: [Por registrar ante DIAN]</p>
-  <p class="sm">Direccion: [Direccion del local]</p>
-  <p class="sm">Tel: [Telefono de contacto]</p>
+  <p class="sm">NIT: 1035424712-4</p>
+  <p class="sm">Direccion: Calle 28 #30-19 - Don Matias, Antioquia</p>
+  <p class="sm">Tel: 3215994825</p>
 </div>
 
 <div class="sep2"></div>

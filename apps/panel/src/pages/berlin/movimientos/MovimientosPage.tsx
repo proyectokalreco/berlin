@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 
 // Clonado de apps/panel/src/pages/credito/esquinadelcredito/movimientos/MovimientosPage.tsx
-// (2026-08-23) — adaptado a Panadería de Berlín: Berlín no tiene el concepto de
+// (2026-08-23) — adaptado a Café Bar Berlín: Berlín no tiene el concepto de
 // "financiadora" de Esquina, así que el bolsillo CxC se arma con el mismo criterio
 // (metodo_pago='credito') sobre la misma fuente unificada, sin queries aparte.
 

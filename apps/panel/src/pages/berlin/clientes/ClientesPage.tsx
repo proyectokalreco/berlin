@@ -73,7 +73,7 @@ function imprimirComprobante(titulo: string, lineas: [string,string][]) {
     td{padding:2px 0;font-size:11px}.key{color:#555}.val{text-align:right;font-weight:bold}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-  <div class="c b" style="font-size:13px;margin:3px 0">*Panaderia de Berlín*</div>
+  <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div>
   <div class="c b">${titulo.toUpperCase()}</div>
   <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>

@@ -543,7 +543,7 @@ function ModalItem({
       .footer{text-align:center;margin-top:20px;font-size:9px;color:#888}
     </style></head><body>
     <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-    <div class="titulo">Panadería de Berlín</div>
+    <div class="titulo">Café Bar Berlín</div>
     <div class="sub">REGISTRO DE FACTURA DE PRODUCCIÓN</div>
     <div class="sep"></div>
     <div class="header-grid">
@@ -890,7 +890,7 @@ export default function PlanillaPage() {
     .footer{text-align:center;margin-top:20px;font-size:9px;color:#888}
     </style></head><body>
     <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-    <div class="titulo">Panadería de Berlín</div>
+    <div class="titulo">Café Bar Berlín</div>
     <div class="sub">REGISTRO DE FACTURA DE PRODUCCIÓN</div>
     <div class="sep"></div>
     <div class="header-grid">
