@@ -58,14 +58,17 @@ berlin/
 │   │       └── panel/    solo GET/PATCH /me/preferencias (botón "Reordenar")
 │   ├── panel/       React + Vite + Tailwind — build con base:'/login/'
 │   │   └── src/pages/berlin/   24 páginas clonadas de Tulio
-│   └── landing/     HTML estático — página pública, sin build
+│   └── landing/     HTML estático + Tailwind CLI (compila styles.css en el build)
 └── infra/
     └── docker-compose.yml   name: berlin (proyecto Docker aislado)
 ```
 
-Las **migraciones de base de datos** (schema `br_*`, tenant central) viven en el repo de
-**Kalreco** (`database/migrations/082-086`), porque la BD es compartida — nunca crear
-migraciones acá, ni aplicar SQL suelto fuera de esa carpeta.
+Las **migraciones de base de datos** (schema `br_*`, tenant central, datos reales) viven en el
+repo de **Kalreco** (`database/migrations/082-090`), porque la BD es compartida — nunca crear
+migraciones acá, ni aplicar SQL suelto fuera de esa carpeta. ⚠️ **Antes de crear la siguiente
+migración, correr `ls database/migrations/ | tail -5` en el repo `kalreco` actualizado** — el
+090 de Berlín tuvo que renombrarse desde 087 porque otro trabajo (no de Berlín) ya había
+tomado ese número mientras esta sesión estaba pausada.
 
 ## 🔗 URLs y identificadores
 
@@ -113,16 +116,26 @@ cd /opt/berlin/infra && docker compose up -d --build
 Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los valores reales de
 `kalreco/infra/.env`, mismo Supabase).
 
-## 📦 Estado de fases (2026-08-26)
+## 📦 Estado de fases (actualizado 2026-08-30)
 
 - ✅ **Fase 0** — BD: 38 tablas `br_*`, 71 FKs, 10 funciones, aplicado en producción.
 - ✅ **Fase 1** — Backend: 24 controllers clonados de Tulio, login aislado, verificado con curl.
 - ✅ **Fase 2** — Panel: 24 páginas, app de un solo negocio (sin Sidebar/Layout multi-negocio de
   Kalreco, rutas propias en la raíz del router), `tsc`/`build` limpios.
 - ✅ **Fase 3** — Landing: diseño provisto por el usuario (Google Stitch), adaptado con logo
-  real + link de login + navegación por anclas.
-- ⏳ **Pendiente**: NIT/dirección/teléfono/horario reales (el cliente los tiene ficticios por
-  ahora); fotos reales del local (las actuales son de un generador de imágenes, placeholder).
+  real, navegación por anclas, WhatsApp real (`3215994825`, 4 puntos), sección Contacto con
+  NIT/dirección/celular + mapa embebido. **Sin link "Iniciar sesión" ni "Inicio" en el menú**
+  — decisión explícita del cliente, por seguridad no exponer la entrada al panel desde la
+  landing pública (2026-08-30).
+- ✅ **Datos reales del negocio** (2026-08-30, migración 090 + 14 archivos de tickets): NIT
+  `1035424712-4`, dirección `Calle 28 #30-19, Puente de los Leones (Terminal de Transporte) -
+  Don Matías, Antioquia`, celular `3215994825`. Nombre en tickets corregido de "Panaderia de
+  Berlín" (residuo del clon) a "Café Bar Berlín". Los tickets/facturas NO leen esto de la BD —
+  está hardcodeado en cada plantilla (mismo patrón sin fuente única que Tulio/Esquina, ver
+  `kalreco/CLAUDE.md`); la fila de `negocios` también se actualizó, mismo dato, por consistencia
+  con lo que sí lee la app (respuesta de login, etc).
+- ⏳ **Pendiente**: fotos reales del local (las actuales son de un generador de imágenes,
+  placeholder de Google Stitch).
 
 ## ⚠️ Incidentes y bugs reales encontrados (para no repetirlos)
 
@@ -176,6 +189,18 @@ compila `styles.css` en el build de Docker (`apps/landing/tailwind.config.js` +
 **Lección: nunca dejar en producción un `<script>` de CDN que genere CSS en tiempo real — sirve
 para prototipar rápido (así lo entregan herramientas como Google Stitch), pero hay que
 compilarlo antes de desplegar.**
+
+### 7. `basename` + ruta propia duplicaban el prefijo — URL quedaba `/login/login`
+Al mover el panel a `/login/` se le puso `basename="/login"` al `BrowserRouter`, pero además
+quedó una `<Route path="/login" element={<Login/>}/>` separada de la ruta raíz (`<Route
+path="/">`, con el Shell). El `basename` ya suma el prefijo `/login` a CUALQUIER ruta interna,
+así que esa ruta propia terminaba resolviendo `/login` + `/login` = `/login/login`. Reportado
+por un cliente del usuario (captura con la URL doble). **Fix (`App.tsx`):** se eliminó la ruta
+`/login` separada — `Login` se renderiza en la ruta raíz (`RootGate`, según
+`isAuthenticated`), igual que antes hacía `PrivateRoute` (eliminado, ya no se usa). Cerrar
+sesión ahora deja la URL limpia en `.../login/`.
+**Lección: con `basename` seteado, ningún `<Route path="...">` ni `<Navigate to="...">` debe
+repetir ese mismo prefijo — el router ya lo antepone a todo automáticamente.**
 
 ## 📄 Documentación relacionada
 

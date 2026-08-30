@@ -23,13 +23,13 @@ deploy, incidentes reales encontrados y sus fixes).
 apps/
   backend/   Node.js + Express — API propia, puerto 4001
   panel/     React + Vite + Tailwind — build con base:'/login/'
-  landing/   HTML estático — página pública, sin build
+  landing/   HTML estático + Tailwind CLI (compila styles.css en el build de Docker)
 infra/
   docker-compose.yml   proyecto Docker aislado (name: berlin)
 ```
 
-Las migraciones de base de datos (schema `br_*`, tenant central) viven en el repo de Kalreco
-(`database/migrations/082-086`), porque comparten la misma BD.
+Las migraciones de base de datos (schema `br_*`, tenant central, datos reales) viven en el
+repo de Kalreco (`database/migrations/082-087`), porque comparten la misma BD.
 
 ## Deploy
 
