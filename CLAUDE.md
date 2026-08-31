@@ -64,7 +64,7 @@ berlin/
 ```
 
 Las **migraciones de base de datos** (schema `br_*`, tenant central, datos reales) viven en el
-repo de **Kalreco** (`database/migrations/082-090`), porque la BD es compartida — nunca crear
+repo de **Kalreco** (`database/migrations/082-092`), porque la BD es compartida — nunca crear
 migraciones acá, ni aplicar SQL suelto fuera de esa carpeta. ⚠️ **Antes de crear la siguiente
 migración, correr `ls database/migrations/ | tail -5` en el repo `kalreco` actualizado** — el
 090 de Berlín tuvo que renombrarse desde 087 porque otro trabajo (no de Berlín) ya había
@@ -134,6 +134,9 @@ Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los val
   está hardcodeado en cada plantilla (mismo patrón sin fuente única que Tulio/Esquina, ver
   `kalreco/CLAUDE.md`); la fila de `negocios` también se actualizó, mismo dato, por consistencia
   con lo que sí lee la app (respuesta de login, etc).
+- ✅ **2026-08-30** — Inventario inicial cargado (migración 091: 17 categorías/234 productos/
+  21 insumos) · POS con venta múltiple + carrito unificado + impresión térmica corregida en
+  7 archivos + fix bug abonos/pago cliente (migración 092) — ver incidentes 8-10 abajo.
 - ⏳ **Pendiente**: fotos reales del local (las actuales son de un generador de imágenes,
   placeholder de Google Stitch).
 
@@ -201,6 +204,32 @@ por un cliente del usuario (captura con la URL doble). **Fix (`App.tsx`):** se e
 sesión ahora deja la URL limpia en `.../login/`.
 **Lección: con `basename` seteado, ningún `<Route path="...">` ni `<Navigate to="...">` debe
 repetir ese mismo prefijo — el router ya lo antepone a todo automáticamente.**
+
+### 8. `br_abonos.cuenta_id` bloqueaba todo abono/pago a cliente — "Error de base de datos"
+Reportado por el cliente con captura. `br_abonos` (generada por `pg_dump` del schema real de
+Tulio en la migración 083) tiene `cuenta_id UUID NOT NULL` — columna huérfana, de un diseño de
+`pan_cuentas_cobrar` que nunca se implementó en ningún controller. `clientes.controller.js`
+(clonado de Tulio) siempre insertó `venta_id`/`tipo` en su lugar — columnas que no existen en
+la tabla real. Insert fallaba siempre. **Fix (migración 092, en el repo `kalreco`):**
+`cuenta_id` pasa a nullable + se agregan `venta_id`/`tipo` — alinea la tabla al esquema que el
+código ya usa. Mismo bug, mismo fix, en `pan_abonos` de Tulio (nunca antes probado ahí).
+
+### 9. POS — venta múltiple + carrito unificado (2026-08-30, commit `83d3bbd`)
+A pedido del cliente, mismo patrón que Esquina del Crédito: pestañas de "ventas en pausa"
+arriba del catálogo (atender varios clientes sin perder el carrito de cada uno, key propia
+`br_pos_ventas_pausa`) + la pantalla de pago dejó de ser un paso aparte — ahora un solo panel
+con la lista de ítems y, siempre visible debajo, los métodos de pago/numpad/selector de
+cliente y un único botón "Cobrar". El éxito de venta pasó a modal (no pantalla completa) para
+no tapar las pestañas. **Mesas no se tocó** — tiene su propio carrito, copiado visualmente del
+POS pero sin compartir código ni estado.
+
+### 10. Impresión térmica ilegible — mismo patrón ya corregido 3× en Esquina (commit `83d3bbd`)
+Courier New + letra <13px + gris/rojo/verde en vez de negro sólido, en 7 archivos: POS, Mesas,
+Caja, Facturación, Clientes, Proveedores, Reportes (este último SÍ es térmica 80mm, no A4 —
+hubo que verificarlo, no asumirlo). Fix: Arial `font-weight:600`, tamaños a 13px+, colores a
+`#000`. **Fuera de alcance:** el documento A4 "Factura de Compra a Proveedor" dentro de
+`ProveedoresPage.tsx` — mismo riesgo si se imprime en la térmica del negocio, pero es un
+cambio de layout más grande, sin confirmar con el cliente que hoy salga mal.
 
 ## 📄 Documentación relacionada
 
