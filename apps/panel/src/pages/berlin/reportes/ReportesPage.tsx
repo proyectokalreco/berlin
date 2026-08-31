@@ -70,25 +70,27 @@ function imprimirReporte(titulo: string, filas: string[][], columnas: string[]) 
 <style>
   * { margin:0; padding:0; box-sizing:border-box }
   @page { margin:5mm; size:80mm auto }
-  body { font-family:'Courier New',monospace; font-size:11px; color:#000 }
+  body { font-family:Arial,sans-serif; font-weight:600; font-size:13px; color:#000 }
   .c { text-align:center } .b { font-weight:bold }
   .sep { border-top:1px dashed #000; margin:5px 0 }
   .sep2 { border-top:2px solid #000; margin:5px 0 }
   img.logo { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:20mm }
   table { width:100%; border-collapse:collapse; margin-top:4px }
+  /* th/td se quedan chicos a propósito — hasta 6 columnas caben en 70mm útiles;
+     el negro sólido + Arial en negrita ya arregla la ilegibilidad sin romper el ancho */
   th { font-size:10px; border-bottom:1px solid #000; padding:2px 0; text-align:left }
-  td { font-size:10px; padding:2px 0; border-bottom:1px dotted #ccc }
+  td { font-size:10px; padding:2px 0; border-bottom:1px dotted #000 }
   td:last-child, th:last-child { text-align:right }
 </style></head><body>
 <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
-<div class="c b" style="font-size:12px;margin:3px 0">*Café Bar Berlín*</div>
+<div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
 <div class="sep2"></div>
 <div class="c b">${titulo.toUpperCase()}</div>
-<div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
+<div class="c" style="font-size:12px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
 <div class="sep"></div>
 <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
 <div class="sep"></div>
-<div class="c" style="font-size:10px;margin-top:4px">Sistema Kalreco v1.0</div>
+<div class="c" style="font-size:12px;margin-top:4px">Sistema Kalreco v1.0</div>
 </body></html>`
   const w = window.open('','_blank','width=440,height=700')
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); setTimeout(() => w.close(), 600) }, 400) }
@@ -247,11 +249,11 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   @page{margin:5mm;size:80mm auto}
-  body{font-family:'Courier New',monospace;font-size:11px;color:#000}
+  body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
   .c{text-align:center}.b{font-weight:bold}.sep{border-top:1px dashed #000;margin:4px 0}
   img.logo{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:18mm}
   table{width:100%;border-collapse:collapse;margin-top:4px}
-  td{padding:2px 0;font-size:11px}.r{text-align:right}
+  td{padding:2px 0;font-size:13px}.r{text-align:right}
   .total{font-size:14px;font-weight:bold}
 </style></head><body>
 <img class="logo" src="${origin}/logos/berlin.png" alt=""/>

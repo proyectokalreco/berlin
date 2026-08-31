@@ -12,15 +12,15 @@ function imprimirProveedor(p: Proveedor) {
   const origin = window.location.origin
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Proveedor ${p.nombre}</title>
   <style>*{margin:0;padding:0;box-sizing:border-box}@page{margin:5mm;size:80mm auto}
-  body{font-family:'Courier New',monospace;font-size:11px;color:#000}
+  body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
   .c{text-align:center}.b{font-weight:bold}.sep{border-top:1px dashed #000;margin:4px 0}
   img.logo{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:18mm}
-  table{width:100%;border-collapse:collapse;margin-top:4px}td{padding:2px 0;font-size:11px}.key{color:#555}.val{text-align:right;font-weight:bold}
+  table{width:100%;border-collapse:collapse;margin-top:4px}td{padding:2px 0;font-size:13px}.key{color:#000}.val{text-align:right;font-weight:bold}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
   <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div><div class="c b">FICHA PROVEEDOR</div>
-  <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
+  <div class="c" style="font-size:12px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
   <div class="sep"></div>
   <table><tbody>
     <tr><td class="key">Nombre</td><td class="val">${p.nombre}</td></tr>
@@ -29,7 +29,7 @@ function imprimirProveedor(p: Proveedor) {
     ${p.telefono ? `<tr><td class="key">Teléfono</td><td class="val">${p.telefono}</td></tr>` : ''}
     ${p.email ? `<tr><td class="key">Email</td><td class="val">${p.email}</td></tr>` : ''}
   </tbody></table>
-  <div class="sep"></div><div class="c" style="font-size:10px;margin-top:4px">Sistema Kalreco v1.0</div>
+  <div class="sep"></div><div class="c" style="font-size:12px;margin-top:4px">Sistema Kalreco v1.0</div>
   </body></html>`
   const w = window.open('','_blank','width=440,height=400')
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();setTimeout(()=>w.close(),600)},400) }
@@ -39,15 +39,15 @@ function imprimirPedido(p: Pedido) {
   const origin = window.location.origin
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedido ${p.numero_pedido ?? p.id.slice(0,8)}</title>
   <style>*{margin:0;padding:0;box-sizing:border-box}@page{margin:5mm;size:80mm auto}
-  body{font-family:'Courier New',monospace;font-size:11px;color:#000}
+  body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
   .c{text-align:center}.b{font-weight:bold}.sep{border-top:1px dashed #000;margin:4px 0}
   img.logo{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:18mm}
-  table{width:100%;border-collapse:collapse;margin-top:4px}td{padding:2px 0;font-size:11px}.key{color:#555}.val{text-align:right;font-weight:bold}
+  table{width:100%;border-collapse:collapse;margin-top:4px}td{padding:2px 0;font-size:13px}.key{color:#000}.val{text-align:right;font-weight:bold}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
   <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div><div class="c b">PEDIDO PROVEEDOR</div>
-  <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
+  <div class="c" style="font-size:12px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
   <div class="sep"></div>
   <table><tbody>
     <tr><td class="key">Proveedor</td><td class="val">${p.proveedor?.nombre ?? '—'}</td></tr>
@@ -58,7 +58,7 @@ function imprimirPedido(p: Pedido) {
     ${p.valor_total ? `<tr><td class="key b">Total</td><td class="val b">$${p.valor_total.toLocaleString('es-CO')}</td></tr>` : ''}
     ${p.descripcion ? `<tr><td class="key">Descripción</td><td class="val">${p.descripcion}</td></tr>` : ''}
   </tbody></table>
-  <div class="sep"></div><div class="c" style="font-size:10px;margin-top:4px">Sistema Kalreco v1.0</div>
+  <div class="sep"></div><div class="c" style="font-size:12px;margin-top:4px">Sistema Kalreco v1.0</div>
   </body></html>`
   const w = window.open('','_blank','width=440,height=450')
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();setTimeout(()=>w.close(),600)},400) }
@@ -70,31 +70,31 @@ function imprimirFactura(f: Factura) {
   const fmtN = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
   const itemsRows = (f.items ?? []).map(i =>
     `<tr>
-      <td style="padding:2px 0;font-size:10px">${i.descripcion}</td>
-      <td style="text-align:center;padding:2px 4px;font-size:10px">${i.cantidad}</td>
-      <td style="text-align:right;padding:2px 0;font-size:10px">${fmtN(i.precio_unitario)}</td>
-      <td style="text-align:right;padding:2px 0;font-size:10px;font-weight:bold">${fmtN(i.subtotal)}</td>
+      <td style="padding:2px 0;font-size:12px">${i.descripcion}</td>
+      <td style="text-align:center;padding:2px 4px;font-size:12px">${i.cantidad}</td>
+      <td style="text-align:right;padding:2px 0;font-size:12px">${fmtN(i.precio_unitario)}</td>
+      <td style="text-align:right;padding:2px 0;font-size:12px;font-weight:bold">${fmtN(i.subtotal)}</td>
     </tr>`
   ).join('')
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
   <title>Factura ${f.numero_factura || f.id.slice(0,8)}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}@page{margin:5mm;size:80mm auto}
-    body{font-family:'Courier New',monospace;font-size:11px;color:#000}
+    body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
     .c{text-align:center}.b{font-weight:bold}.sep{border-top:1px dashed #000;margin:4px 0}
     img.logo{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:18mm}
     .info-table{width:100%;border-collapse:collapse;margin-top:4px}
-    .info-table td{padding:2px 0;font-size:11px}
-    .key{color:#555}.val{text-align:right;font-weight:bold}
+    .info-table td{padding:2px 0;font-size:13px}
+    .key{color:#000}.val{text-align:right;font-weight:bold}
     .items-table{width:100%;border-collapse:collapse;margin-top:4px}
-    .items-table th{font-size:9px;text-align:left;color:#555;padding:2px 0;border-bottom:1px solid #ccc}
+    .items-table th{font-size:11px;text-align:left;color:#000;padding:2px 0;border-bottom:1px solid #000}
     .items-table th:not(:first-child){text-align:right}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
   <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div>
   <div class="c b">FACTURA PROVEEDOR</div>
-  <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
+  <div class="c" style="font-size:12px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
   <div class="sep"></div>
   <table class="info-table"><tbody>
     <tr><td class="key">Proveedor</td><td class="val">${f.proveedor?.nombre ?? '—'}</td></tr>
@@ -120,7 +120,7 @@ function imprimirFactura(f: Factura) {
     ${f.notas ? `<tr><td class="key">Notas</td><td class="val">${f.notas}</td></tr>` : ''}
   </tbody></table>
   <div class="sep"></div>
-  <div class="c" style="font-size:10px;margin-top:4px">Sistema Kalreco v1.0</div>
+  <div class="c" style="font-size:12px;margin-top:4px">Sistema Kalreco v1.0</div>
   </body></html>`
   const w = window.open('','_blank','width=440,height=600')
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();setTimeout(()=>w.close(),600)},400) }
@@ -634,15 +634,15 @@ function ModalPagarFactura({ factura, onClose, onPagada }: {
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
     <title>Pago ${factura.numero_factura || factura.id}</title>
     <style>*{margin:0;padding:0;box-sizing:border-box}@page{margin:5mm;size:80mm auto}
-    body{font-family:'Courier New',monospace;font-size:11px;color:#000}
+    body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
     .c{text-align:center}.b{font-weight:bold}.sep{border-top:1px dashed #000;margin:4px 0}
     img.logo{display:block;margin:4px auto;max-width:60mm;max-height:18mm}
-    table{width:100%;border-collapse:collapse}td{padding:2px 0;font-size:11px}
-    .key{color:#555}.val{text-align:right;font-weight:bold}
+    table{width:100%;border-collapse:collapse}td{padding:2px 0;font-size:13px}
+    .key{color:#000}.val{text-align:right;font-weight:bold}
     </style></head><body>
     <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
     <div class="c b" style="font-size:13px;margin:3px 0">Café Bar Berlín</div>
-    <div class="c" style="font-size:10px">COMPROBANTE DE PAGO</div>
+    <div class="c" style="font-size:12px">COMPROBANTE DE PAGO</div>
     <div class="sep"></div>
     <table><tbody>
       <tr><td class="key">Proveedor</td><td class="val">${factura.proveedor?.nombre ?? '—'}</td></tr>
@@ -652,7 +652,7 @@ function ModalPagarFactura({ factura, onClose, onPagada }: {
       ${referencia ? `<tr><td class="key">Referencia</td><td class="val">${referencia}</td></tr>` : ''}
       <tr><td class="key">Fecha de pago</td><td class="val">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}</td></tr>
     </tbody></table>
-    <div class="sep"></div><div class="c" style="font-size:10px;margin-top:4px">Sistema Kalreco v1.0</div>
+    <div class="sep"></div><div class="c" style="font-size:12px;margin-top:4px">Sistema Kalreco v1.0</div>
     </body></html>`
     const w = window.open('', '_blank', 'width=440,height=500')
     if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();setTimeout(()=>w.close(),600)},400) }

@@ -56,17 +56,17 @@ function imprimirFactura(venta: Venta, anulada = false) {
   }).join('')
 
   const anuladaBanner = anulada ? `
-<div style="background:#ef4444;color:#fff;padding:6px 0;text-align:center;font-weight:900;font-size:18px;letter-spacing:2px;margin:5px 0">
+<div style="border:2px solid #000;color:#000;padding:6px 0;text-align:center;font-weight:900;font-size:18px;letter-spacing:2px;margin:5px 0">
   *** FACTURA ANULADA ***
 </div>
-<p class="c sm" style="color:#c00;font-weight:bold;margin-bottom:4px">${venta.notas || 'Anulada por administrador'}</p>` : ''
+<p class="c sm" style="color:#000;font-weight:bold;margin-bottom:4px">${venta.notas || 'Anulada por administrador'}</p>` : ''
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Factura ${venta.numero_venta}${anulada ? ' — ANULADA' : ''}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box }
   @page { margin:5mm; size:80mm auto }
-  body { font-family:'Courier New',monospace; font-size:14px; color:#000 }
+  body { font-family:Arial,sans-serif; font-weight:600; font-size:14px; color:#000 }
   .c { text-align:center } .b { font-weight:bold }
   .sep  { border-top:1px dashed #000; margin:5px 0 }
   .sep2 { border-top:2px solid  #000; margin:5px 0 }
@@ -74,14 +74,14 @@ function imprimirFactura(venta: Venta, anulada = false) {
   .row > span:first-child { flex:1; min-width:0; overflow-wrap:break-word }
   .amt  { flex-shrink:0; text-align:right; white-space:nowrap; font-weight:700; min-width:58px }
   .item-nm  { font-weight:700; font-size:14px; margin-top:5px; word-break:break-word }
-  .item-sub { font-size:13px; color:#333 }
+  .item-sub { font-size:13px; color:#000 }
   img.logo  { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:28mm; object-fit:contain }
   .biz-sub  { font-size:13px; letter-spacing:1px; margin-top:3px; font-weight:bold }
   .total-row { display:flex; justify-content:space-between; align-items:baseline;
                border-top:2px solid #000; margin-top:5px; padding-top:5px; gap:6px }
   .total-lbl { font-size:16px; font-weight:900 }
   .total-val { font-size:20px; font-weight:900; white-space:nowrap }
-  .sm { font-size:11px; color:#444 }
+  .sm { font-size:13px; color:#000 }
   h3  { font-size:14px; font-weight:bold }
 </style></head><body>
 <div class="c" style="padding:4px 0 2px">
@@ -105,7 +105,7 @@ ${anuladaBanner}
 <div class="sep2"></div>
 <div class="row b sm"><span>DESCRIPCION</span><span class="amt">TOTAL</span></div>
 <div class="sep"></div>
-${itemsHtml || '<p style="font-size:12px;color:#555;margin:4px 0">Detalle no disponible</p>'}
+${itemsHtml || '<p style="font-size:13px;color:#000;margin:4px 0">Detalle no disponible</p>'}
 <div class="sep"></div>
 ${venta.descuento && venta.descuento > 0 ? `<div class="row sm"><span>Descuento:</span><span>- ${fmt(venta.descuento)}</span></div>` : ''}
 <div class="total-row">
@@ -232,11 +232,11 @@ export default function FacturacionPage() {
 <style>
   * { margin:0; padding:0; box-sizing:border-box }
   @page { margin:5mm; size:80mm auto }
-  body { font-family:'Courier New',monospace; font-size:13px; color:#000 }
+  body { font-family:Arial,sans-serif; font-weight:600; font-size:13px; color:#000 }
   .c { text-align:center } .sep { border-top:1px dashed #000; margin:5px 0 }
   .sep2 { border-top:2px solid #000; margin:5px 0 }
   .row { display:flex; justify-content:space-between; margin:3px 0 }
-  .b { font-weight:bold } .sm { font-size:11px }
+  .b { font-weight:bold } .sm { font-size:13px }
   img.logo { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:28mm }
 </style></head><body>
 <div class="c"><img class="logo" src="${origin}/logos/berlin.png" alt="Berlín Café Bar"/>
@@ -252,7 +252,7 @@ export default function FacturacionPage() {
 <div class="row sm"><span>QR / Nequi:</span><span>${fmt(resumen.qr)}</span></div>
 <div class="row sm"><span>Crédito:</span><span>${fmt(resumen.credito)}</span></div>
 <div class="sep"></div>
-<div class="row sm" style="${resumen.anuladas > 0 ? 'color:#ef4444;font-weight:bold' : ''}"><span>Facturas anuladas:</span><span>${resumen.anuladas}</span></div>
+<div class="row sm" style="${resumen.anuladas > 0 ? 'color:#000;font-weight:bold' : ''}"><span>Facturas anuladas:</span><span>${resumen.anuladas}</span></div>
 <div class="sep2"></div>
 <div class="c sm"><p>Generado: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</p>
 <p>Sistema Kalreco v1.0</p></div>

@@ -82,17 +82,17 @@ function imprimirTicketMesa(datos: {
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   @page{margin:5mm;size:80mm auto}
-  body{font-family:'Courier New',Courier,monospace;font-size:14px;width:100%;color:#000;-webkit-print-color-adjust:exact}
+  body{font-family:Arial,sans-serif;font-weight:600;font-size:14px;width:100%;color:#000;-webkit-print-color-adjust:exact}
   .c{text-align:center}.b{font-weight:bold}
   .sep{border-top:1px dashed #000;margin:5px 0}.sep2{border-top:2px solid #000;margin:5px 0}
   .row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin:2px 0}
   .row>span:first-child{flex:1;min-width:0;overflow-wrap:break-word}
   .amt{flex-shrink:0;text-align:right;white-space:nowrap;font-weight:700;min-width:58px}
   .item-nm{font-weight:700;font-size:14px;margin-top:5px;word-break:break-word}
-  .item-sub{font-size:13px;color:#333}
+  .item-sub{font-size:13px;color:#000}
   .logo-img{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:28mm;object-fit:contain}
   .biz-sub{font-size:13px;letter-spacing:1px;margin-top:3px;font-weight:bold}
-  h3{font-size:14px;font-weight:bold}.sm{font-size:11px;color:#444}
+  h3{font-size:14px;font-weight:bold}.sm{font-size:13px;color:#000}
   .total-row{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid #000;margin-top:5px;padding-top:5px;gap:6px}
   .total-lbl{font-size:16px;font-weight:900}.total-val{font-size:20px;font-weight:900;white-space:nowrap}
 </style></head><body>
@@ -120,7 +120,7 @@ ${itemsHtml}
 <div class="sep"></div>
 <div class="row"><span>Sub Total:</span><span class="amt">${fmt(datos.subtotal)}</span></div>
 ${datos.redondeo !== 0
-  ? `<div class="row sm" style="color:#555"><span>Redondeo COP:</span><span class="amt">${datos.redondeo > 0 ? '+' : '-'}${fmt(Math.abs(datos.redondeo))}</span></div>`
+  ? `<div class="row sm" style="color:#000"><span>Redondeo COP:</span><span class="amt">${datos.redondeo > 0 ? '+' : '-'}${fmt(Math.abs(datos.redondeo))}</span></div>`
   : ''}
 <div class="total-row">
   <span class="total-lbl">TOTAL:</span>

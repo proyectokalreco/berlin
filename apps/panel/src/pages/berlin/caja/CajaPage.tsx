@@ -64,14 +64,14 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <style>
   * { margin:0; padding:0; box-sizing:border-box }
   @page { margin:5mm; size:80mm auto }
-  body { font-family:'Courier New',Courier,monospace; font-size:12px; width:100%; color:#000 }
+  body { font-family:Arial,sans-serif; font-weight:600; font-size:13px; width:100%; color:#000 }
   .c { text-align:center } .b { font-weight:bold }
   .sep  { border-top:1px dashed #000; margin:5px 0 }
   .sep2 { border-top:2px solid  #000; margin:5px 0 }
   .row  { display:flex; justify-content:space-between; gap:6px; margin:2px 0 }
   .row > span:first-child { flex:1; min-width:0 }
   .amt  { flex-shrink:0; text-align:right; white-space:nowrap; font-weight:700; min-width:58px }
-  .sm   { font-size:10px; color:#444 }
+  .sm   { font-size:13px; color:#000 }
   .xl   { font-size:17px; font-weight:900; white-space:nowrap }
   .ok   { font-weight:900 }
   img.logo { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:20mm; object-fit:contain }
@@ -116,7 +116,7 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <div class="row b"><span>Efectivo contado:</span><span class="amt">${fmt(turno.monto_final_real ?? 0)}</span></div>
 <div class="row" style="margin-top:4px;padding-top:4px;border-top:2px solid #000">
   <span class="ok" style="font-size:13px">DIFERENCIA:</span>
-  <span class="xl" style="${diferencia < 0 ? 'color:#cc0000' : diferencia > 0 ? 'color:#006600' : ''}">${diferencia >= 0 ? '+' : ''}${fmt(diferencia)}</span>
+  <span class="xl" style="color:#000">${diferencia >= 0 ? '+' : ''}${fmt(diferencia)}</span>
 </div>
 
 ${turno.notas_apertura ? `<div class="sep"></div><p class="b sm">Nota apertura:</p><p class="sm" style="white-space:pre-wrap">${turno.notas_apertura}</p>` : ''}

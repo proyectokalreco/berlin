@@ -66,21 +66,21 @@ function imprimirComprobante(titulo: string, lineas: [string,string][]) {
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     @page{margin:5mm;size:80mm auto}
-    body{font-family:'Courier New',monospace;font-size:11px;color:#000}
+    body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
     .c{text-align:center}.b{font-weight:bold}.sep{border-top:1px dashed #000;margin:4px 0}
     img.logo{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:18mm}
     table{width:100%;border-collapse:collapse;margin-top:4px}
-    td{padding:2px 0;font-size:11px}.key{color:#555}.val{text-align:right;font-weight:bold}
+    td{padding:2px 0;font-size:13px}.key{color:#000}.val{text-align:right;font-weight:bold}
   </style></head><body>
   <img class="logo" src="${origin}/logos/berlin.png" alt=""/>
   <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
   <div class="sep"></div>
   <div class="c b">${titulo.toUpperCase()}</div>
-  <div class="c" style="font-size:10px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+  <div class="c" style="font-size:12px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
   <div class="sep"></div>
   <table><tbody>${rows}</tbody></table>
   <div class="sep"></div>
-  <div class="c" style="font-size:10px;margin-top:4px">Sistema Kalreco v1.0</div>
+  <div class="c" style="font-size:12px;margin-top:4px">Sistema Kalreco v1.0</div>
   </body></html>`
   const w = window.open('','_blank','width=440,height=600')
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{w.print();setTimeout(()=>w.close(),600)},400) }
