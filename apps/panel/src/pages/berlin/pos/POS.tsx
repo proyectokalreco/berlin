@@ -595,6 +595,40 @@ export default function POS() {
     }
   }, [])
 
+  // ── Bloque de pago redimensionable (alto) — mismo patrón, eje vertical ──
+  const PAY_MIN = 220
+  const PAY_MAX = 560
+  const [paymentHeight, setPaymentHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('pos-payment-height')
+    const n = saved ? parseInt(saved, 10) : 340
+    return isNaN(n) ? 340 : Math.min(Math.max(n, PAY_MIN), PAY_MAX)
+  })
+  const isDraggingV = useRef(false)
+  const dragStartY  = useRef(0)
+  const dragStartH  = useRef(0)
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDraggingV.current) return
+      const delta = dragStartY.current - e.clientY   // arrastrar ↑ agranda
+      const next  = Math.min(Math.max(dragStartH.current + delta, PAY_MIN), PAY_MAX)
+      setPaymentHeight(next)
+    }
+    const onUp = () => {
+      if (!isDraggingV.current) return
+      isDraggingV.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setPaymentHeight(h => { localStorage.setItem('pos-payment-height', String(h)); return h })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup',   onUp)
+    }
+  }, [])
+
   // ── Ventas en pausa — hidratar, sincronizar y persistir ──────
   // Mismo patrón que Esquina del Crédito: el carrito/pago/cliente activos
   // siguen viviendo en estado plano (cart, metodoPago, etc. — no se tocan
@@ -1124,6 +1158,11 @@ export default function POS() {
           {/* Tabs */}
           <div
             ref={catScrollRef}
+            onWheel={e => {
+              if (e.deltaY === 0) return
+              e.currentTarget.scrollLeft += e.deltaY
+              e.preventDefault()
+            }}
             className="flex gap-2 px-8 py-2.5 overflow-x-auto"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
@@ -1343,25 +1382,70 @@ export default function POS() {
           )}
         </div>
 
-        {/* ── Pago — siempre visible debajo del carrito (igual patrón que Esquina del Crédito) ── */}
-        <div className="border-t border-white/5 bg-[#0D1B2A] p-3 space-y-2.5 flex-shrink-0 overflow-y-auto max-h-[62%]">
+        {/* ── Divisor horizontal arrastrable — igual patrón que Esquina del Crédito ── */}
+        <div
+          onMouseDown={e => {
+            e.preventDefault()
+            isDraggingV.current  = true
+            dragStartY.current   = e.clientY
+            dragStartH.current   = paymentHeight
+            document.body.style.cursor     = 'row-resize'
+            document.body.style.userSelect = 'none'
+          }}
+          className="h-2 flex-shrink-0 flex items-center justify-center bg-white/5 hover:bg-[#EA580C]/40 cursor-row-resize transition-colors"
+          title="Arrastra para redimensionar"
+        >
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
 
-          {/* Métodos de pago */}
-          <div className="grid grid-cols-4 gap-1">
+        {/* ── Pago — siempre visible debajo del carrito (igual patrón que Esquina del Crédito) ── */}
+        <div className="border-t border-white/5 bg-[#0D1B2A] p-3 space-y-2.5 flex-shrink-0 overflow-y-auto"
+             style={{ height: paymentHeight }}>
+
+          {/* Cliente — siempre visible, igual patrón que Esquina */}
+          <button
+            onClick={() => { if (metodoPago !== 'credito') cambiarMetodo('credito') }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-dark border border-white/10
+                       text-left hover:border-white/20 transition-colors">
+            <Users size={14} className="text-gray-500 flex-shrink-0" />
+            <span className={cn('text-xs truncate flex-1', clienteCredito ? 'text-white' : 'text-gray-500')}>
+              {clienteCredito?.nombre || 'Sin cliente (opcional)'}
+            </span>
+            {clienteCredito && (
+              <span onClick={e => { e.stopPropagation(); setClienteCredito(null) }}
+                className="text-gray-500 hover:text-red-400 p-0.5">
+                <X size={12} />
+              </span>
+            )}
+          </button>
+
+          {/* Pago Completo — destacado, ancho completo, igual patrón que Esquina */}
+          <button
+            onClick={() => cambiarMetodo('exacto')}
+            className={cn(
+              'w-full py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5',
+              metodoPago === 'exacto'
+                ? 'bg-[#EA580C] text-white'
+                : 'bg-[#EA580C]/10 text-[#EA580C] border border-[#EA580C]/30 hover:bg-[#EA580C]/15',
+            )}>
+            <Zap size={14} /> Pago Completo
+          </button>
+
+          {/* Demás métodos — grid 2 columnas, igual patrón que Esquina */}
+          <div className="grid grid-cols-2 gap-1">
             {([
-              { m: 'efectivo',     label: 'Efectivo',    icon: Banknote    },
-              { m: 'exacto',       label: 'P. Completo', icon: Zap         },
-              { m: 'transferencia',label: 'Transfer.',   icon: Smartphone  },
-              { m: 'credito',      label: 'Crédito',     icon: CreditCard  },
+              { m: 'efectivo',      label: 'Efectivo',      icon: Banknote   },
+              { m: 'transferencia', label: 'Transferencia', icon: Smartphone },
+              { m: 'credito',       label: 'Crédito',       icon: CreditCard },
             ] as { m: typeof metodoPago; label: string; icon: React.ElementType }[]).map(({ m, label, icon: Icon }) => (
               <button key={m} onClick={() => cambiarMetodo(m)}
                 className={cn(
-                  'flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-[10px] font-semibold transition-all select-none',
+                  'flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg border text-[11px] font-semibold transition-all select-none',
                   metodoPago === m
                     ? 'bg-[#EA580C]/15 border-[#EA580C]/50 text-[#EA580C]'
                     : 'bg-brand-dark border-white/5 text-gray-500 hover:text-white hover:bg-white/5'
                 )}>
-                <Icon size={14} />
+                <Icon size={13} />
                 {label}
               </button>
             ))}
