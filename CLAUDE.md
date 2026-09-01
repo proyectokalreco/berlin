@@ -242,6 +242,15 @@ resuelve solo limpiando caché/recargando si algún usuario ve pantalla en blanc
 deploy futuro. Impresión térmica: cambio verificado en el HTML, pendiente que el cliente
 confirme en la impresora física con el próximo ticket real.
 
+### 11. Panel de pago no se veía igual a Esquina (commit `90b5367`, mismo día)
+El cliente comparó capturas: faltaba selector de cliente siempre visible, "Pago Completo"
+destacado ancho completo, grid de métodos en 2 columnas (tenía 4-en-fila), y la barra
+arrastrable entre lista de items y bloque de pago. Fix: reestructurado el bloque de pago con
+esos 4 elementos, mismo patrón visual de Esquina (colores propios de Berlín/Tulio, no se
+copiaron los colores de Esquina). Se agregó también scroll con rueda del mouse en la barra de
+categorías (antes solo flechitas/trackpad) — mismo límite existe hoy en Esquina, no se tocó
+ahí. Desplegado y confirmado por el usuario en producción.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
