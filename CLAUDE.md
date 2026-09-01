@@ -231,6 +231,17 @@ hubo que verificarlo, no asumirlo). Fix: Arial `font-weight:600`, tamaños a 13p
 `ProveedoresPage.tsx` — mismo riesgo si se imprime en la térmica del negocio, pero es un
 cambio de layout más grande, sin confirmar con el cliente que hoy salga mal.
 
+**Verificado en vivo en producción (2026-08-30), navegando el panel real:** tab "Venta 1" +
+"Nueva venta" renderizan bien · producto agregado al carrito y botón "P. Completo" visibles a
+la vez (sin pantalla aparte, confirmado) · **abono real probado**: cliente Luisa Herrera,
+factura VT-20260831-0001-27, deuda $12.000 → abono $5.000 efectivo exitoso → saldo $7.000,
+queda en historial. Antes de este fix daba "Error de base de datos" siempre. **Decisión del
+cliente: este abono de prueba se queda, no se revierte.** Los 401/MIME vistos en consola al
+probar eran caché vieja del Service Worker (PWA) tras el deploy, no bug de código — se
+resuelve solo limpiando caché/recargando si algún usuario ve pantalla en blanco tras un
+deploy futuro. Impresión térmica: cambio verificado en el HTML, pendiente que el cliente
+confirme en la impresora física con el próximo ticket real.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
