@@ -138,7 +138,7 @@ const METODO_COLOR: Record<string, string> = {
 }
 function MetodoBadge({ m }: { m: string }) {
   const cls = METODO_COLOR[m] ?? 'bg-gray-500/15 text-gray-400 border-gray-500/30'
-  const lbl = m === 'efectivo' ? 'Efectivo' : m === 'transferencia' ? 'Transferencia'
+  const lbl = m === 'efectivo' ? 'Efectivo' : m === 'transferencia' ? 'Pago Electrónico'
     : m === 'credito' ? 'Crédito' : m === 'qr' ? 'QR/Nequi' : m
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cls}`}>{lbl.toUpperCase()}</span>
 }
@@ -202,7 +202,7 @@ export default function FacturacionPage() {
       { Concepto: 'Total ventas',    Valor: resumen.total },
       { Concepto: 'Transacciones',   Valor: resumen.count },
       { Concepto: 'Efectivo',        Valor: resumen.efectivo },
-      { Concepto: 'Transferencia',   Valor: resumen.transferencia },
+      { Concepto: 'Pago Electrónico', Valor: resumen.transferencia },
       { Concepto: 'QR / Nequi',      Valor: resumen.qr },
       { Concepto: 'Crédito',         Valor: resumen.credito },
       { Concepto: 'Anuladas',        Valor: resumen.anuladas },
@@ -248,7 +248,7 @@ export default function FacturacionPage() {
 <div class="row b" style="font-size:15px"><span>TOTAL VENTAS:</span><span>${fmt(resumen.total)}</span></div>
 <div class="sep"></div>
 <div class="row sm"><span>Efectivo:</span><span>${fmt(resumen.efectivo)}</span></div>
-<div class="row sm"><span>Transferencia:</span><span>${fmt(resumen.transferencia)}</span></div>
+<div class="row sm"><span>Pago Electronico:</span><span>${fmt(resumen.transferencia)}</span></div>
 <div class="row sm"><span>QR / Nequi:</span><span>${fmt(resumen.qr)}</span></div>
 <div class="row sm"><span>Crédito:</span><span>${fmt(resumen.credito)}</span></div>
 <div class="sep"></div>
@@ -430,7 +430,7 @@ export default function FacturacionPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             { label: 'Efectivo',      value: resumen.efectivo,      icon: Banknote,    color: 'text-green-400', bg: 'bg-green-500/10' },
-            { label: 'Transferencia', value: resumen.transferencia, icon: Smartphone,  color: 'text-purple-400',bg: 'bg-purple-500/10' },
+            { label: 'Pago Electrónico', value: resumen.transferencia, icon: Smartphone,  color: 'text-purple-400',bg: 'bg-purple-500/10' },
             { label: 'QR / Nequi',   value: resumen.qr,            icon: Clock,       color: 'text-yellow-400',bg: 'bg-yellow-500/10' },
             { label: 'Crédito',      value: resumen.credito,       icon: CreditCard,  color: 'text-blue-400',  bg: 'bg-blue-500/10' },
           ].map(({ label, value, icon: Icon, color, bg }) => (

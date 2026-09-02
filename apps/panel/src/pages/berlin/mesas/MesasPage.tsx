@@ -128,7 +128,7 @@ ${datos.redondeo !== 0
 </div>
 <div class="sep"></div>
 <div class="row b"><span>Método de pago:</span><span>${
-  datos.metodo_pago === 'transferencia' ? 'Transferencia'
+  datos.metodo_pago === 'transferencia' ? 'Pago Electrónico'
   : datos.metodo_pago === 'credito' ? 'Crédito'
   : datos.metodo_pago === 'qr' ? 'QR / Nequi'
   : 'Efectivo'
@@ -719,7 +719,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                   {([
                     { id:'efectivo',      label:'Efectivo',      icon: Banknote },
                     { id:'exacto',        label:'Pago completo', icon: Check },
-                    { id:'transferencia', label:'Transferencia',  icon: Smartphone },
+                    { id:'transferencia', label:'Pago Electrónico',  icon: Smartphone },
                     { id:'qr',            label:'QR / Nequi',    icon: Zap },
                     { id:'credito',       label:'Crédito',       icon: CreditCard },
                   ] as const).map(m => (

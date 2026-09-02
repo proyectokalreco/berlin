@@ -186,7 +186,7 @@ export default function GastosPage() {
                     className="w-full bg-brand-dark border border-white/10 rounded-xl px-3 py-3 text-sm text-white
                                focus:outline-none focus:border-orange-500/50 min-h-[48px]">
                     <option value="efectivo">Efectivo</option>
-                    <option value="transferencia">Transferencia</option>
+                    <option value="transferencia">Pago Electrónico</option>
                     <option value="tarjeta">Tarjeta</option>
                   </select>
                 </div>

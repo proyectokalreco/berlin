@@ -12,9 +12,9 @@ import { CSS } from '@dnd-kit/utilities'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../store/authStore'
 import {
-  ShoppingCart, Package, FlaskConical, BookOpen, Banknote,
+  ShoppingCart, Package, BookOpen, Banknote,
   Truck, FileText, Users, UserCheck, Receipt, BarChart3,
-  PieChart, TrendingUp, CheckCircle, AlertCircle, Clock, AlertTriangle, Tag, LayoutGrid,
+  PieChart, TrendingUp, CheckCircle, AlertCircle, Clock, AlertTriangle, LayoutGrid,
   Pencil, X, Upload, Link2, ImageIcon, Settings2, CreditCard, GripVertical,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -41,7 +41,6 @@ const ALL_MODULES = [
   { to: `${BASE}/caja`,         icon: Banknote,     label: 'Caja',         sub: 'Apertura · Cierre',          color: GOLDEN               },
   { to: `${BASE}/mesas`,        icon: LayoutGrid,   label: 'Mesas',        sub: 'Gestión de mesas · Meseros', color: '#00C49A'             },
   { to: `${BASE}/inventario`,   icon: Package,      label: 'Inventario',   sub: 'Productos · Insumos',        color: '#00C49A'             },
-  { to: `${BASE}/mojes`,        icon: FlaskConical, label: 'Mojes',        sub: 'Plan de producción',         color: '#F59E0B'             },
   { to: `${BASE}/recetas`,      icon: BookOpen,     label: 'Recetas',      sub: 'Costeo · Formulación',       color: '#C084FC'             },
   { to: `${BASE}/proveedores`,  icon: Truck,        label: 'Proveedores',  sub: 'Facturas · Compras',         color: '#60A5FA'             },
   { to: `${BASE}/facturacion`,  icon: FileText,     label: 'Facturación Diaria',  sub: 'Facturas · Anular · Exportar', color: '#34D399'             },
@@ -51,7 +50,6 @@ const ALL_MODULES = [
   { to: `${BASE}/movimientos`,  icon: BarChart3,      label: 'Libro Diario', sub: 'Ingresos · Gastos · Compras', color: '#A78BFA'             },
   { to: `${BASE}/reportes`,     icon: PieChart,       label: 'Reportes',     sub: 'Excel · PDF · Cierre',       color: '#4ADE80'             },
   { to: `${BASE}/mermas`,         icon: AlertTriangle,  label: 'Pérdidas',          sub: 'Productos dañados',          color: '#FBBF24'             },
-  { to: `${BASE}/etiquetas`,      icon: Tag,            label: 'Etiquetas',         sub: 'Imprimir código de barras',  color: '#64748B'             },
   { to: `${BASE}/cuentas-pagar`,  icon: AlertCircle,    label: 'Cuentas por Pagar', sub: 'Facturas · Vencimientos',    color: '#F97316'             },
   { to: `${BASE}/cuentas-cobrar`, icon: CreditCard,     label: 'Cuentas por Cobrar',sub: 'Créditos · Saldos',          color: '#00C49A'             },
 ]
@@ -60,7 +58,7 @@ const MODULOS_POR_ROL: Record<string, string[]> = {
   super_admin:     ALL_MODULES.map(m => m.label),
   admin:           ALL_MODULES.map(m => m.label),
   admin_berlin: ALL_MODULES.map(m => m.label),
-  panadero:        ['Mojes', 'Inventario', 'Recetas', 'Pérdidas', 'Etiquetas'],
+  panadero:        ['Inventario', 'Recetas', 'Pérdidas'],
   cajero:          ['Caja', 'POS', 'Mesas', 'Facturación Diaria', 'Clientes', 'Cuentas por Cobrar'],
   vendedor:        ['Caja', 'POS', 'Mesas', 'Clientes'],
   mesero:          ['Mesas', 'Inventario'],

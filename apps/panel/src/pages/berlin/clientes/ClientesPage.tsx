@@ -852,7 +852,7 @@ function ModalAbonar({ cliente, ventaPreseleccionada, ventasPendientes, onClose,
                   metodo === m
                     ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
                     : 'bg-brand-dark border-white/10 text-gray-400 hover:border-white/20')}>
-                {m}
+                {m === 'transferencia' ? 'Pago Electrónico' : m}
               </button>
             ))}
           </div>

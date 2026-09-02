@@ -279,9 +279,9 @@ ${ivaTotal > 0
 ${venta.metodoPago === 'mixto' ? `
 <div class="row b"><span>Metodo de pago:</span><span>Mixto</span></div>
 <div class="row"><span>Efectivo:</span><span class="amt">${fmt(venta.mixtoEfectivo ?? 0)}</span></div>
-<div class="row"><span>Transferencia:</span><span class="amt">${fmt(venta.mixtoTransferencia ?? 0)}</span></div>
+<div class="row"><span>Pago Electronico:</span><span class="amt">${fmt(venta.mixtoTransferencia ?? 0)}</span></div>
 ` : venta.metodoPago === 'transferencia' ? `
-<div class="row b"><span>Metodo de pago:</span><span>Transferencia</span></div>
+<div class="row b"><span>Metodo de pago:</span><span>Pago Electronico</span></div>
 <div class="row sm"><span>Efectivo recibido:</span><span>N/A</span></div>
 ` : venta.metodoPago === 'credito' ? `
 <div class="row b" style="color:#000"><span>*** VENTA A CREDITO ***</span></div>
@@ -557,6 +557,7 @@ export default function POS() {
   const [mixtoTransferencia, setMixtoTransferencia] = useState('')
   const searchRef                           = useRef<HTMLInputElement>(null)
   const catScrollRef                        = useRef<HTMLDivElement>(null)
+  const efectivoInputRef                    = useRef<HTMLInputElement>(null)
 
   // ── Detección móvil para layout adaptable ──
   const [isMobile, setIsMobile] = useState(() =>
@@ -832,6 +833,12 @@ export default function POS() {
     if (m !== 'credito') { setClienteCredito(null); setBuscandoCliente('') }
     if (m !== 'mixto') { setMixtoEfectivo(''); setMixtoTransferencia('') }
   }
+
+  // Foco automático en el campo de efectivo al elegir ese método — antes era
+  // un <p> de solo lectura, sin cursor, aunque el numpad sí escribía el valor.
+  useEffect(() => {
+    if (metodoPago === 'efectivo') efectivoInputRef.current?.focus()
+  }, [metodoPago])
 
   // ── Cálculos ──
   const subTotal    = cart.reduce((s, i) => s + precioEfectivo(i) * i.cantidad, 0)
@@ -1463,7 +1470,7 @@ export default function POS() {
           <div className="grid grid-cols-2 gap-1">
             {([
               { m: 'efectivo',      label: 'Efectivo',      icon: Banknote   },
-              { m: 'transferencia', label: 'Transferencia', icon: Smartphone },
+              { m: 'transferencia', label: 'Pago Electrónico', icon: Smartphone },
               { m: 'mixto',         label: 'Mixto',         icon: Layers     },
               { m: 'credito',       label: 'Crédito',       icon: CreditCard },
             ] as { m: typeof metodoPago; label: string; icon: React.ElementType }[]).map(({ m, label, icon: Icon }) => (
@@ -1485,10 +1492,26 @@ export default function POS() {
           {/* EFECTIVO — numpad */}
           {metodoPago === 'efectivo' && (<>
             <div className="bg-[#162C50] border border-white/8 rounded-xl px-4 py-2.5 text-center">
-              <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">Efectivo recibido</p>
-              <p className="text-2xl font-bold text-white tabular-nums min-h-[1.8rem]">
-                {efectivo ? fmt(parseFloat(efectivo)) : <span className="text-gray-700">$ 0</span>}
-              </p>
+              <label htmlFor="efectivo-input" className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">
+                Efectivo recibido
+              </label>
+              <div className="relative flex items-center justify-center">
+                <span className="text-2xl font-bold text-gray-600 mr-1">$</span>
+                <input
+                  id="efectivo-input"
+                  ref={efectivoInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  value={efectivo ? new Intl.NumberFormat('es-CO').format(parseInt(efectivo, 10)) : ''}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/\D/g, '')
+                    setEfectivo(raw)
+                  }}
+                  placeholder="0"
+                  className="bg-transparent text-2xl font-bold text-white tabular-nums text-center
+                             placeholder:text-gray-700 focus:outline-none w-full max-w-[10rem]"
+                />
+              </div>
             </div>
             <NumPad valor={efectivo} onChange={setEfectivo} total={total} />
             {efectivoNum >= total && total > 0 && (
@@ -1515,7 +1538,7 @@ export default function POS() {
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center space-y-1">
               <Smartphone size={20} className="text-blue-400 mx-auto" />
               <p className="text-white font-bold text-xl tabular-nums">{fmt(total)}</p>
-              <p className="text-xs text-gray-400">El cliente realizó la transferencia</p>
+              <p className="text-xs text-gray-400">El cliente realizó el pago electrónico</p>
               <p className="text-xs text-blue-400 font-medium">Verifica el recibo antes de confirmar</p>
             </div>
           )}
@@ -1526,7 +1549,7 @@ export default function POS() {
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Dividir pago</p>
               {[
                 { label: 'Efectivo',      val: mixtoEfectivo,      set: setMixtoEfectivo      },
-                { label: 'Transferencia', val: mixtoTransferencia, set: setMixtoTransferencia },
+                { label: 'Pago Electrónico', val: mixtoTransferencia, set: setMixtoTransferencia },
               ].map(({ label, val, set }) => (
                 <div key={label}>
                   <label className="text-[10px] text-gray-500 mb-0.5 block">{label}</label>
@@ -1698,7 +1721,7 @@ export default function POS() {
           )}>{ventaOk.numero_venta}</p>
           <p className="text-gray-400 text-sm mt-1">
             {ventaOk.metodo === 'credito' ? 'Venta a crédito'
-            : ventaOk.metodo === 'transferencia' ? 'Pago por transferencia'
+            : ventaOk.metodo === 'transferencia' ? 'Pago electrónico'
             : ventaOk.metodo === 'mixto' ? 'Pago mixto'
             : 'Venta procesada'}
           </p>
@@ -1710,7 +1733,7 @@ export default function POS() {
           )}
           {ventaOk.metodo === 'mixto' && (
             <p className="text-green-300 text-sm mt-2">
-              Efectivo <strong>{fmt(ventaOk.mixtoEfectivo ?? 0)}</strong> · Transferencia <strong>{fmt(ventaOk.mixtoTransferencia ?? 0)}</strong>
+              Efectivo <strong>{fmt(ventaOk.mixtoEfectivo ?? 0)}</strong> · Pago Electrónico <strong>{fmt(ventaOk.mixtoTransferencia ?? 0)}</strong>
             </p>
           )}
           {ventaOk.cambioEntregado > 0 && (

@@ -101,7 +101,7 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <p class="b sm" style="margin-bottom:3px">VENTAS DEL TURNO</p>
 <div class="row"><span>Total ventas:</span><span class="amt">${fmt(turno.total_ventas)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Efectivo:</span><span class="amt">${fmt(turno.total_ventas_efectivo)}</span></div>
-<div class="row sm"><span>&nbsp;&nbsp;Transferencia:</span><span class="amt">${fmt(turno.total_ventas_transferencia)}</span></div>
+<div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(turno.total_ventas_transferencia)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;QR / Nequi:</span><span class="amt">${fmt(turno.total_ventas_qr)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(turno.total_credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${turno.num_ventas}</span></div>
@@ -381,7 +381,7 @@ export default function CajaPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Efectivo',      value: ventasTurno?.efectivo ?? 0,       color: 'text-green-400'  },
-                { label: 'Transferencia', value: ventasTurno?.transferencias ?? 0, color: 'text-blue-400'   },
+                { label: 'Pago Electrónico', value: ventasTurno?.transferencias ?? 0, color: 'text-blue-400'   },
                 { label: 'QR / Nequi',   value: ventasTurno?.qr ?? 0,             color: 'text-purple-400' },
                 { label: 'Crédito',       value: ventasTurno?.credito ?? 0,        color: 'text-pink-400'   },
               ].map(({ label, value, color }) => (
@@ -399,7 +399,7 @@ export default function CajaPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Efectivo',      value: ventasHoy?.efectivo ?? 0,       color: 'text-green-400'  },
-                { label: 'Transferencia', value: ventasHoy?.transferencias ?? 0, color: 'text-blue-400'   },
+                { label: 'Pago Electrónico', value: ventasHoy?.transferencias ?? 0, color: 'text-blue-400'   },
                 { label: 'QR / Nequi',   value: ventasHoy?.qr ?? 0,             color: 'text-purple-400' },
                 { label: 'Crédito',       value: ventasHoy?.credito ?? 0,        color: 'text-pink-400'   },
               ].map(({ label, value, color }) => (

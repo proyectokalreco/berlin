@@ -648,7 +648,7 @@ function ModalPagarFactura({ factura, onClose, onPagada }: {
       <tr><td class="key">Proveedor</td><td class="val">${factura.proveedor?.nombre ?? '—'}</td></tr>
       ${factura.numero_factura ? `<tr><td class="key">N° Factura</td><td class="val">${factura.numero_factura}</td></tr>` : ''}
       <tr><td class="key">Total pagado</td><td class="val b" style="font-size:13px">${fmtCOP(factura.total)}</td></tr>
-      <tr><td class="key">Método de pago</td><td class="val">${metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia'}</td></tr>
+      <tr><td class="key">Método de pago</td><td class="val">${metodoPago === 'efectivo' ? 'Efectivo' : 'Pago Electrónico'}</td></tr>
       ${referencia ? `<tr><td class="key">Referencia</td><td class="val">${referencia}</td></tr>` : ''}
       <tr><td class="key">Fecha de pago</td><td class="val">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}</td></tr>
     </tbody></table>
@@ -716,7 +716,7 @@ function ModalPagarFactura({ factura, onClose, onPagada }: {
                   metodoPago === 'transferencia'
                     ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
                     : 'bg-brand-dark border-white/10 text-gray-500 hover:text-gray-300'}`}>
-                <CreditCard size={16}/> Transferencia
+                <CreditCard size={16}/> Pago Electrónico
               </button>
             </div>
           </div>
@@ -1554,7 +1554,7 @@ export default function ProveedoresPage() {
                         formCompra.metodo_pago === m
                           ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
                           : 'bg-brand-dark border-white/10 text-gray-500 hover:text-gray-300')}>
-                      {m}
+                      {m === 'transferencia' ? 'Pago Electrónico' : m}
                     </button>
                   ))}
                 </div>

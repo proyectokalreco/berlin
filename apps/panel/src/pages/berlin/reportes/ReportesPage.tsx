@@ -34,7 +34,7 @@ interface VentaDia {
 const METODO_BADGE: Record<string, { label: string; cls: string }> = {
   efectivo:      { label: 'Efectivo',      cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
   exacto:        { label: 'Exacto',        cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
-  transferencia: { label: 'Transferencia', cls: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
+  transferencia: { label: 'Pago Electrónico', cls: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
   credito:       { label: 'Crédito',       cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   qr:            { label: 'QR/Nequi',      cls: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
   encargo:       { label: 'Encargo',       cls: 'bg-brand-teal/15 text-brand-teal border-brand-teal/30' },
