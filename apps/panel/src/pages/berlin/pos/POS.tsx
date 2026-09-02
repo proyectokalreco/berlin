@@ -7,7 +7,7 @@ import {
   Search, X, Minus, Plus, Trash2, Printer, CheckCircle,
   ShoppingCart, Grid3X3, Delete, ChevronLeft, ChevronRight,
   Keyboard, Lock, Banknote, Zap, Smartphone, CreditCard, Users,
-  Phone, Wifi, WifiOff, RefreshCw,
+  Phone, Wifi, WifiOff, RefreshCw, Layers,
 } from 'lucide-react'
 import { useOfflineQueue } from './useOfflineQueue'
 import type { QueuedSale } from './useOfflineQueue'
@@ -33,16 +33,19 @@ interface VentaEnPausa {
   numero:          number
   cart:            CartItem[]
   efectivo:        string
-  metodoPago:      'efectivo' | 'exacto' | 'transferencia' | 'credito'
+  metodoPago:      'efectivo' | 'exacto' | 'transferencia' | 'credito' | 'mixto'
   clienteCredito:  { id: string; nombre: string; telefono?: string } | null
   buscandoCliente: string
   idempotencyKey:  string
+  mixtoEfectivo:      string
+  mixtoTransferencia: string
   creadaEn:        number
 }
 const STORAGE_KEY_VENTAS = 'br_pos_ventas_pausa'
 const ventaVacia = (id: string, numero: number): VentaEnPausa => ({
   id, numero, cart: [], efectivo: '', metodoPago: 'efectivo',
   clienteCredito: null, buscandoCliente: '',
+  mixtoEfectivo: '', mixtoTransferencia: '',
   idempotencyKey: crypto.randomUUID(), creadaEn: Date.now(),
 })
 
@@ -154,8 +157,10 @@ function imprimirTicket(venta: {
   efectivo:     number
   cambio:       number
   cajero?:      string
-  metodoPago?:  string   // 'efectivo' | 'transferencia' | 'credito'
+  metodoPago?:  string   // 'efectivo' | 'transferencia' | 'credito' | 'mixto'
   clienteNombre?: string
+  mixtoEfectivo?: number
+  mixtoTransferencia?: number
 }) {
   const fecha = new Date().toLocaleString('es-CO', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -271,11 +276,15 @@ ${ivaTotal > 0
 </div>
 
 <div class="sep"></div>
-${venta.metodoPago === 'transferencia' ? `
+${venta.metodoPago === 'mixto' ? `
+<div class="row b"><span>Metodo de pago:</span><span>Mixto</span></div>
+<div class="row"><span>Efectivo:</span><span class="amt">${fmt(venta.mixtoEfectivo ?? 0)}</span></div>
+<div class="row"><span>Transferencia:</span><span class="amt">${fmt(venta.mixtoTransferencia ?? 0)}</span></div>
+` : venta.metodoPago === 'transferencia' ? `
 <div class="row b"><span>Metodo de pago:</span><span>Transferencia</span></div>
 <div class="row sm"><span>Efectivo recibido:</span><span>N/A</span></div>
 ` : venta.metodoPago === 'credito' ? `
-<div class="row b" style="color:#c00"><span>*** VENTA A CREDITO ***</span></div>
+<div class="row b" style="color:#000"><span>*** VENTA A CREDITO ***</span></div>
 <div class="row"><span>Cliente:</span><span><b>${venta.clienteNombre ?? 'Sin nombre'}</b></span></div>
 <div class="row sm"><span>Metodo de pago:</span><span>Credito</span></div>
 ` : `
@@ -537,12 +546,15 @@ export default function POS() {
   const [efectivo,       setEfectivo]       = useState('')
   const [ventaOk,        setVentaOk]        = useState<{
     numero_venta: string; total: number
-    metodo: 'efectivo' | 'exacto' | 'transferencia' | 'credito'
+    metodo: 'efectivo' | 'exacto' | 'transferencia' | 'credito' | 'mixto'
     clienteNombre?: string; efectivoPagado: number; cambioEntregado: number
+    mixtoEfectivo?: number; mixtoTransferencia?: number
   } | null>(null)
-  const [metodoPago,     setMetodoPago]     = useState<'efectivo' | 'exacto' | 'transferencia' | 'credito'>('efectivo')
+  const [metodoPago,     setMetodoPago]     = useState<'efectivo' | 'exacto' | 'transferencia' | 'credito' | 'mixto'>('efectivo')
   const [clienteCredito, setClienteCredito] = useState<{ id: string; nombre: string; telefono?: string } | null>(null)
   const [buscandoCliente,setBuscandoCliente]= useState('')
+  const [mixtoEfectivo,      setMixtoEfectivo]      = useState('')
+  const [mixtoTransferencia, setMixtoTransferencia] = useState('')
   const searchRef                           = useRef<HTMLInputElement>(null)
   const catScrollRef                        = useRef<HTMLDivElement>(null)
 
@@ -638,6 +650,7 @@ export default function POS() {
     setCart(v.cart); setEfectivo(v.efectivo); setMetodoPago(v.metodoPago)
     setClienteCredito(v.clienteCredito); setBuscandoCliente(v.buscandoCliente)
     setIdempotencyKey(v.idempotencyKey)
+    setMixtoEfectivo(v.mixtoEfectivo ?? ''); setMixtoTransferencia(v.mixtoTransferencia ?? '')
   }
 
   useEffect(() => {
@@ -667,10 +680,10 @@ export default function POS() {
   useEffect(() => {
     if (!hidratado.current || !ventaActivaId) return
     setVentas(prev => prev.map(v => v.id === ventaActivaId
-      ? { ...v, cart, efectivo, metodoPago, clienteCredito, buscandoCliente, idempotencyKey }
+      ? { ...v, cart, efectivo, metodoPago, clienteCredito, buscandoCliente, idempotencyKey, mixtoEfectivo, mixtoTransferencia }
       : v))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, efectivo, metodoPago, clienteCredito, buscandoCliente, idempotencyKey])
+  }, [cart, efectivo, metodoPago, clienteCredito, buscandoCliente, idempotencyKey, mixtoEfectivo, mixtoTransferencia])
 
   useEffect(() => {
     if (!hidratado.current) return
@@ -808,6 +821,7 @@ export default function POS() {
   const clearCart = () => {
     setCart([]); setEfectivo(''); setVentaOk(null)
     setMetodoPago('efectivo'); setClienteCredito(null); setBuscandoCliente('')
+    setMixtoEfectivo(''); setMixtoTransferencia('')
     setIdempotencyKey(crypto.randomUUID())
     if (isMobile) setPosView('catalogo')
   }
@@ -816,6 +830,7 @@ export default function POS() {
     setMetodoPago(m)
     setEfectivo('')
     if (m !== 'credito') { setClienteCredito(null); setBuscandoCliente('') }
+    if (m !== 'mixto') { setMixtoEfectivo(''); setMixtoTransferencia('') }
   }
 
   // ── Cálculos ──
@@ -825,11 +840,16 @@ export default function POS() {
   const redondeo    = total - subTotal            // positivo → sube, negativo → baja, 0 → exacto
   const efectivoNum = parseFloat(efectivo) || 0
   const cambio      = Math.max(0, efectivoNum - total)
+  const mixtoEfeNum = parseFloat(mixtoEfectivo) || 0
+  const mixtoTraNum = parseFloat(mixtoTransferencia) || 0
+  const mixtoSuma   = mixtoEfeNum + mixtoTraNum
+  const mixtoValido = mixtoEfeNum >= 0 && mixtoTraNum >= 0 && Math.abs(mixtoSuma - total) <= 1
   const canCobrar   = cart.length > 0 && (
     (metodoPago === 'efectivo'     && efectivoNum >= total) ||
     (metodoPago === 'exacto'       ) ||
     (metodoPago === 'transferencia') ||
-    (metodoPago === 'credito'      && clienteCredito !== null)
+    (metodoPago === 'credito'      && clienteCredito !== null) ||
+    (metodoPago === 'mixto'        && mixtoValido)
   )
 
   // ── Venta ──
@@ -846,6 +866,8 @@ export default function POS() {
         cliente_id:       metodoPago === 'credito' ? clienteCredito?.id : undefined,
         redondeo,
         idempotency_key:  idempotencyKey,
+        monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+        monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
       })
     },
     onSuccess: (res) => {
@@ -858,6 +880,8 @@ export default function POS() {
         numero_venta: venta.numero_venta, total,
         metodo: metodoPago, clienteNombre: clienteCredito?.nombre,
         efectivoPagado, cambioEntregado,
+        mixtoEfectivo: metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+        mixtoTransferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
       })
       imprimirTicket({
         numero_venta: venta.numero_venta,
@@ -870,6 +894,8 @@ export default function POS() {
         cajero:       user?.nombre,
         metodoPago:   metodoPagoReal,
         clienteNombre: clienteCredito?.nombre,
+        mixtoEfectivo: metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+        mixtoTransferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
       })
       toast.success(`✅ Venta ${venta.numero_venta} procesada`)
       setIdempotencyKey(crypto.randomUUID())
@@ -899,6 +925,8 @@ export default function POS() {
             cliente_id: metodoPago === 'credito' ? clienteCredito?.id : undefined,
             redondeo,
             idempotency_key: idempotencyKey,
+            monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+            monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
           },
           queued_at: Date.now(),
         }
@@ -1436,6 +1464,7 @@ export default function POS() {
             {([
               { m: 'efectivo',      label: 'Efectivo',      icon: Banknote   },
               { m: 'transferencia', label: 'Transferencia', icon: Smartphone },
+              { m: 'mixto',         label: 'Mixto',         icon: Layers     },
               { m: 'credito',       label: 'Crédito',       icon: CreditCard },
             ] as { m: typeof metodoPago; label: string; icon: React.ElementType }[]).map(({ m, label, icon: Icon }) => (
               <button key={m} onClick={() => cambiarMetodo(m)}
@@ -1488,6 +1517,38 @@ export default function POS() {
               <p className="text-white font-bold text-xl tabular-nums">{fmt(total)}</p>
               <p className="text-xs text-gray-400">El cliente realizó la transferencia</p>
               <p className="text-xs text-blue-400 font-medium">Verifica el recibo antes de confirmar</p>
+            </div>
+          )}
+
+          {/* MIXTO — divide el pago entre efectivo y transferencia */}
+          {metodoPago === 'mixto' && (
+            <div className="space-y-2 rounded-xl border border-white/8 bg-[#162C50] p-2.5">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Dividir pago</p>
+              {[
+                { label: 'Efectivo',      val: mixtoEfectivo,      set: setMixtoEfectivo      },
+                { label: 'Transferencia', val: mixtoTransferencia, set: setMixtoTransferencia },
+              ].map(({ label, val, set }) => (
+                <div key={label}>
+                  <label className="text-[10px] text-gray-500 mb-0.5 block">{label}</label>
+                  <input
+                    type="text" inputMode="numeric"
+                    value={val}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+                      if (raw === '') { set(''); return }
+                      set(new Intl.NumberFormat('es-CO').format(parseInt(raw, 10)))
+                    }}
+                    placeholder="0"
+                    className="w-full bg-brand-dark text-white border border-white/10 rounded-lg px-3 py-1.5
+                               text-sm focus:outline-none focus:border-[#EA580C]/50"
+                  />
+                </div>
+              ))}
+              <div className={cn('flex justify-between text-[11px] font-semibold px-0.5',
+                mixtoValido ? 'text-green-400' : 'text-red-400')}>
+                <span>Suma: {fmt(mixtoSuma)}</span>
+                <span>Total: {fmt(total)}</span>
+              </div>
             </div>
           )}
 
@@ -1607,6 +1668,8 @@ export default function POS() {
                 </span>
             : metodoPago === 'credito' && !clienteCredito
               ? 'Seleccionar cliente'
+            : metodoPago === 'mixto' && !mixtoValido
+              ? 'Cuadrar montos del mixto'
             : `Cobrar · ${fmt(total)}`
             }
           </button>
@@ -1636,12 +1699,18 @@ export default function POS() {
           <p className="text-gray-400 text-sm mt-1">
             {ventaOk.metodo === 'credito' ? 'Venta a crédito'
             : ventaOk.metodo === 'transferencia' ? 'Pago por transferencia'
+            : ventaOk.metodo === 'mixto' ? 'Pago mixto'
             : 'Venta procesada'}
           </p>
           <p className="text-white font-bold text-2xl mt-1 tabular-nums">{fmt(ventaOk.total)}</p>
           {ventaOk.metodo === 'credito' && ventaOk.clienteNombre && (
             <p className="text-pink-300 text-sm mt-2">
               Cliente: <strong>{ventaOk.clienteNombre}</strong>
+            </p>
+          )}
+          {ventaOk.metodo === 'mixto' && (
+            <p className="text-green-300 text-sm mt-2">
+              Efectivo <strong>{fmt(ventaOk.mixtoEfectivo ?? 0)}</strong> · Transferencia <strong>{fmt(ventaOk.mixtoTransferencia ?? 0)}</strong>
             </p>
           )}
           {ventaOk.cambioEntregado > 0 && (
@@ -1659,6 +1728,8 @@ export default function POS() {
                 cajero:    user?.nombre,
                 metodoPago: ventaOk.metodo === 'exacto' ? 'efectivo' : ventaOk.metodo,
                 clienteNombre: ventaOk.clienteNombre,
+                mixtoEfectivo: ventaOk.mixtoEfectivo,
+                mixtoTransferencia: ventaOk.mixtoTransferencia,
               })}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
                          border border-white/10 text-gray-400 hover:text-white hover:bg-white/5">

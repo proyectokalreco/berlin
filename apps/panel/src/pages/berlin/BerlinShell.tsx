@@ -15,7 +15,7 @@ import toast from 'react-hot-toast'
 // ── Paleta Berlín Café Bar (tomada del logo) ───────────────────
 const GOLD  = '#D9A652'
 const GOLD_DK = '#A15F2F'
-const BG_DARK = '#1A120B'
+const BG_DARK = '#2B1D14'
 
 // ── Logo de Berlín Café Bar ─────────────────────────────
 function BerlinLogo() {
@@ -120,7 +120,7 @@ function NotifBell({ rol }: { rol: string }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-50 w-80 bg-[#241811] rounded-2xl border border-white/10
+          <div className="absolute right-0 top-10 z-50 w-80 bg-[#3A2818] rounded-2xl border border-white/10
                           shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
               <p className="text-sm font-bold text-white">

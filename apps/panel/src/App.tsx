@@ -77,12 +77,12 @@ export default function App() {
         position="top-right"
         toastOptions={{
           style: {
-            background: '#241811',
+            background: '#3A2818',
             color: '#fff',
             border: '1px solid rgba(217,166,82,0.15)',
           },
-          success: { iconTheme: { primary: '#D9A652', secondary: '#241811' } },
-          error:   { iconTheme: { primary: '#FF6B35', secondary: '#241811' } },
+          success: { iconTheme: { primary: '#D9A652', secondary: '#3A2818' } },
+          error:   { iconTheme: { primary: '#FF6B35', secondary: '#3A2818' } },
         }}
       />
     </QueryClientProvider>

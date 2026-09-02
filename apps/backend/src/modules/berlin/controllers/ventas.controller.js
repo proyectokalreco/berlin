@@ -78,10 +78,21 @@ const crear = async (req, res, next) => {
       notas,
       caja_id,
       idempotency_key,
+      monto_efectivo,
+      monto_transferencia,
     } = req.body;
 
     if (!items?.length) {
       return res.status(400).json({ error: 'Se requiere al menos un ítem' });
+    }
+
+    if (metodo_pago === 'mixto') {
+      const me = parseFloat(monto_efectivo);
+      const mt = parseFloat(monto_transferencia);
+      if (!Number.isFinite(me) || !Number.isFinite(mt) || me < 0 || mt < 0) {
+        return res.status(400).json({ error: 'Pago mixto requiere monto_efectivo y monto_transferencia' });
+      }
+      // se valida contra el total más abajo, una vez calculado
     }
 
     // Idempotencia: si ya existe una venta con este key, devolver la existente
@@ -120,6 +131,16 @@ const crear = async (req, res, next) => {
 
     const totalFinal = Math.max(0, total)
 
+    let montoEfectivoVal = null;
+    let montoTransferenciaVal = null;
+    if (metodo_pago === 'mixto') {
+      montoEfectivoVal = parseFloat(monto_efectivo);
+      montoTransferenciaVal = parseFloat(monto_transferencia);
+      if (Math.abs((montoEfectivoVal + montoTransferenciaVal) - totalFinal) > 1) {
+        return res.status(400).json({ error: 'La suma de efectivo + transferencia no coincide con el total' });
+      }
+    }
+
     // Insertar venta
     const { data: venta, error: ventaErr } = await supabase
       .from('br_ventas')
@@ -136,6 +157,8 @@ const crear = async (req, res, next) => {
         caja_id:         caja_id || null,
         notas,
         idempotency_key: idempotency_key || null,
+        monto_efectivo:      montoEfectivoVal,
+        monto_transferencia: montoTransferenciaVal,
         // Ventas a crédito inician con saldo_pendiente = total
         saldo_pendiente: metodo_pago === 'credito' ? totalFinal : null,
       })
@@ -179,7 +202,7 @@ const crear = async (req, res, next) => {
 
     // Actualizar caja del día
     if (caja_id) {
-      await actualizarCaja(caja_id, total, metodo_pago);
+      await actualizarCaja(caja_id, total, metodo_pago, montoEfectivoVal, montoTransferenciaVal);
     }
 
     // Si había una venta a crédito anterior con saldo_pendiente NULL (antes de migration 015),
@@ -264,7 +287,7 @@ const resumenDia = async (req, res, next) => {
     const { desde, hasta } = rangoDiaColombia(fecha);
     const { data } = await supabase
       .from('br_ventas')
-      .select('total, metodo_pago, estado')
+      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia')
       .gte('fecha', desde)
       .lte('fecha', hasta);
 
@@ -273,8 +296,10 @@ const resumenDia = async (req, res, next) => {
     const resumen = {
       total_ventas:       totalVentas,
       num_ventas:         completadas.length,
-      efectivo:           completadas.filter(v => v.metodo_pago === 'efectivo').reduce((s, v) => s + parseFloat(v.total), 0),
-      transferencias:     completadas.filter(v => v.metodo_pago === 'transferencia').reduce((s, v) => s + parseFloat(v.total), 0),
+      efectivo:           completadas.filter(v => v.metodo_pago === 'efectivo').reduce((s, v) => s + parseFloat(v.total), 0)
+                            + completadas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_efectivo) || 0), 0),
+      transferencias:     completadas.filter(v => v.metodo_pago === 'transferencia').reduce((s, v) => s + parseFloat(v.total), 0)
+                            + completadas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_transferencia) || 0), 0),
       qr:                 completadas.filter(v => v.metodo_pago?.includes('qr')).reduce((s, v) => s + parseFloat(v.total), 0),
       credito:            completadas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
       ticket_promedio:    completadas.length > 0 ? totalVentas / completadas.length : 0,
@@ -410,7 +435,7 @@ const reporteMes = async (req, res, next) => {
 };
 
 // Helper interno
-async function actualizarCaja(cajaId, total, metodo_pago) {
+async function actualizarCaja(cajaId, total, metodo_pago, montoEfectivo, montoTransferencia) {
   if (metodo_pago === 'credito') {
     // Crédito: suma a total_ventas, num_ventas y total_credito
     // pero NO a efectivo/transferencia — el dinero no entra a caja de forma inmediata
@@ -418,6 +443,21 @@ async function actualizarCaja(cajaId, total, metodo_pago) {
       p_caja_id: cajaId,
       p_valor:   total,
     })
+    return
+  }
+
+  if (metodo_pago === 'mixto') {
+    // Reparte el mismo total entre los dos bolsillos — nunca contarlo todo como efectivo
+    if (montoEfectivo > 0) {
+      await supabase.rpc('br_incrementar_caja', {
+        p_caja_id: cajaId, p_campo: 'total_efectivo', p_valor: montoEfectivo,
+      });
+    }
+    if (montoTransferencia > 0) {
+      await supabase.rpc('br_incrementar_caja', {
+        p_caja_id: cajaId, p_campo: 'total_transferencias', p_valor: montoTransferencia,
+      });
+    }
     return
   }
 

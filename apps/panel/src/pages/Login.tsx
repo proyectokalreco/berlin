@@ -102,7 +102,7 @@ export default function Login() {
 
         <div
           className="rounded-2xl p-8 shadow-2xl"
-          style={{ background: '#1A120B', border: `1px solid ${GOLD}22` }}
+          style={{ background: '#2B1D14', border: `1px solid ${GOLD}22` }}
         >
           <h2 className="text-xl font-semibold text-white mb-6">Iniciar sesión</h2>
 
