@@ -122,7 +122,7 @@ function PreviewModal({
 }: { titulo: string; columnas: string[]; filas: string[][]; datos: Record<string,unknown>[]; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl max-h-[85vh] flex flex-col">
         {/* Cabecera */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
           <div>
@@ -297,7 +297,7 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-3xl border border-white/10 shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-3xl border border-white/10 shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
           <div>
@@ -323,7 +323,7 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-[#0D1B2A] z-10">
+              <thead className="sticky top-0 bg-[#1C1A18] z-10">
                 {/* Encabezados clicables */}
                 <tr className="border-b border-white/10">
                   {([
@@ -342,7 +342,7 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
                   <th className="text-center px-4 py-2.5 text-[11px] text-gray-400 uppercase tracking-wider font-medium">Acción</th>
                 </tr>
                 {/* Inputs de búsqueda por columna */}
-                <tr className="border-b border-white/5 bg-[#0D1B2A]">
+                <tr className="border-b border-white/5 bg-[#1C1A18]">
                   {([
                     [fTicket,   setFTicket,   'text-left',   'Buscar ticket…'],
                     [fMonto,    setFMonto,    'text-right',  'Valor…'],

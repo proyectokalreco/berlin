@@ -99,7 +99,7 @@ function ModalEditarModulo({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#112240] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl">
+      <div className="bg-[#2C2925] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">

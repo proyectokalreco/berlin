@@ -773,7 +773,7 @@ function EmojiPickerInput({
 
       {/* Panel flotante — renderizado en document.body, no recortado por el modal */}
       <div
-        className="fixed z-[9999] bg-[#0D1B2A] border border-white/20 rounded-2xl p-3 shadow-2xl w-56"
+        className="fixed z-[9999] bg-[#1C1A18] border border-white/20 rounded-2xl p-3 shadow-2xl w-56"
         style={{ top: panelPos.top, left: panelPos.left }}
       >
         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 px-1">
@@ -807,7 +807,7 @@ function EmojiPickerInput({
               onChange={e => onChange(e.target.value)}
               placeholder="🍞"
               autoFocus
-              className="flex-1 bg-[#112240] border border-white/10 rounded-lg px-3 py-1.5
+              className="flex-1 bg-[#2C2925] border border-white/10 rounded-lg px-3 py-1.5
                          text-lg text-center focus:outline-none focus:border-brand-teal
                          placeholder:text-gray-700"
             />
@@ -926,7 +926,7 @@ function ProductImageInput({
     <>
       <div className="fixed inset-0 z-[9998]" onClick={() => { setOpen(false); setMode('menu') }} />
       <div
-        className="fixed z-[9999] bg-[#0D1B2A] border border-white/20 rounded-2xl p-3 shadow-2xl w-56"
+        className="fixed z-[9999] bg-[#1C1A18] border border-white/20 rounded-2xl p-3 shadow-2xl w-56"
         style={{ top: panelPos.top, left: panelPos.left }}
       >
         {mode === 'menu' ? (
@@ -998,7 +998,7 @@ function ProductImageInput({
               onKeyDown={e => e.key === 'Enter' && handleUrlImport()}
               placeholder="https://..."
               autoFocus
-              className="w-full bg-[#112240] border border-white/10 rounded-lg px-3 py-2 text-xs text-white
+              className="w-full bg-[#2C2925] border border-white/10 rounded-lg px-3 py-2 text-xs text-white
                          focus:outline-none focus:border-brand-teal placeholder:text-gray-600"
             />
 
@@ -1062,7 +1062,7 @@ function ProductImageInput({
                   onChange={e => onChange(e.target.value)}
                   placeholder="🍞"
                   autoFocus
-                  className="flex-1 bg-[#112240] border border-white/10 rounded-lg px-3 py-1.5
+                  className="flex-1 bg-[#2C2925] border border-white/10 rounded-lg px-3 py-1.5
                              text-lg text-center focus:outline-none focus:border-brand-teal
                              placeholder:text-gray-700"
                 />

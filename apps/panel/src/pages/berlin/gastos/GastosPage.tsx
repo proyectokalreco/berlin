@@ -155,7 +155,7 @@ export default function GastosPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">Registrar gasto</h3>
               <button onClick={() => setShowModal(false)}

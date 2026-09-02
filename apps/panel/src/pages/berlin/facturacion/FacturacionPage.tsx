@@ -537,7 +537,7 @@ export default function FacturacionPage() {
       {/* ── Modal preview / imprimir ──────────────────────────── */}
       {preview && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[90vh]">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
               <div>
@@ -626,7 +626,7 @@ export default function FacturacionPage() {
       {/* ── Modal anular factura ──────────────────────────────── */}
       {anularModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-red-500/20 shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-red-500/20 shadow-2xl">
             <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
               <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle size={16} className="text-red-400"/>
@@ -678,7 +678,7 @@ export default function FacturacionPage() {
       {/* ── Modal imprimir evidencia de anulación ─────────────── */}
       {ventaAnulada && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl">
             <div className="px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">Factura anulada exitosamente</h3>
               <p className="text-[11px] text-gray-500">{ventaAnulada.numero_venta}</p>

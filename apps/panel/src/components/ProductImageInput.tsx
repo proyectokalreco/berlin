@@ -88,7 +88,7 @@ export default function ProductImageInput({ value, onChange }: Props) {
     <>
       <div className="fixed inset-0 z-[9998]" onClick={() => { setOpen(false); setMode('menu') }} />
       <div
-        className="fixed z-[9999] bg-[#0D1B2A] border border-white/20 rounded-2xl p-3 shadow-2xl w-56"
+        className="fixed z-[9999] bg-[#1C1A18] border border-white/20 rounded-2xl p-3 shadow-2xl w-56"
         style={{ top: panelPos.top, left: panelPos.left }}
       >
         {mode === 'menu' ? (
@@ -135,7 +135,7 @@ export default function ProductImageInput({ value, onChange }: Props) {
               onKeyDown={e => e.key === 'Enter' && handleUrlImport()}
               placeholder="https://..."
               autoFocus
-              className="w-full bg-[#112240] border border-white/10 rounded-lg px-3 py-2 text-xs text-white
+              className="w-full bg-[#2C2925] border border-white/10 rounded-lg px-3 py-2 text-xs text-white
                          focus:outline-none focus:border-brand-teal placeholder:text-gray-600"
             />
             {urlInput.startsWith('http') && (
@@ -180,7 +180,7 @@ export default function ProductImageInput({ value, onChange }: Props) {
                 value={(!isEmpty && !isUrl) ? value : ''}
                 onChange={e => onChange(e.target.value)}
                 placeholder="🍞" autoFocus
-                className="w-full bg-[#112240] border border-white/10 rounded-lg px-3 py-1.5
+                className="w-full bg-[#2C2925] border border-white/10 rounded-lg px-3 py-1.5
                            text-lg text-center focus:outline-none focus:border-brand-teal
                            placeholder:text-gray-700"
               />

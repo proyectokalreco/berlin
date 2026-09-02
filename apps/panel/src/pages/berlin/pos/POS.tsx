@@ -141,7 +141,7 @@ function MiniIcon({ producto, catNombre }: { producto: Producto; catNombre?: str
     <img src={imgUrl!} alt="" className="w-11 h-11 rounded-lg object-cover bg-brand-dark flex-shrink-0" />
   )
   return (
-    <div className="w-11 h-11 rounded-lg bg-[#1A2F4A] flex items-center justify-center text-2xl flex-shrink-0">
+    <div className="w-11 h-11 rounded-lg bg-[#403A32] flex items-center justify-center text-2xl flex-shrink-0">
       {emoji}
     </div>
   )
@@ -370,7 +370,7 @@ function ProductCard({
       ) : (
         <div className={cn(
           'w-full aspect-square rounded-lg mb-2 flex items-center justify-center text-4xl',
-          enCart ? 'bg-[#EA580C]/10' : 'bg-[#1A2F4A]',
+          enCart ? 'bg-[#EA580C]/10' : 'bg-[#403A32]',
         )}>
           {emoji}
         </div>
@@ -1434,7 +1434,7 @@ export default function POS() {
         </div>
 
         {/* ── Pago — siempre visible debajo del carrito (igual patrón que Esquina del Crédito) ── */}
-        <div className="border-t border-white/5 bg-[#0D1B2A] p-3 space-y-2.5 flex-shrink-0 overflow-y-auto"
+        <div className="border-t border-white/5 bg-[#1C1A18] p-3 space-y-2.5 flex-shrink-0 overflow-y-auto"
              style={{ height: paymentHeight }}>
 
           {/* Cliente — siempre visible, igual patrón que Esquina */}
@@ -1491,7 +1491,7 @@ export default function POS() {
 
           {/* EFECTIVO — numpad */}
           {metodoPago === 'efectivo' && (<>
-            <div className="bg-[#162C50] border border-white/8 rounded-xl px-4 py-2.5 text-center">
+            <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-2.5 text-center">
               <label htmlFor="efectivo-input" className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">
                 Efectivo recibido
               </label>
@@ -1525,7 +1525,7 @@ export default function POS() {
 
           {/* EXACTO — total sin vuelto */}
           {metodoPago === 'exacto' && (
-            <div className="bg-[#162C50] border border-[#EA580C]/20 rounded-xl p-3 text-center space-y-1">
+            <div className="bg-[#403A32] border border-[#EA580C]/20 rounded-xl p-3 text-center space-y-1">
               <Zap size={20} className="text-[#EA580C] mx-auto" />
               <p className="text-xs text-gray-400">Total exacto a cobrar</p>
               <p className="text-2xl font-bold text-white tabular-nums">{fmt(total)}</p>
@@ -1545,7 +1545,7 @@ export default function POS() {
 
           {/* MIXTO — divide el pago entre efectivo y transferencia */}
           {metodoPago === 'mixto' && (
-            <div className="space-y-2 rounded-xl border border-white/8 bg-[#162C50] p-2.5">
+            <div className="space-y-2 rounded-xl border border-white/8 bg-[#403A32] p-2.5">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Dividir pago</p>
               {[
                 { label: 'Efectivo',      val: mixtoEfectivo,      set: setMixtoEfectivo      },
@@ -1704,7 +1704,7 @@ export default function POS() {
     {ventaOk && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
         <div className={cn(
-          'bg-[#112240] border rounded-2xl w-full max-w-sm shadow-2xl text-center p-6',
+          'bg-[#2C2925] border rounded-2xl w-full max-w-sm shadow-2xl text-center p-6',
           ventaOk.metodo === 'credito'      ? 'border-pink-500/30'
           : ventaOk.metodo === 'transferencia' ? 'border-blue-500/30'
           : 'border-green-500/30',
@@ -1771,7 +1771,7 @@ export default function POS() {
     {ventaLibreModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
            style={{ background: 'rgba(0,0,0,0.7)' }}>
-        <div className="bg-[#112240] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="bg-[#2C2925] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
           <h3 className="text-white font-bold text-lg mb-1">Venta Libre</h3>
           <p className="text-gray-500 text-xs mb-5">Ingresa la descripción, precio y cantidad</p>
 
@@ -1782,7 +1782,7 @@ export default function POS() {
               </label>
               <input
                 autoFocus
-                className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl px-3 py-2.5
+                className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                            text-white text-sm placeholder:text-gray-600 focus:outline-none
                            focus:border-[#EA580C]/60"
                 value={ventaLibreModal.nombre}
@@ -1800,7 +1800,7 @@ export default function POS() {
                 id="vl-precio"
                 type="number"
                 min="1"
-                className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl px-3 py-2.5
+                className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                            text-white text-sm placeholder:text-gray-600 focus:outline-none
                            focus:border-[#EA580C]/60"
                 value={ventaLibreModal.precio}
@@ -1818,7 +1818,7 @@ export default function POS() {
                 id="vl-cantidad"
                 type="number"
                 min="1"
-                className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl px-3 py-2.5
+                className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                            text-white text-sm placeholder:text-gray-600 focus:outline-none
                            focus:border-[#EA580C]/60"
                 value={ventaLibreModal.cantidad}

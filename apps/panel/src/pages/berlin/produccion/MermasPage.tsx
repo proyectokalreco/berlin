@@ -78,7 +78,7 @@ function ModalMerma({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4
                     bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
@@ -132,7 +132,7 @@ function ModalMerma({ onClose }: { onClose: () => void }) {
                              focus:border-yellow-500/60 placeholder:text-gray-600"
                 />
                 {mostrarRes && busqueda.length >= 1 && resultados.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#0D1B2A]
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#1C1A18]
                                   border border-white/15 rounded-xl shadow-2xl z-10 overflow-hidden">
                     {resultados.map(p => (
                       <button key={p.id} type="button"

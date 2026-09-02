@@ -43,7 +43,7 @@ function MiniIconMesa({ nombre, imagenUrl }: { nombre: string; imagenUrl?: strin
   }
   const emoji = isEmoji(imagenUrl) ? imagenUrl! : getAutoEmoji(nombre)
   return (
-    <div className="w-9 h-9 rounded-lg bg-[#1A2F4A] flex items-center justify-center text-xl flex-shrink-0">
+    <div className="w-9 h-9 rounded-lg bg-[#403A32] flex items-center justify-center text-xl flex-shrink-0">
       {emoji}
     </div>
   )
@@ -700,7 +700,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     {/* ── Modal cobrar — fuera del overflow-hidden para que los clicks lleguen ── */}
     {showCobrar && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">Cobrar mesa {mesa.numero}</h3>
               <button onClick={() => setShowCobrar(false)}
@@ -739,7 +739,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               {/* Efectivo: display + teclado numérico (igual que POS) */}
               {metodoPago === 'efectivo' && (
                 <div className="space-y-2">
-                  <div className="bg-[#162C50] border border-white/8 rounded-xl px-4 py-3 text-center">
+                  <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-3 text-center">
                     <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">Efectivo recibido</p>
                     <p className="text-3xl font-bold text-white tabular-nums min-h-[2.2rem]">
                       {efectivoRecibido
@@ -814,7 +814,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
       {ventaLibreModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
              style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="bg-[#112240] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="text-white font-bold text-lg mb-1">Venta Libre</h3>
             <p className="text-gray-500 text-xs mb-5">Ingresa la descripción, precio y cantidad</p>
 
@@ -823,7 +823,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 block">Descripción / Nombre</label>
                 <input
                   autoFocus
-                  className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl px-3 py-2.5
+                  className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                              text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#EA580C]/60"
                   value={ventaLibreModal.nombre}
                   onChange={e => setVentaLibreModal(prev => prev ? { ...prev, nombre: e.target.value } : prev)}
@@ -837,7 +837,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                   id="vl-mesa-precio"
                   type="number"
                   min="1"
-                  className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl px-3 py-2.5
+                  className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                              text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#EA580C]/60"
                   value={ventaLibreModal.precio}
                   onChange={e => setVentaLibreModal(prev => prev ? { ...prev, precio: e.target.value } : prev)}
@@ -851,7 +851,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                   id="vl-mesa-cantidad"
                   type="number"
                   min="1"
-                  className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl px-3 py-2.5
+                  className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                              text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#EA580C]/60"
                   value={ventaLibreModal.cantidad}
                   onChange={e => setVentaLibreModal(prev => prev ? { ...prev, cantidad: e.target.value } : prev)}
@@ -1100,7 +1100,7 @@ function ModalConfigMesas({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
           <h3 className="text-white font-bold flex items-center gap-2"><Settings size={16} className="text-brand-teal"/> Configurar Mesas</h3>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg"><X size={16}/></button>

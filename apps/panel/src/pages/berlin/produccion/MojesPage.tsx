@@ -198,7 +198,7 @@ function ModalValidar({ moje, onClose }: { moje: Moje; onClose: () => void }) {
             className="flex-1"
             loading={isPending}
             onClick={() => mutate()}
-            style={{ background: incidencia ? '#DC2626' : '#00C49A', color: '#0D1B2A' }}
+            style={{ background: incidencia ? '#DC2626' : '#00C49A', color: '#1C1A18' }}
           >
             {incidencia ? 'Validar con incidencia' : 'Confirmar validación'}
           </Button>

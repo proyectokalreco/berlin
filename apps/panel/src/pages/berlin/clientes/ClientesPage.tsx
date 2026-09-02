@@ -230,7 +230,7 @@ function ClienteDetalle({ cliente, onClose }: { cliente: Cliente; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-xl border border-white/10 shadow-2xl my-auto">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-xl border border-white/10 shadow-2xl my-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
@@ -713,7 +713,7 @@ function ModalDeudaManual({ cliente, onClose, onSuccess }: { cliente:Cliente; on
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <AlertTriangle size={16} className="text-orange-400"/>
@@ -806,7 +806,7 @@ function ModalAbonar({ cliente, ventaPreseleccionada, ventasPendientes, onClose,
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <ArrowDownCircle size={16} className="text-blue-400"/>
@@ -942,7 +942,7 @@ function ModalEncargo({ cliente, onClose, onSuccess }: { cliente:Cliente; onClos
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 overflow-y-auto">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl my-auto">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <CalendarClock size={16} className="text-brand-teal"/>
@@ -971,7 +971,7 @@ function ModalEncargo({ cliente, onClose, onSuccess }: { cliente:Cliente; onClos
                   placeholder="Buscar producto en inventario…"
                   className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
                 {mostrar && busqueda.length >= 1 && resultados.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#0D1B2A] border border-white/15 rounded-xl shadow-2xl z-10 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#1C1A18] border border-white/15 rounded-xl shadow-2xl z-10 overflow-hidden">
                     {resultados.map(p => (
                       <button key={p.id} type="button" onClick={() => seleccionarProducto(p)}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left">
@@ -1097,7 +1097,7 @@ function ModalSepare({ cliente, onClose, onSuccess }: { cliente:Cliente; onClose
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 overflow-y-auto">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl my-auto">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <ShoppingBag size={16} className="text-purple-400"/>
@@ -1127,7 +1127,7 @@ function ModalSepare({ cliente, onClose, onSuccess }: { cliente:Cliente; onClose
                   placeholder="Buscar producto en inventario…"
                   className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500/50"/>
                 {mostrar && busqueda.length >= 1 && resultados.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#0D1B2A] border border-white/15 rounded-xl shadow-2xl z-10 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#1C1A18] border border-white/15 rounded-xl shadow-2xl z-10 overflow-hidden">
                     {resultados.map(p => (
                       <button key={p.id} type="button"
                         onClick={() => { setProducto(p); setBusqueda(p.nombre); setMostrar(false); setPrecio(String(p.precio_venta)) }}
@@ -1411,7 +1411,7 @@ export default function ClientesPage() {
       {/* Modal crear / editar */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">{editando ? 'Editar cliente' : 'Nuevo cliente'}</h3>
               <button onClick={cerrarModal}

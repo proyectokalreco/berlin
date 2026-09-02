@@ -371,7 +371,7 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
 
       {/* Producto / insumo seleccionado o buscador */}
       {item._itemSel ? (
-        <div className="flex items-center gap-2 bg-[#0D1B2A] rounded-lg px-3 py-2 border border-brand-teal/30">
+        <div className="flex items-center gap-2 bg-[#1C1A18] rounded-lg px-3 py-2 border border-brand-teal/30">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-xs font-semibold text-white truncate">{item._itemSel.nombre}</p>
@@ -402,10 +402,10 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
             onFocus={() => onPatch({ _mostrarRes: true })}
             placeholder="Buscar producto o insumo…"
             autoComplete="off"
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg pl-8 pr-3 py-2
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-8 pr-3 py-2
                        text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-teal"/>
           {item._mostrarRes && item._busqueda.length >= 1 && resultados.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-0.5 bg-[#0D1B2A] border border-white/15
+            <div className="absolute top-full left-0 right-0 mt-0.5 bg-[#1C1A18] border border-white/15
                             rounded-xl shadow-2xl z-20 overflow-hidden max-h-48 overflow-y-auto">
               {resultados.map(p => (
                 <button key={`${p._tipo}-${p.id}`} type="button" onClick={() => seleccionar(p)}
@@ -445,7 +445,7 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
           <input type="number" min="0.01" step="0.01" value={item.cantidad}
             onChange={e => onPatch({ cantidad: e.target.value })}
             placeholder="0"
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-2 py-2
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-2 py-2
                        text-xs text-white text-center focus:outline-none focus:border-brand-teal
                        placeholder:text-gray-600"/>
         </div>
@@ -456,7 +456,7 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
             <input type="number" min="0" step="0.01" value={item.precio_unitario}
               onChange={e => onPatch({ precio_unitario: e.target.value })}
               placeholder="0"
-              className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg pl-4 pr-1 py-2
+              className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-4 pr-1 py-2
                          text-xs text-white focus:outline-none focus:border-brand-teal
                          placeholder:text-gray-600"/>
           </div>
@@ -468,14 +468,14 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
             <input type="number" min="0" step="0.01" value={item.precio_venta}
               onChange={e => onPatch({ precio_venta: e.target.value })}
               placeholder="0"
-              className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg pl-4 pr-1 py-2
+              className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-4 pr-1 py-2
                          text-xs text-white focus:outline-none focus:border-brand-teal
                          placeholder:text-gray-600"/>
           </div>
         </div>
         <div>
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">V.Total</p>
-          <div className="bg-[#0D1B2A] border border-white/5 rounded-lg px-2 py-2 text-xs
+          <div className="bg-[#1C1A18] border border-white/5 rounded-lg px-2 py-2 text-xs
                           text-brand-teal font-bold text-right">
             {total > 0
               ? new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(total)
@@ -510,7 +510,7 @@ function ItemPedidoRow({ item, index, canRemove, onChange, onRemove }:
     <div className="bg-brand-dark rounded-xl p-3 space-y-3 border border-white/5">
       <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Ítem {index + 1}</p>
       {item._itemSel ? (
-        <div className="flex items-center gap-3 bg-[#0D1B2A] rounded-xl px-3 py-2.5 border border-brand-teal/30">
+        <div className="flex items-center gap-3 bg-[#1C1A18] rounded-xl px-3 py-2.5 border border-brand-teal/30">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm text-white font-semibold truncate">{item._itemSel.nombre}</p>
@@ -541,10 +541,10 @@ function ItemPedidoRow({ item, index, canRemove, onChange, onRemove }:
               onChange={e => onChange({ _busqueda: e.target.value, _mostrarRes: true, descripcion: e.target.value })}
               onFocus={() => onChange({ _mostrarRes: true })}
               placeholder="Buscar producto o insumo…"
-              className="w-full bg-[#0D1B2A] border border-white/10 rounded-xl pl-9 pr-3 py-2.5
+              className="w-full bg-[#1C1A18] border border-white/10 rounded-xl pl-9 pr-3 py-2.5
                          text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-brand-teal/50"/>
             {item._mostrarRes && item._busqueda.length >= 1 && resultados.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#0D1B2A] border border-white/15 rounded-xl shadow-2xl z-20 overflow-hidden">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1C1A18] border border-white/15 rounded-xl shadow-2xl z-20 overflow-hidden">
                 {resultados.map(p => (
                   <button key={`${p._tipo}-${p.id}`} type="button" onClick={() => seleccionar(p)}
                     className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/5 text-left transition-colors">
@@ -581,12 +581,12 @@ function ItemPedidoRow({ item, index, canRemove, onChange, onRemove }:
           <label className="text-[10px] text-gray-500 mb-1 block">Cantidad</label>
           <input type="number" min="0.01" step="0.01" value={item.cantidad}
             onChange={e => onChange({ cantidad: e.target.value })} placeholder="1"
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
         </div>
         <div>
           <label className="text-[10px] text-gray-500 mb-1 block">Unidad</label>
           <input value={item.unidad} onChange={e => onChange({ unidad: e.target.value })} placeholder="unidad"
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
         </div>
         <div>
           <label className="text-[10px] text-gray-500 mb-1 block">Precio unit.</label>
@@ -594,7 +594,7 @@ function ItemPedidoRow({ item, index, canRemove, onChange, onRemove }:
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
             <input type="number" min="0" value={item.precio_unitario}
               onChange={e => onChange({ precio_unitario: e.target.value })} placeholder="0"
-              className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg pl-5 pr-2 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
+              className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-5 pr-2 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
           </div>
           {item.cantidad && item.precio_unitario && (
             <p className="text-[10px] text-brand-teal mt-0.5">
@@ -660,7 +660,7 @@ function ModalPagarFactura({ factura, onClose, onPagada }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
@@ -1508,7 +1508,7 @@ export default function ProveedoresPage() {
       {/* Modal Compra rápida */}
       {showCompra && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">Nueva compra</h3>
               <button onClick={() => setShowCompra(false)}
@@ -1582,7 +1582,7 @@ export default function ProveedoresPage() {
       {/* Modal proveedor */}
       {showProv && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">{editProv ? 'Editar proveedor' : 'Nuevo proveedor'}</h3>
               <button onClick={() => { setShowProv(false); setEditProv(null); setFormProv(EMPTY_PROV) }}
@@ -1612,8 +1612,8 @@ export default function ProveedoresPage() {
       {/* Modal Pedido */}
       {showPed && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-[#112240] rounded-t-2xl z-10">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-[#2C2925] rounded-t-2xl z-10">
               <h3 className="text-white font-bold">{editPedido ? 'Editar pedido' : 'Nuevo pedido'}</h3>
               <button onClick={() => { setShowPed(false); setEditPedido(null); setFormPed(EMPTY_PED) }}
                 className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-xl"><X size={18}/></button>
@@ -1710,8 +1710,8 @@ export default function ProveedoresPage() {
       {/* Modal editar factura/compra — detalle completo */}
       {editFactura && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl overflow-y-auto max-h-[92vh]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-[#112240] rounded-t-2xl z-10">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl overflow-y-auto max-h-[92vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-[#2C2925] rounded-t-2xl z-10">
               <h3 className="text-white font-bold">Editar factura</h3>
               <button onClick={() => setEditFactura(null)}
                 className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-xl"><X size={18}/></button>
@@ -1818,7 +1818,7 @@ export default function ProveedoresPage() {
                   className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none min-h-[48px]"/>
               </div>
             </div>
-            <div className="px-5 pb-5 flex gap-2 sticky bottom-0 bg-[#112240] pt-3 border-t border-white/5">
+            <div className="px-5 pb-5 flex gap-2 sticky bottom-0 bg-[#2C2925] pt-3 border-t border-white/5">
               <button onClick={() => setEditFactura(null)}
                 className="py-3 px-4 rounded-xl border border-white/10 text-gray-400 text-sm min-h-[48px]">Cancelar</button>
               <button onClick={() => imprimirFactura(editFactura!)}
@@ -1837,7 +1837,7 @@ export default function ProveedoresPage() {
       {showFac && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4
                         bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl
                           max-h-[92vh] flex flex-col">
 
             {/* Header */}

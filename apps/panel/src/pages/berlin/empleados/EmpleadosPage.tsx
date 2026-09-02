@@ -214,7 +214,7 @@ export default function EmpleadosPage() {
       {/* Modal confirmación eliminar */}
       {confirmEliminar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-sm border border-red-500/20 shadow-2xl p-6 space-y-4">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-red-500/20 shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-red-500/10 flex-shrink-0">
                 <AlertTriangle size={20} className="text-red-400" />
@@ -260,8 +260,8 @@ export default function EmpleadosPage() {
       {/* Modal crear/editar */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#112240] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-[#112240] rounded-t-2xl z-10">
+          <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-[#2C2925] rounded-t-2xl z-10">
               <h3 className="text-white font-bold">{editando ? 'Editar empleado' : 'Nuevo empleado'}</h3>
               <button onClick={cerrarModal}
                 className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-xl">

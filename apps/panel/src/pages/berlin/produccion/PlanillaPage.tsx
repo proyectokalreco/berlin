@@ -280,7 +280,7 @@ function FilaLinea({
 
       {/* Producto */}
       {linea.producto ? (
-        <div className="flex items-center gap-2 bg-[#0D1B2A] rounded-lg px-3 py-2 border border-brand-teal/30">
+        <div className="flex items-center gap-2 bg-[#1C1A18] rounded-lg px-3 py-2 border border-brand-teal/30">
           <span className="text-sm flex-shrink-0">
             {linea.producto.imagen_url && !isEmojiIcon(linea.producto.imagen_url)
               ? <img src={linea.producto.imagen_url} alt="" className="w-5 h-5 rounded object-cover"/>
@@ -307,10 +307,10 @@ function FilaLinea({
             onChange={e => onPatch({ busqueda: e.target.value, mostrarRes: true })}
             onFocus={() => onPatch({ mostrarRes: true })}
             placeholder="Descripción del producto…"
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg pl-8 pr-3 py-2
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-8 pr-3 py-2
                        text-xs text-white focus:outline-none focus:border-brand-teal placeholder:text-gray-600"/>
           {linea.mostrarRes && linea.busqueda.length >= 1 && resultados.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-0.5 bg-[#0D1B2A] border border-white/15
+            <div className="absolute top-full left-0 right-0 mt-0.5 bg-[#1C1A18] border border-white/15
                             rounded-xl shadow-2xl z-20 overflow-hidden max-h-48 overflow-y-auto">
               {resultados.map(p => (
                 <button key={p.id} type="button" onClick={() => seleccionar(p)}
@@ -336,7 +336,7 @@ function FilaLinea({
       {/* Receta */}
       {recetas.length > 0 && (
         <select value={linea.recetaId} onChange={e => onPatch({ recetaId: e.target.value })}
-          className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300
+          className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300
                      focus:outline-none focus:border-brand-teal">
           <option value="">Sin receta</option>
           {recetas.map(r => <option key={r.id} value={r.id}>{r.nombre} (rinde {r.rendimiento})</option>)}
@@ -350,7 +350,7 @@ function FilaLinea({
           <input type="number" min="1" value={linea.cantidad}
             onChange={e => onPatch({ cantidad: e.target.value })}
             placeholder="0"
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-2 py-2
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-2 py-2
                        text-xs text-white text-center focus:outline-none focus:border-brand-teal
                        placeholder:text-gray-600"/>
         </div>
@@ -361,7 +361,7 @@ function FilaLinea({
             <input type="number" min="0" value={linea.precioVenta}
               onChange={e => onPatch({ precioVenta: e.target.value })}
               placeholder="0"
-              className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg pl-4 pr-1 py-2
+              className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-4 pr-1 py-2
                          text-xs text-white focus:outline-none focus:border-brand-teal
                          placeholder:text-gray-600"/>
           </div>
@@ -369,7 +369,7 @@ function FilaLinea({
         <div>
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">IVA %</p>
           <select value={linea.iva} onChange={e => onPatch({ iva: e.target.value })}
-            className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-1 py-2
+            className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-1 py-2
                        text-xs text-white focus:outline-none focus:border-brand-teal">
             <option value="0">0%</option>
             <option value="5">5%</option>
@@ -378,7 +378,7 @@ function FilaLinea({
         </div>
         <div>
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">V. Total</p>
-          <div className="bg-[#0D1B2A] border border-white/5 rounded-lg px-2 py-2 text-xs
+          <div className="bg-[#1C1A18] border border-white/5 rounded-lg px-2 py-2 text-xs
                           text-brand-teal font-bold text-right">
             {total > 0
               ? new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(total)
@@ -390,7 +390,7 @@ function FilaLinea({
       {/* Descripción/Observaciones */}
       <input value={linea.notas} onChange={e => onPatch({ notas: e.target.value })}
         placeholder="Observaciones (opcional)"
-        className="w-full bg-[#0D1B2A] border border-white/10 rounded-lg px-3 py-1.5 text-xs
+        className="w-full bg-[#1C1A18] border border-white/10 rounded-lg px-3 py-1.5 text-xs
                    text-white focus:outline-none focus:border-brand-teal placeholder:text-gray-600"/>
     </div>
   )
@@ -580,7 +580,7 @@ function ModalItem({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4
                     bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#112240] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl
+      <div className="bg-[#2C2925] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl
                       max-h-[92vh] flex flex-col">
 
         {/* Header */}

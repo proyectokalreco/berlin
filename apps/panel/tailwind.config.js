@@ -5,9 +5,9 @@ export default {
     extend: {
       colors: {
         brand: {
-          dark:      '#2B1D14',
-          navy:      '#3A2818',
-          card:      '#4A3222',
+          dark:      '#1C1A18',
+          navy:      '#2C2925',
+          card:      '#403A32',
           teal:      '#D9A652',
           'teal-dk': '#A15F2F',
           coral:     '#FF6B35',
