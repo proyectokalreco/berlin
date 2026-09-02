@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Beer, BarChart2, Package, ShoppingCart,
-  Banknote, PieChart, FlaskConical, BookOpen, LogOut, ClipboardList, Bell, LayoutGrid,
+  Banknote, PieChart, BookOpen, LogOut, ClipboardList, Bell, LayoutGrid,
   Wifi, WifiOff,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
@@ -46,7 +46,6 @@ const ALL_TABS = [
   { to: '/caja',         end: false, icon: Banknote,      label: 'Caja'       },
   { to: '/pos',          end: false, icon: ShoppingCart,  label: 'POS'        },
   { to: '/mesas',        end: false, icon: LayoutGrid,    label: 'Mesas'      },
-  { to: '/mojes',        end: false, icon: FlaskConical,  label: 'Producción' },
   { to: '/planilla',     end: false, icon: ClipboardList, label: 'Planilla'   },
   { to: '/inventario',   end: false, icon: Package,       label: 'Inventario' },
   { to: '/recetas',      end: false, icon: BookOpen,      label: 'Recetas'    },
@@ -56,7 +55,7 @@ const ALL_TABS = [
 // ── Tabs visibles según rol ────────────────────────────────────
 function getTabsByRol(rol: string) {
   if (rol === 'panadero')
-    return ALL_TABS.filter(t => ['Dashboard','Producción','Planilla','Inventario','Recetas'].includes(t.label))
+    return ALL_TABS.filter(t => ['Dashboard','Planilla','Inventario','Recetas'].includes(t.label))
   if (rol === 'cajero' || rol === 'vendedor')
     return ALL_TABS.filter(t => ['Dashboard','Caja','POS','Mesas'].includes(t.label))
   if (rol === 'mesero')
