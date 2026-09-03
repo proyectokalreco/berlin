@@ -1460,8 +1460,8 @@ export default function POS() {
             className={cn(
               'w-full py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5',
               metodoPago === 'exacto'
-                ? 'bg-[#EA580C] text-white'
-                : 'bg-[#EA580C]/10 text-[#EA580C] border border-[#EA580C]/30 hover:bg-[#EA580C]/15',
+                ? 'bg-[#EA580C] text-white border border-[#EA580C]'
+                : 'bg-brand-dark border border-white/5 text-gray-500 hover:text-white hover:bg-white/5',
             )}>
             <Zap size={14} /> Pago Completo
           </button>

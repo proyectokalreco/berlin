@@ -251,6 +251,56 @@ copiaron los colores de Esquina). Se agregó también scroll con rueda del mouse
 categorías (antes solo flechitas/trackpad) — mismo límite existe hoy en Esquina, no se tocó
 ahí. Desplegado y confirmado por el usuario en producción.
 
+### 12. Pago mixto POS (migración 093, commit con `387f926`)
+`br_ventas` no tenía columnas para split de pago — se agregaron `monto_efectivo`/
+`monto_transferencia`. `ventas.controller.js` valida suma=total (tolerancia $1) en `crear()`,
+y `actualizarCaja()` gana rama `mixto` con 2 llamadas RPC separadas (antes hubiera contado
+el 100% como efectivo, mismo patrón de bug ya visto en Esquina/Hogar). Nuevo botón "Mixto" en
+POS con 2 inputs enmascarados + validación en vivo.
+
+### 13. Cursor invisible en "Efectivo recibido" + rename "Transferencia"→"Pago Electrónico"
+El campo de efectivo era un `<p>` de solo lectura — sin cursor ni foco visibles. Se convirtió
+a `<input>` real (`ref` + autofocus al elegir método), compatible con el NumPad táctil y con
+el listener global de teclado (que ya ignoraba `INPUT` activo). Además, "Transferencia" se
+renombró a **"Pago Electrónico"** en 9 archivos del panel — solo texto visible; el valor
+interno `metodo_pago==='transferencia'` (comparaciones, claves de mapas, nombre de variables)
+quedó intacto a propósito, sin impacto en BD.
+
+### 14. Dashboard/tiles y top-nav — módulos ocultos a pedido del cliente
+Tiles "Mojes" y "Etiquetas" ocultos del grid de `BerlinDashboard.tsx` (2026-09-01). El cliente
+señaló con captura que el tab "Producción" seguía visible en la barra superior aunque el tile
+ya no estaba — se ocultó también en `BerlinShell.tsx` (`ALL_TABS` + filtro `panadero` en
+`getTabsByRol`), commit `70c05ad`. En ambos casos la ruta (`/mojes`, `/etiquetas`) sigue viva,
+solo se retiró del descubrimiento en UI — reversible sin tocar backend.
+
+### 15. Paleta café no cambiaba el look real del POS — causa raíz: hex sueltos sin token
+Cambiar solo `tailwind.config.js` (`brand.dark/navy/card`) no bastó — grep encontró ~70 usos
+de hex arbitrario (`bg-[#0D1B2A]`, `bg-[#112240]`, `bg-[#162C50]`, `bg-[#1A2F4A]`) en 14
+archivos, especialmente el panel de pago del POS, completamente desconectados del token.
+Migrados todos al hex nuevo (vía `sed`) para que el próximo cambio de paleta sí se propague.
+Tras mostrar un mockup en vivo (3 opciones: café actual / gris neutro / gris cálido), el
+cliente eligió **gris cálido**: `brand.dark:#1C1A18, navy:#2C2925, card:#403A32` (dorado sin
+cambios). Confirmado en producción con captura — mejor contraste, cursor de efectivo visible.
+
+### 16. Mejoras POS/Caja/Dashboard a pedido del cliente (2026-09-03)
+
+Tres pedidos, aplicados por partes:
+
+**Parte 1 — botón "Pago Completo" del POS se veía siempre "activo" (`POS.tsx`).** El botón
+destacado ancho completo tenía estado NO-seleccionado con fondo/borde/texto naranja tenue
+(`bg-[#EA580C]/10`), que se leía como seleccionado aunque el método activo fuera otro. Los
+otros 4 botones del grid sí quedaban neutros. Fix: estado NO-seleccionado ahora
+`bg-brand-dark border-white/5 text-gray-500`, idéntico al grid; seleccionado sigue naranja
+sólido. En Mesas este problema no existe (los 5 botones usan estilo uniforme).
+
+**Parte 3 — tile "Pérdidas" (`/mermas`) oculto del Dashboard (`BerlinDashboard.tsx`).** Mismo
+patrón que incidente 14 (Mojes/Etiquetas): quitado de `ALL_MODULES` y de la lista de rol
+`panadero`. Ruta `/mermas` sigue viva, reversible sin tocar backend. No estaba en el top-nav.
+
+**Parte 2 — caja compartida por negocio + Nequi/QR dentro de Pago Electrónico + cierre
+parcial.** Ver `kalreco/CLAUDE.md` (migración 094, BD compartida) — pendiente/en curso al
+momento de escribir esto.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.

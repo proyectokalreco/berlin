@@ -14,7 +14,7 @@ import { useAuthStore } from '../../store/authStore'
 import {
   ShoppingCart, Package, BookOpen, Banknote,
   Truck, FileText, Users, UserCheck, Receipt, BarChart3,
-  PieChart, TrendingUp, CheckCircle, AlertCircle, Clock, AlertTriangle, LayoutGrid,
+  PieChart, TrendingUp, CheckCircle, AlertCircle, Clock, LayoutGrid,
   Pencil, X, Upload, Link2, ImageIcon, Settings2, CreditCard, GripVertical,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -49,7 +49,7 @@ const ALL_MODULES = [
   { to: `${BASE}/gastos`,       icon: Receipt,      label: 'Gastos',       sub: 'Control de gastos',          color: '#F97316'             },
   { to: `${BASE}/movimientos`,  icon: BarChart3,      label: 'Libro Diario', sub: 'Ingresos · Gastos · Compras', color: '#A78BFA'             },
   { to: `${BASE}/reportes`,     icon: PieChart,       label: 'Reportes',     sub: 'Excel · PDF · Cierre',       color: '#4ADE80'             },
-  { to: `${BASE}/mermas`,         icon: AlertTriangle,  label: 'Pérdidas',          sub: 'Productos dañados',          color: '#FBBF24'             },
+  // 'Pérdidas' (/mermas) oculto del dashboard a pedido del cliente (2026-09-03) — ruta sigue viva, solo retirada del descubrimiento en UI
   { to: `${BASE}/cuentas-pagar`,  icon: AlertCircle,    label: 'Cuentas por Pagar', sub: 'Facturas · Vencimientos',    color: '#F97316'             },
   { to: `${BASE}/cuentas-cobrar`, icon: CreditCard,     label: 'Cuentas por Cobrar',sub: 'Créditos · Saldos',          color: '#00C49A'             },
 ]
@@ -58,7 +58,7 @@ const MODULOS_POR_ROL: Record<string, string[]> = {
   super_admin:     ALL_MODULES.map(m => m.label),
   admin:           ALL_MODULES.map(m => m.label),
   admin_berlin: ALL_MODULES.map(m => m.label),
-  panadero:        ['Inventario', 'Recetas', 'Pérdidas'],
+  panadero:        ['Inventario', 'Recetas'],
   cajero:          ['Caja', 'POS', 'Mesas', 'Facturación Diaria', 'Clientes', 'Cuentas por Cobrar'],
   vendedor:        ['Caja', 'POS', 'Mesas', 'Clientes'],
   mesero:          ['Mesas', 'Inventario'],
