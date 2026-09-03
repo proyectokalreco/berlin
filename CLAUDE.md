@@ -298,8 +298,24 @@ patrón que incidente 14 (Mojes/Etiquetas): quitado de `ALL_MODULES` y de la lis
 `panadero`. Ruta `/mermas` sigue viva, reversible sin tocar backend. No estaba en el top-nav.
 
 **Parte 2 — caja compartida por negocio + Nequi/QR dentro de Pago Electrónico + cierre
-parcial.** Ver `kalreco/CLAUDE.md` (migración 094, BD compartida) — pendiente/en curso al
-momento de escribir esto.
+parcial** (migración 094, BD compartida — detalle en `kalreco/CLAUDE.md`):
+- **Caja compartida:** `caja.controller.js` deja de filtrar el turno por `usuario_apertura_id`
+  — 1 turno abierto por negocio por día (índice único `br_turnos_caja(fecha) WHERE
+  estado='abierto'`, antes `(fecha, usuario_apertura_id)`). Si un usuario abre caja y otro
+  entra, el segundo ve la misma caja y puede vender. `cerrarCaja` suma el día completo (sin
+  filtrar `vendedor_id`), gana regla de permiso (admin siempre; cajero solo si él la abrió;
+  vendedor nunca) y `desglose_vendedores`. Mismo criterio que Esquina (079).
+- **Nequi/QR en Pago Electrónico:** `metodo_pago='qr'` se suma dentro de `transferencia` en
+  `cerrarCaja`/`ventasTurno`/`resumenDia`; columna "QR / Nequi" quitada de Caja (paneles +
+  ticket) y el botón quitado del modal de cobro de Mesas. `total_ventas_qr` queda en 0.
+- **Un solo panel de ventas:** con caja compartida "Ventas del turno" y "Ventas del día —
+  todos los cajeros" eran lo mismo → se dejó uno solo, y la KPI redundante "Ventas del turno"
+  se quitó de la fila superior.
+- **Cierre parcial:** botón + modal en `CajaPage.tsx` — resumen del turno en vivo + efectivo
+  contado opcional + impresión de tiquete 80mm "TURNO EN CURSO · NO ES CIERRE DEFINITIVO",
+  sin cerrar la caja. Clon del de Esquina, tema oscuro Berlín.
+- `tsc`/`node -c` limpios. Pendiente: aplicar migración 094 + deploy backend+panel + prueba
+  del cliente.
 
 ## 📄 Documentación relacionada
 

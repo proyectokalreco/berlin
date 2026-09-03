@@ -298,9 +298,10 @@ const resumenDia = async (req, res, next) => {
       num_ventas:         completadas.length,
       efectivo:           completadas.filter(v => v.metodo_pago === 'efectivo').reduce((s, v) => s + parseFloat(v.total), 0)
                             + completadas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_efectivo) || 0), 0),
-      transferencias:     completadas.filter(v => v.metodo_pago === 'transferencia').reduce((s, v) => s + parseFloat(v.total), 0)
+      // Pago Electrónico unifica transferencia + QR/Nequi + parte electrónica de mixto
+      transferencias:     completadas.filter(v => v.metodo_pago === 'transferencia' || v.metodo_pago?.includes('qr')).reduce((s, v) => s + parseFloat(v.total), 0)
                             + completadas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_transferencia) || 0), 0),
-      qr:                 completadas.filter(v => v.metodo_pago?.includes('qr')).reduce((s, v) => s + parseFloat(v.total), 0),
+      qr:                 0,
       credito:            completadas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
       ticket_promedio:    completadas.length > 0 ? totalVentas / completadas.length : 0,
     };

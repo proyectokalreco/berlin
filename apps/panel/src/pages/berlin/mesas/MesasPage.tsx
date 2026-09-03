@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutGrid, X, Plus, Minus, Trash2, Search, ChevronLeft,
   Lock, Unlock, CreditCard, Banknote, Smartphone,
-  Zap, Settings, Edit2, Check, Send, AlertTriangle, Delete, RefreshCw,
+  Settings, Edit2, Check, Send, AlertTriangle, Delete, RefreshCw,
 } from 'lucide-react'
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
 import type { QueuedCobro } from './useOfflineMesasCobro'
@@ -128,9 +128,8 @@ ${datos.redondeo !== 0
 </div>
 <div class="sep"></div>
 <div class="row b"><span>Método de pago:</span><span>${
-  datos.metodo_pago === 'transferencia' ? 'Pago Electrónico'
+  datos.metodo_pago === 'transferencia' || datos.metodo_pago === 'qr' ? 'Pago Electrónico'
   : datos.metodo_pago === 'credito' ? 'Crédito'
-  : datos.metodo_pago === 'qr' ? 'QR / Nequi'
   : 'Efectivo'
 }</span></div>
 ${datos.efectivo_recibido && datos.metodo_pago === 'efectivo' ? `
@@ -285,7 +284,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const [cobrarKey] = useState(() => crypto.randomUUID())
   const [busqueda,    setBusqueda]    = useState('')
   const [catActiva,   setCatActiva]   = useState<string|null>(null)
-  const [metodoPago,       setMetodoPago]       = useState<'efectivo'|'exacto'|'transferencia'|'qr'|'credito'>('efectivo')
+  const [metodoPago,       setMetodoPago]       = useState<'efectivo'|'exacto'|'transferencia'|'credito'>('efectivo')
   const [showCobrar,       setShowCobrar]       = useState(false)
   const [clienteId,        setClienteId]        = useState<string>('')
   const [buscandoCli,      setBuscandoCli]      = useState('')
@@ -720,7 +719,6 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                     { id:'efectivo',      label:'Efectivo',      icon: Banknote },
                     { id:'exacto',        label:'Pago completo', icon: Check },
                     { id:'transferencia', label:'Pago Electrónico',  icon: Smartphone },
-                    { id:'qr',            label:'QR / Nequi',    icon: Zap },
                     { id:'credito',       label:'Crédito',       icon: CreditCard },
                   ] as const).map(m => (
                     <button key={m.id} type="button" onClick={() => { setMetodoPago(m.id); setEfectivoRecibido('') }}

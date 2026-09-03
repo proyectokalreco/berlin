@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import {
   Banknote, Lock, Unlock, TrendingUp, ShoppingCart, Receipt,
   Clock, User, CheckCircle, XCircle, Printer, AlertCircle, AlertTriangle,
-  DollarSign, ArrowUpCircle, ArrowDownCircle, Calendar, Shuffle,
+  DollarSign, ArrowUpCircle, ArrowDownCircle, Calendar, Shuffle, FileBarChart2, X,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
@@ -33,15 +33,15 @@ interface TurnoCaja {
   total_ventas: number
   total_ventas_efectivo: number
   total_ventas_transferencia: number
-  total_ventas_qr: number
   total_credito: number        // ventas a crédito del turno
   total_gastos: number
   num_ventas: number
   estado: 'abierto' | 'cerrado'
   notas_apertura?: string
   notas_cierre?: string
-  usuario_apertura?: { id: string; nombre: string }
+  usuario_apertura?: { id: string; nombre: string; rol?: string }
   usuario_cierre?: { id: string; nombre: string }
+  desglose_vendedores?: { vendedor_id: string | null; nombre: string; total: number; num_ventas: number }[]
 }
 
 // ── Imprimir reporte de cierre de caja ───────────────────────────
@@ -102,9 +102,14 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <div class="row"><span>Total ventas:</span><span class="amt">${fmt(turno.total_ventas)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Efectivo:</span><span class="amt">${fmt(turno.total_ventas_efectivo)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(turno.total_ventas_transferencia)}</span></div>
-<div class="row sm"><span>&nbsp;&nbsp;QR / Nequi:</span><span class="amt">${fmt(turno.total_ventas_qr)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(turno.total_credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${turno.num_ventas}</span></div>
+
+${(turno.desglose_vendedores && turno.desglose_vendedores.length > 1) ? `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">VENTAS POR VENDEDOR</p>
+${turno.desglose_vendedores.map(d => `<div class="row sm"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>`).join('')}
+` : ''}
 
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO DE CAJA</p>
@@ -149,6 +154,9 @@ export default function CajaPage() {
   const [montoCierre,     setMontoCierre]     = useState('')
   const [notasCierre,     setNotasCierre]     = useState('')
   const [showCierreModal, setShowCierreModal] = useState(false)
+  // Cierre parcial — reporte informativo del turno en curso, NO cierra la caja
+  const [showParcialModal, setShowParcialModal] = useState(false)
+  const [montoParcial,     setMontoParcial]     = useState('')
   // Conteo aleatorio — paso 2 del cierre
   const [cierreStep,    setCierreStep]    = useState<1|2>(1)
   const [conteoItems,   setConteoItems]   = useState<{id:string;nombre:string;imagen_url?:string;stock_actual:number;contado:string}[]>([])
@@ -174,21 +182,10 @@ export default function CajaPage() {
     queryFn:  () => api.get('/berlin/caja/historial').then(r => r.data),
   })
 
-  // ── Ventas del día — GLOBAL (todos los cajeros)
-  const { data: ventasHoy } = useQuery<{
-    total_ventas: number; num_ventas: number; efectivo: number;
-    transferencias: number; qr: number; credito: number; ticket_promedio: number
-  }>({
-    queryKey: ['ventas-resumen-hoy'],
-    queryFn:  () => api.get('/berlin/ventas/resumen').then(r => r.data),
-    refetchInterval: 30_000,
-    enabled: !!turnoActivo,
-  })
-
-  // ── Ventas del turno — solo el cajero actual
+  // ── Ventas de hoy — caja compartida, todo el negocio (un solo turno por día)
   const { data: ventasTurno } = useQuery<{
     total_ventas: number; num_ventas: number; efectivo: number;
-    transferencias: number; qr: number; credito: number; ticket_promedio: number
+    transferencias: number; credito: number; ticket_promedio: number
   }>({
     queryKey: ['ventas-turno-actual'],
     queryFn:  () => api.get('/berlin/caja/ventas-turno').then(r => r.data),
@@ -282,6 +279,82 @@ export default function CajaPage() {
     ? new Date(turnoActivo.apertura_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
     : null
 
+  // Caja compartida: permiso para cerrar. Admin del negocio siempre; si la abrió un
+  // cajero, ese mismo cajero también; si la abrió un vendedor, solo un admin.
+  const rol = user?.rol ?? ''
+  const esAdminNegocio = ['super_admin', 'admin', 'admin_berlin'].includes(rol)
+  const abrioUnCajero  = turnoActivo?.usuario_apertura?.rol === 'cajero'
+  const esQuienAbrio   = turnoActivo?.usuario_apertura?.id === user?.id
+  const puedeCerrar    = esAdminNegocio || (abrioUnCajero && esQuienAbrio)
+
+  // Efectivo esperado en vivo — para el cierre parcial y el arqueo
+  const efectivoEsperadoVivo =
+    (turnoActivo?.monto_inicial ?? 0) + (ventasTurno?.efectivo ?? 0)
+
+  // ── Cierre parcial: tiquete informativo, la caja NO se cierra ──
+  const imprimirParcial = () => {
+    if (!turnoActivo) return
+    const origin  = window.location.origin
+    const ahora   = new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const contado = parseInt(montoParcial) || 0
+    const dif     = contado > 0 ? contado - efectivoEsperadoVivo : null
+    const t       = ventasTurno
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cierre Parcial ${turnoActivo.fecha}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box }
+  @page { margin:5mm; size:80mm auto }
+  body { font-family:Arial,sans-serif; font-weight:600; font-size:13px; width:100%; color:#000 }
+  .c { text-align:center } .b { font-weight:bold }
+  .sep { border-top:1px dashed #000; margin:5px 0 }
+  .sep2 { border-top:2px solid #000; margin:5px 0 }
+  .row { display:flex; justify-content:space-between; gap:6px; margin:2px 0 }
+  .row > span:first-child { flex:1; min-width:0 }
+  .amt { flex-shrink:0; text-align:right; white-space:nowrap; font-weight:700; min-width:58px }
+  .sm { font-size:13px }
+  .badge { font-size:11px; border:1px solid #000; padding:1px 4px; display:inline-block; margin-top:3px }
+  img.logo { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:20mm; object-fit:contain }
+</style></head><body>
+<img class="logo" src="${origin}/logos/berlin.png" alt="Berlín Café Bar" />
+<div class="c" style="margin-bottom:4px">
+  <p class="b">*Café Bar Berlín*</p>
+  <p class="sm">NIT: 1035424712-4</p>
+  <p class="sm">Tel: 3215994825</p>
+</div>
+<div class="sep2"></div>
+<div class="c">
+  <p class="b" style="font-size:14px">CIERRE PARCIAL</p>
+  <p><span class="badge">TURNO EN CURSO · NO ES CIERRE DEFINITIVO</span></p>
+</div>
+<div class="sep2"></div>
+<div class="row sm"><span>Fecha / hora corte:</span><span>${ahora}</span></div>
+<div class="row sm"><span>Apertura:</span><span>${horaApertura ?? '—'}</span></div>
+<div class="row sm"><span>Cajero corte:</span><span>${user?.nombre ?? 'Admin'}</span></div>
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">VENTAS HASTA AHORA</p>
+<div class="row"><span>Total ventas:</span><span class="amt">${fmt(t?.total_ventas ?? 0)}</span></div>
+<div class="row sm"><span>&nbsp;&nbsp;Efectivo:</span><span class="amt">${fmt(t?.efectivo ?? 0)}</span></div>
+<div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(t?.transferencias ?? 0)}</span></div>
+<div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(t?.credito ?? 0)}</span></div>
+<div class="row sm"><span>No. transacciones:</span><span class="amt">${t?.num_ventas ?? 0}</span></div>
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
+<div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
+<div class="row"><span>+ Ventas efectivo:</span><span class="amt">${fmt(t?.efectivo ?? 0)}</span></div>
+<div class="row b"><span>Efectivo esperado:</span><span class="amt">${fmt(efectivoEsperadoVivo)}</span></div>
+${contado > 0 ? `<div class="row"><span>Efectivo contado:</span><span class="amt">${fmt(contado)}</span></div>` : ''}
+${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;border-top:2px solid #000"><span>Diferencia:</span><span class="amt">${dif >= 0 ? '+' : ''}${fmt(dif)}</span></div>` : ''}
+<div class="sep"></div>
+<div class="c sm"><p>*** LA CAJA SIGUE ABIERTA ***</p><p>Sistema Kalreco v1.0</p></div>
+</body></html>`
+    const win = window.open('', '_blank', 'width=440,height=760')
+    if (win) {
+      win.document.write(html)
+      win.document.close()
+      win.focus()
+      setTimeout(() => { win.print(); setTimeout(() => win.close(), 800) }, 400)
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -339,25 +412,35 @@ export default function CajaPage() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setShowCierreModal(true)}
+                  onClick={() => { setMontoParcial(''); setShowParcialModal(true) }}
                   className="flex items-center gap-1.5 text-sm font-semibold
-                             bg-red-500/10 hover:bg-red-500/20 text-red-400
-                             border border-red-500/30 px-4 py-2 rounded-xl transition-colors"
+                             bg-brand-teal/10 hover:bg-brand-teal/20 text-brand-teal
+                             border border-brand-teal/30 px-4 py-2 rounded-xl transition-colors"
+                  title="Ver el resumen del turno e imprimir un corte parcial sin cerrar la caja"
                 >
-                  <Lock size={14} /> Cerrar turno
+                  <FileBarChart2 size={14} /> Cierre parcial
                 </button>
+                {puedeCerrar && (
+                  <button
+                    onClick={() => setShowCierreModal(true)}
+                    className="flex items-center gap-1.5 text-sm font-semibold
+                               bg-red-500/10 hover:bg-red-500/20 text-red-400
+                               border border-red-500/30 px-4 py-2 rounded-xl transition-colors"
+                  >
+                    <Lock size={14} /> Cerrar turno
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
           {/* KPIs — fila resumen general */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Monto inicial',    value: fmt(turnoActivo.monto_inicial),         icon: DollarSign,   color: 'text-gray-300'   },
-              { label: 'Ventas del día',   value: fmt(ventasHoy?.total_ventas ?? 0),       icon: TrendingUp,   color: 'text-brand-teal' },
-              { label: 'Ventas del turno', value: fmt(ventasTurno?.total_ventas ?? 0),     icon: Receipt,      color: 'text-amber-400'  },
+              { label: 'Ventas del día',   value: fmt(ventasTurno?.total_ventas ?? 0),     icon: TrendingUp,   color: 'text-brand-teal' },
               { label: 'Efectivo en caja', value: fmt(turnoActivo.monto_inicial + (ventasTurno?.efectivo ?? 0)), icon: Banknote, color: 'text-green-400' },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-brand-navy rounded-xl border border-white/5 p-4">
@@ -370,38 +453,19 @@ export default function CajaPage() {
             ))}
           </div>
 
-          {/* Ventas del turno — desglose por método de pago */}
+          {/* Ventas del día — desglose por método de pago (caja compartida = todo el negocio) */}
           <div className="bg-brand-navy rounded-xl border border-amber-500/10 p-4">
             <div className="flex items-center gap-2 mb-3">
               <Receipt size={13} className="text-amber-400" />
               <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
-                Ventas del turno — {ventasTurno?.num_ventas ?? 0} transacciones
+                Ventas del día — {ventasTurno?.num_ventas ?? 0} transacciones
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Efectivo',      value: ventasTurno?.efectivo ?? 0,       color: 'text-green-400'  },
-                { label: 'Pago Electrónico', value: ventasTurno?.transferencias ?? 0, color: 'text-blue-400'   },
-                { label: 'QR / Nequi',   value: ventasTurno?.qr ?? 0,             color: 'text-purple-400' },
-                { label: 'Crédito',       value: ventasTurno?.credito ?? 0,        color: 'text-pink-400'   },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="bg-brand-dark rounded-lg p-3">
-                  <p className="text-[11px] text-gray-500 mb-1">{label}</p>
-                  <p className={cn('text-base font-bold', color)}>{fmt(value)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Ventas del día global — referencia para admin */}
-          <div className="bg-brand-navy rounded-xl border border-white/5 p-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ventas del día — todos los cajeros</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: 'Efectivo',      value: ventasHoy?.efectivo ?? 0,       color: 'text-green-400'  },
-                { label: 'Pago Electrónico', value: ventasHoy?.transferencias ?? 0, color: 'text-blue-400'   },
-                { label: 'QR / Nequi',   value: ventasHoy?.qr ?? 0,             color: 'text-purple-400' },
-                { label: 'Crédito',       value: ventasHoy?.credito ?? 0,        color: 'text-pink-400'   },
+                { label: 'Efectivo',         value: ventasTurno?.efectivo ?? 0,       color: 'text-green-400' },
+                { label: 'Pago Electrónico', value: ventasTurno?.transferencias ?? 0, color: 'text-blue-400'  },
+                { label: 'Crédito',          value: ventasTurno?.credito ?? 0,        color: 'text-pink-400'  },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-brand-dark rounded-lg p-3">
                   <p className="text-[11px] text-gray-500 mb-1">{label}</p>
@@ -810,6 +874,81 @@ export default function CajaPage() {
               </div>
             </>)}
 
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL CIERRE PARCIAL ═══════════════════════════════ */}
+      {showParcialModal && turnoActivo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
+          <div className="bg-brand-navy rounded-2xl border border-white/10 p-6 w-full max-w-md space-y-4 shadow-2xl my-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileBarChart2 size={18} className="text-brand-teal" />
+                <p className="font-bold text-white">Cierre parcial</p>
+              </div>
+              <button onClick={() => setShowParcialModal(false)} className="text-gray-500 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-300 font-medium">
+              ⚠️ La caja sigue abierta — este corte es solo informativo.
+            </div>
+
+            <div className="bg-brand-dark rounded-xl p-4 space-y-1.5 border border-white/5 text-sm">
+              <div className="flex justify-between"><span className="text-gray-400">Ventas del día</span><span className="text-white font-mono">{fmt(ventasTurno?.total_ventas ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Efectivo</span><span className="text-green-400 font-mono">{fmt(ventasTurno?.efectivo ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Pago Electrónico</span><span className="text-blue-400 font-mono">{fmt(ventasTurno?.transferencias ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Crédito</span><span className="text-pink-400 font-mono">{fmt(ventasTurno?.credito ?? 0)}</span></div>
+              <div className="flex justify-between border-t border-white/5 pt-1.5 mt-1 font-bold">
+                <span className="text-gray-300">Efectivo esperado</span>
+                <span className="text-white font-mono">{fmt(efectivoEsperadoVivo)}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 font-medium block mb-1">
+                Efectivo contado en caja (opcional)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="text" inputMode="numeric"
+                  value={fmtInput(montoParcial)}
+                  onChange={e => setMontoParcial(stripDigits(e.target.value))}
+                  placeholder="0"
+                  className="w-full bg-brand-dark border border-white/10 rounded-xl
+                             pl-7 pr-4 py-3 text-white font-bold text-lg
+                             focus:outline-none focus:border-brand-teal/50 transition-colors"
+                />
+              </div>
+              {montoParcial && (() => {
+                const diff = (parseInt(montoParcial) || 0) - efectivoEsperadoVivo
+                return (
+                  <p className={cn('text-xs mt-1 ml-1 font-semibold', diff < 0 ? 'text-red-400' : diff > 0 ? 'text-yellow-400' : 'text-green-400')}>
+                    Diferencia: {diff >= 0 ? '+' : ''}{fmt(diff)}
+                    {diff < 0 ? ' ⚠️ Faltante' : diff > 0 ? ' Sobrante' : ' ✓ Cuadra'}
+                  </p>
+                )
+              })()}
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowParcialModal(false)}
+                className="flex-1 py-3 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 transition-colors text-sm"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={imprimirParcial}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
+                           bg-brand-teal hover:opacity-90 text-brand-dark font-bold text-sm transition-opacity"
+              >
+                <Printer size={15} /> Imprimir corte
+              </button>
+            </div>
           </div>
         </div>
       )}
