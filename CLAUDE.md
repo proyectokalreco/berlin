@@ -314,8 +314,10 @@ parcial** (migración 094, BD compartida — detalle en `kalreco/CLAUDE.md`):
 - **Cierre parcial:** botón + modal en `CajaPage.tsx` — resumen del turno en vivo + efectivo
   contado opcional + impresión de tiquete 80mm "TURNO EN CURSO · NO ES CIERRE DEFINITIVO",
   sin cerrar la caja. Clon del de Esquina, tema oscuro Berlín.
-- `tsc`/`node -c` limpios. Pendiente: aplicar migración 094 + deploy backend+panel + prueba
-  del cliente.
+- `tsc`/`node -c` limpios. **Desplegado y confirmado por el usuario en producción
+  (2026-09-03):** migración 094 aplicada (`DROP INDEX` / `CREATE INDEX` OK), backend+panel
+  reconstruidos, "todo funciona bien". Commits `berlin` `ca85f95` (partes 1+3) + `07bc430`
+  (parte 2), `kalreco` `1a74cf4` (migración 094).
 
 ## 📄 Documentación relacionada
 
