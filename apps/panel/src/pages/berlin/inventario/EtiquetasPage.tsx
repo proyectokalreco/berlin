@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Tag, Printer, Plus, Minus, Search } from 'lucide-react'
 import { api } from '../../../lib/api'
 import type { Producto } from '../../../types'
 import { cn } from '../../../lib/utils'
+import { coincide } from '../../../lib/buscar'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -94,12 +95,16 @@ export default function EtiquetasPage() {
   const [seleccion, setSeleccion] = useState<Map<string, { producto: Producto; cantidad: number }>>(new Map())
   const [tamano, setTamano] = useState<'pequena' | 'mediana' | 'grande'>('mediana')
 
-  const { data: productos = [], isLoading } = useQuery<Producto[]>({
-    queryKey: ['productos-etiquetas', busqueda],
-    queryFn:  () => api.get('/berlin/productos', {
-      params: { q: busqueda || undefined, limit: 50 },
-    }).then(r => r.data).catch(() => []),
+  const { data: productosTodos = [], isLoading } = useQuery<Producto[]>({
+    queryKey: ['productos-etiquetas'],
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data).catch(() => []),
   })
+  const productos = useMemo(
+    () => busqueda.trim()
+      ? productosTodos.filter(p => coincide(busqueda, p.nombre, p.codigo_barras))
+      : productosTodos,
+    [productosTodos, busqueda],
+  )
 
   const setCantidad = (producto: Producto, delta: number) => {
     setSeleccion(prev => {

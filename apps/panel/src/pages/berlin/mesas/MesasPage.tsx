@@ -11,6 +11,7 @@ import { api } from '../../../lib/api'
 import toast from 'react-hot-toast'
 import type { Producto, Categoria } from '../../../types'
 import { cn } from '../../../lib/utils'
+import { coincide } from '../../../lib/buscar'
 import { useAuthStore } from '../../../store/authStore'
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -327,10 +328,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   })
 
   const { data: productos = [] } = useQuery<Producto[]>({
-    queryKey: ['productos-mesa', busqueda, catActiva],
-    queryFn:  () => api.get('/berlin/productos', {
-      params: { q: busqueda || undefined, categoria_id: catActiva || undefined, limit: 80 },
-    }).then(r => r.data),
+    queryKey: ['productos-mesa'],
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data),
+    staleTime: 30_000,
   })
 
   const { data: categorias = [] } = useQuery<Categoria[]>({
@@ -338,11 +338,17 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     queryFn:  () => api.get('/berlin/categorias').then(r => r.data),
   })
 
-  const { data: clientes = [] } = useQuery<{id:string;nombre:string}[]>({
-    queryKey: ['clientes-mesa', buscandoCli],
-    queryFn:  () => api.get('/berlin/clientes', { params: { q: buscandoCli || undefined } }).then(r => r.data),
+  const { data: clientesTodos = [] } = useQuery<{id:string;nombre:string}[]>({
+    queryKey: ['clientes-mesa'],
+    queryFn:  () => api.get('/berlin/clientes', { params: { limit: 2000 } }).then(r => r.data),
     enabled:  metodoPago === 'credito',
   })
+  const clientes = useMemo(
+    () => buscandoCli.trim()
+      ? clientesTodos.filter(c => coincide(buscandoCli, c.nombre))
+      : clientesTodos,
+    [clientesTodos, buscandoCli],
+  )
 
   const { mutate: agregarProd } = useMutation({
     mutationFn: (payload: { producto_id: string; cantidad: number; precio_unitario?: number; nombre_libre?: string }) =>
@@ -472,7 +478,14 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const cambio     = efectivoNum > totalFinal ? efectivoNum - totalFinal : 0
 
   // Mostrar todos los productos; productos con stock=0 y tipo=receta quedan deshabilitados
-  const prodsFiltrados = useMemo(() => productos, [productos])
+  const catNameMap = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
+  const prodsFiltrados = useMemo(() => {
+    let list = productos
+    if (catActiva) list = list.filter(p => p.categoria_id === catActiva)
+    if (busqueda.trim())
+      list = list.filter(p => coincide(busqueda, p.nombre, p.codigo_barras, catNameMap.get(p.categoria_id ?? '')))
+    return list
+  }, [productos, catActiva, busqueda, catNameMap])
 
   // Enter → ejecutar cobrar cuando el modal está abierto
   useEffect(() => {

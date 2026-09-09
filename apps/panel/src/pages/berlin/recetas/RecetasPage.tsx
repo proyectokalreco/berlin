@@ -9,6 +9,7 @@ import {
   Zap, Settings, Check, Coffee, Thermometer, Search,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { coincide } from '../../../lib/buscar'
 import FormCrearProductoRapido from '../../../components/FormCrearProductoRapido'
 import FormCrearInsumoRapido   from '../../../components/FormCrearInsumoRapido'
 
@@ -969,14 +970,13 @@ export default function RecetasPage() {
     horneada: 'horneada', congelada: 'congelada', frito: 'frito',
     bebida_caliente: 'bebida caliente', bebida_fria: 'bebida fría',
   }
-  const q = busqueda.trim().toLowerCase()
-  const recetasFiltradas = q ? recetas.filter(r => {
-    const enNombre   = r.nombre.toLowerCase().includes(q)
-    const enProducto = r.producto?.nombre?.toLowerCase().includes(q)
-    const enInsumo    = r.ingredientes?.some(i => i.insumo?.nombre?.toLowerCase().includes(q))
-    const enTipo      = r.tipo_receta.split('+').some(t => (TIPO_LABELS[t.trim()] ?? t).toLowerCase().includes(q))
-    return enNombre || enProducto || enInsumo || enTipo
-  }) : recetas
+  const recetasFiltradas = busqueda.trim() ? recetas.filter(r => coincide(
+    busqueda,
+    r.nombre,
+    r.producto?.nombre,
+    ...(r.ingredientes ?? []).map(i => i.insumo?.nombre),
+    ...r.tipo_receta.split('+').map(t => TIPO_LABELS[t.trim()] ?? t),
+  )) : recetas
 
   const { mutate: guardarPct, isPending: guardandoPct } = useMutation({
     mutationFn: () => api.put('/berlin/configuracion/pct_costos_operativos', {

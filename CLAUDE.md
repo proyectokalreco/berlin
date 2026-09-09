@@ -319,6 +319,42 @@ parcial** (migración 094, BD compartida — detalle en `kalreco/CLAUDE.md`):
   reconstruidos, "todo funciona bien". Commits `berlin` `ca85f95` (partes 1+3) + `07bc430`
   (parte 2), `kalreco` `1a74cf4` (migración 094).
 
+### 17. Búsqueda tolerante en todo el panel (2026-09-09) — solo frontend
+
+Reporte del cliente: en Inventario (y otros módulos) el buscador obligaba a escribir el
+nombre exacto. **Causa real diagnosticada — NO eran mayúsculas** (el código ya hacía
+`toLowerCase()` de ambos lados, y el backend usa `.ilike` que también es case-insensitive):
+1. **Acentos.** Los nombres del negocio traen tildes (`AROMÁTICA`, `CAFÉ`, `LIMÓN`, `PIÑA`).
+   `"aromática".includes("aromatica")` → `false`. Por eso "debo poner el nombre exacto".
+2. **Orden de palabras.** `.includes()` de substring contiguo → `"queso palito"` no encuentra
+   `"PALITO DE QUESO"`.
+3. Un solo campo (solo `nombre`).
+
+**Solución — helper compartido `apps/panel/src/lib/buscar.ts`:**
+```ts
+normalizar(s)  // minúsculas + sin tildes (NFD + quita U+0300-036F) + espacios colapsados
+coincide(termino, ...campos)  // todos los tokens del término en ALGÚN campo, cualquier orden
+```
+`coincide('')` devuelve `true` (sin filtro).
+
+**Aplicado a los filtros del navegador** (`toLowerCase().includes()` → `coincide()`), ampliando
+campos: Inventario productos (nombre + código + **categoría**), Inventario insumos (nombre +
+**proveedor** + unidad), POS y Mesas catálogo (nombre + código + categoría), Recetas,
+Facturación, Proveedores (4 tabs).
+
+**Los `q` del backend pasaron a filtrarse en el navegador** (decisión del cliente: opción 3A —
+sin tocar la BD ni el backend). Se carga la lista completa una vez (`limit` alto) y se filtra
+con `coincide`: ClientesPage (lista + pickers encargo/separe), POS cliente, Mesas cliente y
+catálogo, Etiquetas, Mermas, Proveedores `buscar-items` (hook `useBuscarItems` — productos +
+insumos cargados una vez). El parámetro `q` sigue existiendo en el backend, solo dejó de
+usarse desde el panel.
+
+**`ProductosTerminados.tsx` eliminado** — archivo muerto, no estaba ruteado en `App.tsx`
+(la ruta `/inventario` usa `MateriasPrimas.tsx`).
+
+`tsc --noEmit` + `npm run build` limpios. **Sin tocar backend.** Alcance: solo Berlín (Tulio/
+Esquina/Hogar tienen el mismo patrón, quedan para otra sesión). Deploy: rebuild de `panel`.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.

@@ -1,6 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
+import { coincide } from '../../../lib/buscar'
+import type { Producto, Insumo } from '../../../types'
 import toast from 'react-hot-toast'
 import {
   Truck, Plus, X, Phone, FileText, Edit2, CheckCircle, Clock,
@@ -330,14 +332,34 @@ function FormCrearTerminadoRapido({ nombreInicial, onCreado, onCancelar }:
   )
 }
 
+// ── Buscador de items de inventario (productos + insumos) ─────
+// Carga la lista completa una vez y filtra en el navegador — acento- y
+// case-insensitive, multi-palabra. Reemplaza el endpoint `buscar-items`.
+function useBuscarItems(termino: string, activo: boolean): BusqItem[] {
+  const { data: prods = [] } = useQuery<Producto[]>({
+    queryKey: ['inv-items-prod'],
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data),
+    enabled:  activo, staleTime: 60_000,
+  })
+  const { data: insumos = [] } = useQuery<Insumo[]>({
+    queryKey: ['inv-items-insumo'],
+    queryFn:  () => api.get('/berlin/insumos').then(r => r.data),
+    enabled:  activo, staleTime: 60_000,
+  })
+  return useMemo(() => {
+    if (!termino.trim()) return []
+    const todos: BusqItem[] = [
+      ...prods.map(p => ({ id: p.id, nombre: p.nombre, stock_actual: p.stock_actual, precio_ref: p.precio_venta, _tipo: 'producto' as const })),
+      ...insumos.map(i => ({ id: i.id, nombre: i.nombre, stock_actual: i.stock_actual, precio_ref: i.costo_unitario, _tipo: 'insumo' as const, unidad_medida: i.unidad_medida })),
+    ]
+    return todos.filter(x => coincide(termino, x.nombre)).slice(0, 10)
+  }, [prods, insumos, termino])
+}
+
 // ── Fila artículo compra (estilo Planilla FilaLinea) ─────────
 function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
   { item: ItemFac; index: number; canRemove: boolean; onPatch: (p: Partial<ItemFac>) => void; onRemove: () => void }) {
-  const { data: resultados = [] } = useQuery<BusqItem[]>({
-    queryKey: ['fac-busq', item._busqueda],
-    queryFn:  () => api.get('/berlin/proveedores/buscar-items', { params: { q: item._busqueda, limit: 8 } }).then(r => r.data),
-    enabled:  item._busqueda.length >= 1 && !item._itemSel,
-  })
+  const resultados = useBuscarItems(item._busqueda, !item._itemSel)
 
   const seleccionar = (p: BusqItem) => onPatch({
     _itemSel: p, _busqueda: p.nombre, _mostrarRes: false,
@@ -491,11 +513,7 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
 function ItemPedidoRow({ item, index, canRemove, onChange, onRemove }:
   { item: ItemPedido; index: number; canRemove: boolean
     onChange: (p: Partial<ItemPedido>) => void; onRemove: () => void }) {
-  const { data: resultados = [] } = useQuery<BusqItem[]>({
-    queryKey: ['ped-busq', item._busqueda],
-    queryFn:  () => api.get('/berlin/proveedores/buscar-items', { params: { q: item._busqueda, limit: 8 } }).then(r => r.data),
-    enabled:  item._busqueda.length >= 1 && !item._itemSel,
-  })
+  const resultados = useBuscarItems(item._busqueda, !item._itemSel)
   const seleccionar = (p: BusqItem) => onChange({
     _itemSel: p, _busqueda: p.nombre, _mostrarRes: false, _showCrear: false,
     descripcion: p.nombre,
@@ -1019,6 +1037,12 @@ export default function ProveedoresPage() {
     queryFn:  () => api.get('/berlin/proveedores/facturas', { params: { tipo: 'compra' } }).then(r => r.data),
   })
 
+  // Filtrado por tab — acento- y case-insensitive, multi-palabra (lib/buscar)
+  const provFiltrados = proveedores.filter(p => coincide(busq, p.nombre, p.nit, p.contacto, p.telefono, p.email))
+  const pedFiltrados  = pedidos.filter(p => coincide(busq, p.proveedor?.nombre, p.numero_pedido, p.descripcion, p.estado))
+  const compFiltradas = compras.filter(f => coincide(busq, f.proveedor?.nombre, f.notas, f.total, f.estado))
+  const factFiltradas = facturas.filter(f => coincide(busq, f.numero_factura, f.proveedor?.nombre, f.total, f.estado, f.notas, ...(f.items ?? []).map(i => i.descripcion)))
+
   const { mutate: guardarCompra, isPending: pendCompra } = useMutation({
     mutationFn: () => api.post('/berlin/proveedores/facturas', {
       proveedor_id: formCompra.proveedor_id,
@@ -1179,28 +1203,14 @@ export default function ProveedoresPage() {
       {tab === 'proveedores' && (
         <div className="bg-brand-navy rounded-xl border border-white/5 overflow-hidden">
           {loadProv ? <div className="py-12 text-center text-sm text-gray-600">Cargando…</div>
-          : proveedores.filter(p => {
-              if (!busq) return true
-              const q = busq.toLowerCase()
-              return p.nombre.toLowerCase().includes(q)
-                || (p.nit ?? '').toLowerCase().includes(q)
-                || (p.contacto ?? '').toLowerCase().includes(q)
-                || (p.telefono ?? '').toLowerCase().includes(q)
-            }).length === 0 ? (
+          : provFiltrados.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3 text-gray-600">
               <Truck size={36} className="opacity-20"/>
               <p className="text-sm">{busq ? 'Sin resultados' : 'No hay proveedores registrados'}</p>
             </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {proveedores.filter(p => {
-                if (!busq) return true
-                const q = busq.toLowerCase()
-                return p.nombre.toLowerCase().includes(q)
-                  || (p.nit ?? '').toLowerCase().includes(q)
-                  || (p.contacto ?? '').toLowerCase().includes(q)
-                  || (p.telefono ?? '').toLowerCase().includes(q)
-              }).map(p => (
+              {provFiltrados.map(p => (
                 <div key={p.id} className="flex items-center gap-3 p-4">
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
                     <Truck size={16} className="text-blue-400"/>
@@ -1240,14 +1250,7 @@ export default function ProveedoresPage() {
       {tab === 'pedidos' && (
         <div className="bg-brand-navy rounded-xl border border-white/5 overflow-hidden">
           {loadPed ? <div className="py-12 text-center text-sm text-gray-600">Cargando…</div>
-          : pedidos.filter(p => {
-              if (!busq) return true
-              const q = busq.toLowerCase()
-              return (p.proveedor?.nombre ?? '').toLowerCase().includes(q)
-                || (p.numero_pedido ?? '').toLowerCase().includes(q)
-                || (p.descripcion ?? '').toLowerCase().includes(q)
-                || p.estado.toLowerCase().includes(q)
-            }).length === 0 ? (
+          : pedFiltrados.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3 text-gray-600">
               <Package size={36} className="opacity-20"/>
               <p className="text-sm">{busq ? 'Sin resultados' : 'No hay pedidos registrados'}</p>
@@ -1260,14 +1263,7 @@ export default function ProveedoresPage() {
             </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {pedidos.filter(p => {
-                if (!busq) return true
-                const q = busq.toLowerCase()
-                return (p.proveedor?.nombre ?? '').toLowerCase().includes(q)
-                  || (p.numero_pedido ?? '').toLowerCase().includes(q)
-                  || (p.descripcion ?? '').toLowerCase().includes(q)
-                  || p.estado.toLowerCase().includes(q)
-              }).map(p => {
+              {pedFiltrados.map(p => {
                 const est = ESTADOS_PEDIDO[p.estado] ?? ESTADOS_PEDIDO.pendiente
                 return (
                   <div key={p.id} className="p-4 space-y-2">
@@ -1338,14 +1334,7 @@ export default function ProveedoresPage() {
       {tab === 'compras' && (
         <div className="bg-brand-navy rounded-xl border border-white/5 overflow-hidden">
           {loadCompras ? <div className="py-12 text-center text-sm text-gray-600">Cargando…</div>
-          : compras.filter(f => {
-              if (!busq) return true
-              const q = busq.toLowerCase()
-              return (f.proveedor?.nombre ?? '').toLowerCase().includes(q)
-                || (f.notas ?? '').toLowerCase().includes(q)
-                || String(f.total).includes(q)
-                || f.estado.toLowerCase().includes(q)
-            }).length === 0 ? (
+          : compFiltradas.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3 text-gray-600">
               <FileText size={36} className="opacity-20"/>
               <p className="text-sm">{busq ? 'Sin resultados' : 'No hay compras registradas'}</p>
@@ -1358,14 +1347,7 @@ export default function ProveedoresPage() {
             </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {compras.filter(f => {
-                if (!busq) return true
-                const q = busq.toLowerCase()
-                return (f.proveedor?.nombre ?? '').toLowerCase().includes(q)
-                  || (f.notas ?? '').toLowerCase().includes(q)
-                  || String(f.total).includes(q)
-                  || f.estado.toLowerCase().includes(q)
-              }).map(f => (
+              {compFiltradas.map(f => (
                 <div key={f.id} className="flex items-start gap-3 p-4">
                   <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
                     f.estado === 'pagada' ? 'bg-green-500/10' : 'bg-amber-500/10')}>
@@ -1418,32 +1400,14 @@ export default function ProveedoresPage() {
       {tab === 'facturas' && (
         <div className="bg-brand-navy rounded-xl border border-white/5 overflow-hidden">
             {loadFac ? <div className="py-12 text-center text-sm text-gray-600">Cargando…</div>
-            : facturas.filter(f => {
-                if (!busq) return true
-                const q = busq.toLowerCase()
-                return (f.numero_factura ?? '').toLowerCase().includes(q)
-                  || (f.proveedor?.nombre ?? '').toLowerCase().includes(q)
-                  || String(f.total).includes(q)
-                  || (f.estado).toLowerCase().includes(q)
-                  || (f.notas ?? '').toLowerCase().includes(q)
-                  || (f.items ?? []).some(i => i.descripcion.toLowerCase().includes(q))
-              }).length === 0 ? (
+            : factFiltradas.length === 0 ? (
               <div className="flex flex-col items-center py-12 gap-3 text-gray-600">
                 <FileText size={36} className="opacity-20"/>
                 <p className="text-sm">{busq ? 'Sin resultados' : 'No hay facturas registradas'}</p>
               </div>
             ) : (
               <div className="divide-y divide-white/5">
-                {facturas.filter(f => {
-                  if (!busq) return true
-                  const q = busq.toLowerCase()
-                  return (f.numero_factura ?? '').toLowerCase().includes(q)
-                    || (f.proveedor?.nombre ?? '').toLowerCase().includes(q)
-                    || String(f.total).includes(q)
-                    || (f.estado).toLowerCase().includes(q)
-                    || (f.notas ?? '').toLowerCase().includes(q)
-                    || (f.items ?? []).some(i => i.descripcion.toLowerCase().includes(q))
-                }).map(f => (
+                {factFiltradas.map(f => (
                   <div key={f.id} className="flex items-start gap-3 p-4">
                     <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
                       f.estado === 'pagada' ? 'bg-green-500/10' : 'bg-amber-500/10')}>

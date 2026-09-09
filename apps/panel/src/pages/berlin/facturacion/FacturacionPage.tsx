@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
+import { coincide } from '../../../lib/buscar'
 import { useAuthStore } from '../../../store/authStore'
 import * as XLSX from 'xlsx'
 import {
@@ -301,14 +302,12 @@ export default function FacturacionPage() {
     },
   })
 
-  const q = busqueda.toLowerCase()
-  const filtradas = ventas.filter(v => {
-    if (!q) return true
-    if (v.numero_venta.toLowerCase().includes(q)) return true
-    if ((v.cliente?.nombre ?? '').toLowerCase().includes(q)) return true
-    if ((v.items ?? []).some(i => (i.producto?.nombre ?? '').toLowerCase().includes(q))) return true
-    return false
-  })
+  const filtradas = ventas.filter(v => coincide(
+    busqueda,
+    v.numero_venta,
+    v.cliente?.nombre,
+    ...(v.items ?? []).map(i => i.producto?.nombre),
+  ))
 
   return (
     <div className="space-y-4">

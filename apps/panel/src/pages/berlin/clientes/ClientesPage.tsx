@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
+import { coincide } from '../../../lib/buscar'
 import toast from 'react-hot-toast'
 import {
   Users, Plus, X, Phone, Edit2, Search, CreditCard,
@@ -13,6 +14,22 @@ import { cn } from '../../../lib/utils'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
+
+// Buscador de productos para encargos/separes: carga la lista completa una vez
+// y filtra en el navegador (acento- y case-insensitive, multi-palabra).
+function useProductosBuscar(termino: string, activo: boolean): Producto[] {
+  const { data: todos = [] } = useQuery<Producto[]>({
+    queryKey: ['productos-buscador-clientes'],
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data),
+    enabled:  activo, staleTime: 60_000,
+  })
+  return useMemo(
+    () => termino.trim()
+      ? todos.filter(p => coincide(termino, p.nombre, p.codigo_barras)).slice(0, 8)
+      : [],
+    [todos, termino],
+  )
+}
 
 // Maneja tanto '2026-06-04' como '2026-06-04T18:05:00+00:00'
 const fmtFecha = (d: string) =>
@@ -892,11 +909,7 @@ function ModalEncargo({ cliente, onClose, onSuccess }: { cliente:Cliente; onClos
   const [fechaEnt,    setFechaEnt]    = useState('')
   const [notas,       setNotas]       = useState('')
 
-  const { data: resultados = [] } = useQuery<Producto[]>({
-    queryKey: ['enc-busqueda', busqueda],
-    queryFn:  () => api.get('/berlin/productos', { params: { q: busqueda, limit: 8 } }).then(r => r.data),
-    enabled:  busqueda.length >= 1 && !productoSel,
-  })
+  const resultados = useProductosBuscar(busqueda, !productoSel)
 
   const seleccionarProducto = (p: Producto) => {
     setProductoSel(p)
@@ -1061,11 +1074,7 @@ function ModalSepare({ cliente, onClose, onSuccess }: { cliente:Cliente; onClose
   const [fechaLim,  setFechaLim]  = useState('')
   const [notas,     setNotas]     = useState('')
 
-  const { data: resultados = [] } = useQuery<Producto[]>({
-    queryKey: ['sep-busqueda', busqueda],
-    queryFn:  () => api.get('/berlin/productos', { params: { q: busqueda, limit: 8 } }).then(r => r.data),
-    enabled:  busqueda.length >= 1 && !producto,
-  })
+  const resultados = useProductosBuscar(busqueda, !producto)
 
   const { mutate: crear, isPending } = useMutation({
     mutationFn: () => api.post('/berlin/separes', {
@@ -1215,11 +1224,15 @@ export default function ClientesPage() {
   const [clienteSel,  setClienteSel]  = useState<Cliente | null>(null)
   const [soloDeuda,   setSoloDeuda]   = useState(false)
 
-  const { data: clientes = [], isLoading } = useQuery<Cliente[]>({
-    queryKey: ['clientes', busqueda],
-    queryFn:  () => api.get('/berlin/clientes', { params: busqueda ? { q: busqueda } : {} }).then(r => r.data),
+  const { data: clientesTodos = [], isLoading } = useQuery<Cliente[]>({
+    queryKey: ['clientes'],
+    queryFn:  () => api.get('/berlin/clientes', { params: { limit: 2000 } }).then(r => r.data),
     refetchInterval: 30_000,
   })
+  // Filtrado en el navegador — acento- y case-insensitive, multi-palabra
+  const clientes = busqueda.trim()
+    ? clientesTodos.filter(c => coincide(busqueda, c.nombre, c.telefono))
+    : clientesTodos
 
   const { data: resumen } = useQuery<Resumen>({
     queryKey: ['clientes-resumen'],

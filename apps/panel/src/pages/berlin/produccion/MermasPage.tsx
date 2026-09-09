@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Trash2, Plus, X, AlertTriangle, ChevronDown, ChevronUp,
@@ -7,6 +7,7 @@ import { api } from '../../../lib/api'
 import toast from 'react-hot-toast'
 import type { Producto } from '../../../types'
 import { cn } from '../../../lib/utils'
+import { coincide } from '../../../lib/buscar'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n)
@@ -47,11 +48,17 @@ function ModalMerma({ onClose }: { onClose: () => void }) {
   const [motivo,    setMotivo]    = useState('mala_coccion')
   const [descripcion, setDescripcion] = useState('')
 
-  const { data: resultados = [] } = useQuery<Producto[]>({
-    queryKey: ['productos-busqueda-merma', busqueda],
-    queryFn:  () => api.get('/berlin/productos', { params: { q: busqueda, limit: 8 } }).then(r => r.data),
-    enabled:  busqueda.length >= 1 && !producto,
+  const { data: productosTodos = [] } = useQuery<Producto[]>({
+    queryKey: ['productos-busqueda-merma'],
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data),
+    staleTime: 60_000,
   })
+  const resultados = useMemo(
+    () => busqueda.trim() && !producto
+      ? productosTodos.filter(p => coincide(busqueda, p.nombre, p.codigo_barras)).slice(0, 8)
+      : [],
+    [productosTodos, busqueda, producto],
+  )
 
   const { mutate: crear, isPending } = useMutation({
     mutationFn: () => api.post('/berlin/mermas', {

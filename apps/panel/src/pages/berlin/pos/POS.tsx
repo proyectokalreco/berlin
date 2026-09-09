@@ -13,6 +13,7 @@ import { useOfflineQueue } from './useOfflineQueue'
 import type { QueuedSale } from './useOfflineQueue'
 import { useProductosConSnapshot } from './useProductosConSnapshot'
 import { cn } from '../../../lib/utils'
+import { coincide } from '../../../lib/buscar'
 import { useAuthStore } from '../../../store/authStore'
 import { useNavigate } from 'react-router-dom'
 
@@ -739,14 +740,20 @@ export default function POS() {
   const { productos, categorias, isLoading } = useProductosConSnapshot()
 
   // ── Clientes para el selector de crédito ──
-  const { data: clientesLista = [] } = useQuery<{ id: string; nombre: string; telefono?: string }[]>({
-    queryKey: ['clientes-picker-pos', buscandoCliente],
-    queryFn:  () => api.get('/berlin/clientes', {
-      params: buscandoCliente ? { q: buscandoCliente } : {},
-    }).then(r => r.data),
+  // Se carga la lista completa una sola vez y se filtra en el navegador
+  // (acento- y case-insensitive) — evita depender del `q` del backend.
+  const { data: clientesTodos = [] } = useQuery<{ id: string; nombre: string; telefono?: string }[]>({
+    queryKey: ['clientes-picker-pos'],
+    queryFn:  () => api.get('/berlin/clientes', { params: { limit: 1000 } }).then(r => r.data),
     enabled:   metodoPago === 'credito',
     staleTime: 60_000,
   })
+  const clientesLista = useMemo(
+    () => buscandoCliente.trim()
+      ? clientesTodos.filter(c => coincide(buscandoCliente, c.nombre, c.telefono))
+      : clientesTodos,
+    [clientesTodos, buscandoCliente],
+  )
 
   const catNameMap = useMemo(
     () => new Map(categorias.map(c => [c.id, c.nombre])),
@@ -764,11 +771,10 @@ export default function POS() {
     if (catActiva) list = list.filter(p => p.categoria_id === catActiva)
     if (busqueda.trim())
       list = list.filter(p =>
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        (codigoMap[p.id] ?? '').includes(busqueda)
+        coincide(busqueda, p.nombre, codigoMap[p.id], p.codigo_barras, catNameMap.get(p.categoria_id ?? ''))
       )
     return list
-  }, [productos, catActiva, busqueda, codigoMap])
+  }, [productos, catActiva, busqueda, codigoMap, catNameMap])
 
   // ── Carrito ──
   const addItem = (p: Producto) => {

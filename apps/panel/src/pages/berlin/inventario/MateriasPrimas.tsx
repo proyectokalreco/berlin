@@ -13,6 +13,7 @@ import {
   Settings2, Tag, Camera, Smile, ChevronLeft, Globe,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { coincide } from '../../../lib/buscar'
 import * as XLSX from 'xlsx'
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -488,7 +489,7 @@ function TabInsumos() {
   const criticos = insumos.filter(i => i.stock_actual <= i.stock_minimo)
   const bajos    = insumos.filter(i => i.stock_actual > i.stock_minimo && i.stock_minimo > 0 && i.stock_actual <= i.stock_minimo * 2)
   const filtrados = insumos.filter(ins => {
-    const match = ins.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const match = coincide(busqueda, ins.nombre, ins.proveedor, ins.unidad_medida)
     if (filtro === 'criticos') return match && ins.stock_actual <= ins.stock_minimo
     if (filtro === 'bajos')    return match && ins.stock_actual > ins.stock_minimo && ins.stock_minimo > 0 && ins.stock_actual <= ins.stock_minimo * 2
     return match
@@ -2055,9 +2056,9 @@ function TabProductos() {
     queryFn:  () => api.get('/berlin/categorias').then(r => r.data),
   })
 
+  const catNombre = (id?: string | null) => categorias.find(c => c.id === id)?.nombre
   const filtrados = productos.filter(p => {
-    const matchSearch = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (p.codigo_barras ?? '').includes(busqueda)
+    const matchSearch = coincide(busqueda, p.nombre, p.codigo_barras, catNombre(p.categoria_id))
     const matchCat = filtroCategoria === '' || p.categoria_id === filtroCategoria
     const isAgotado = p.origen === 'externo' && p.stock_actual <= 0
     const isBajo = p.origen === 'externo' && p.stock_actual > 0 && p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo
