@@ -353,7 +353,9 @@ usarse desde el panel.
 (la ruta `/inventario` usa `MateriasPrimas.tsx`).
 
 `tsc --noEmit` + `npm run build` limpios. **Sin tocar backend.** Alcance: solo Berlín (Tulio/
-Esquina/Hogar tienen el mismo patrón, quedan para otra sesión). Deploy: rebuild de `panel`.
+Esquina/Hogar tienen el mismo patrón, quedan para otra sesión). Commit `f990ee8`.
+**✅ Desplegado (rebuild de `panel`) y confirmado por el usuario en producción (2026-09-09):**
+buscar "jug" en Inventario encuentra "JUGO EN AGUA" / "JUGO EN LECHE".
 
 ## 📄 Documentación relacionada
 
