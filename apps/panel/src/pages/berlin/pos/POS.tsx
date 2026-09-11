@@ -800,9 +800,17 @@ export default function POS() {
     [productos, idsLimonadas],
   )
 
+  // Aromáticas — por NOMBRE de producto, no por categoría: hay aromáticas mal categorizadas
+  // (ej. "AROMATICA FRUTOS ROJOS" vive en "Bebidas Calientes", no en "Aromáticas") y así
+  // igual aparecen en el modal. Decisión del cliente.
+  const saboresAromaticas = useMemo(
+    () => productos.filter(p => normalizar(p.nombre).startsWith('aromatica')).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [productos],
+  )
+
   const [modalVariante, setModalVariante] = useState<{
-    grupo:    'jugo' | 'limonada'
-    saborKey: string | null   // jugo: key normalizado del sabor · limonada: id del producto
+    grupo:    'jugo' | 'limonada' | 'aromatica'
+    saborKey: string | null   // jugo: key normalizado del sabor · limonada/aromatica: id del producto
     base:     'agua' | 'leche' | null
     cantidad: string
   } | null>(null)
@@ -859,7 +867,8 @@ export default function POS() {
       ? saboresJugos.find(s => normalizar(s.sabor) === modalVariante.saborKey)?.[
           modalVariante.base === 'leche' ? 'leche' : 'agua'
         ]
-      : saboresLimonada.find(p => p.id === modalVariante.saborKey)
+      : (modalVariante.grupo === 'aromatica' ? saboresAromaticas : saboresLimonada)
+          .find(p => p.id === modalVariante.saborKey)
     if (!producto) { toast.error('Selecciona sabor y presentación'); return }
     agregarConCantidad(producto, cantidad)
     setModalVariante(null)
@@ -1299,11 +1308,13 @@ export default function POS() {
             {categorias.map(cat => {
               const count = productos.filter(p => p.categoria_id === cat.id).length
               if (count === 0) return null
-              const esJugo     = idsJugosAgua.has(cat.id) || idsJugosLeche.has(cat.id)
-              const esLimonada = idsLimonadas.has(cat.id)
+              const esJugo      = idsJugosAgua.has(cat.id) || idsJugosLeche.has(cat.id)
+              const esLimonada  = idsLimonadas.has(cat.id)
+              const esAromatica = normalizar(cat.nombre).includes('aromatica')
               const onClickCat = () => {
-                if (esJugo)     { setModalVariante({ grupo: 'jugo', saborKey: null, base: null, cantidad: '1' }); return }
-                if (esLimonada) { setModalVariante({ grupo: 'limonada', saborKey: null, base: null, cantidad: '1' }); return }
+                if (esJugo)      { setModalVariante({ grupo: 'jugo', saborKey: null, base: null, cantidad: '1' }); return }
+                if (esLimonada)  { setModalVariante({ grupo: 'limonada', saborKey: null, base: null, cantidad: '1' }); return }
+                if (esAromatica) { setModalVariante({ grupo: 'aromatica', saborKey: null, base: null, cantidad: '1' }); return }
                 setCatActiva(cat.id)
               }
               return (
@@ -1938,14 +1949,19 @@ export default function POS() {
       const saborActual = modalVariante.grupo === 'jugo'
         ? saboresJugos.find(s => normalizar(s.sabor) === modalVariante.saborKey)
         : null
-      const limonadaActual = modalVariante.grupo === 'limonada'
-        ? saboresLimonada.find(p => p.id === modalVariante.saborKey)
-        : null
-      const titulo = modalVariante.grupo === 'jugo' ? 'Jugos' : 'Limonadas'
+      // "Solo sabor" — grupos sin paso de Agua/Leche (Limonadas, Aromáticas)
+      const soloSaborList = modalVariante.grupo === 'aromatica' ? saboresAromaticas
+        : modalVariante.grupo === 'limonada' ? saboresLimonada : []
+      const soloSaborLabel = modalVariante.grupo === 'aromatica' ? 'aromáticas' : 'limonadas'
+      const soloSaborActual = modalVariante.grupo !== 'jugo'
+        ? soloSaborList.find(p => p.id === modalVariante.saborKey)
+        : undefined
+      const titulo = modalVariante.grupo === 'jugo' ? 'Jugos'
+        : modalVariante.grupo === 'limonada' ? 'Limonadas' : 'Aromáticas'
       const pasoBase = modalVariante.grupo === 'jugo' && modalVariante.saborKey !== null
       const listo = modalVariante.grupo === 'jugo'
         ? !!saborActual && !!modalVariante.base
-        : !!limonadaActual
+        : !!soloSaborActual
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1956,7 +1972,7 @@ export default function POS() {
               <h3 className="text-white font-bold text-lg">{titulo}</h3>
             </div>
             <p className="text-gray-500 text-xs mb-5">
-              {!pasoBase && !limonadaActual ? 'Elige el sabor' : 'Confirma la cantidad'}
+              {!pasoBase && !soloSaborActual ? 'Elige el sabor' : 'Confirma la cantidad'}
             </p>
 
             {/* Paso 1 — Sabor */}
@@ -1977,9 +1993,9 @@ export default function POS() {
                 )}
               </div>
             )}
-            {modalVariante.grupo === 'limonada' && !modalVariante.saborKey && (
+            {modalVariante.grupo !== 'jugo' && !modalVariante.saborKey && (
               <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-                {saboresLimonada.map(p => (
+                {soloSaborList.map(p => (
                   <button key={p.id}
                     onClick={() => setModalVariante(prev => prev && ({ ...prev, saborKey: p.id }))}
                     className="bg-[#1C1A18] hover:bg-white/5 border border-white/10 rounded-xl px-3 py-3
@@ -1987,16 +2003,16 @@ export default function POS() {
                     {p.nombre}
                   </button>
                 ))}
-                {saboresLimonada.length === 0 && (
+                {soloSaborList.length === 0 && (
                   <p className="col-span-2 text-gray-500 text-sm text-center py-4">
-                    No hay limonadas cargadas en Inventario.
+                    No hay {soloSaborLabel} cargadas en Inventario.
                   </p>
                 )}
               </div>
             )}
 
             {/* Paso 2 — Base (solo jugos) + cantidad */}
-            {(pasoBase || limonadaActual) && (
+            {(pasoBase || soloSaborActual) && (
               <div className="space-y-4">
                 <button
                   onClick={() => setModalVariante(prev => prev && ({ ...prev, saborKey: null, base: null }))}
@@ -2006,7 +2022,7 @@ export default function POS() {
                 </button>
 
                 <p className="text-white text-sm font-semibold">
-                  {saborActual?.sabor ?? limonadaActual?.nombre}
+                  {saborActual?.sabor ?? soloSaborActual?.nombre}
                 </p>
 
                 {modalVariante.grupo === 'jugo' && (
@@ -2043,7 +2059,7 @@ export default function POS() {
                   <input
                     type="number"
                     min="1"
-                    autoFocus={modalVariante.grupo === 'limonada'}
+                    autoFocus={modalVariante.grupo !== 'jugo'}
                     className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                                text-white text-sm placeholder:text-gray-600 focus:outline-none
                                focus:border-[#EA580C]/60"

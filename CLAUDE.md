@@ -460,6 +460,45 @@ código, probar en una ventana de incógnito. Si ahí funciona, es el Service Wo
 del lado del navegador (F12 → Application → Service Workers → Unregister → Storage → Clear
 site data → recargar), no hace falta tocar el repo.
 
+### 20. POS — modal Sabor para Aromáticas (2026-09-11) + hallazgo pendiente de clasificación
+
+**Reporte del cliente:** varias recetas de aromáticas (canela, frutos rojos, hierbabuena...)
+están linkeadas a un producto vía receta, pero ese producto sigue apareciendo en Inventario
+como "Compra y venta" en vez de "De receta" — importante porque `tipo_producto`/`origen`
+determina si el POS deja vender con stock en 0.
+
+**Investigado, no se tocó nada de esto todavía (falta confirmar con el cliente):**
+- Descartado que el formulario de editar producto ignore el valor real: `MateriasPrimas.tsx`
+  inicializa el toggle leyendo `producto.tipo_producto` de la BD tal cual — si muestra
+  "Compra y venta" es porque la fila real en BD dice eso.
+- Descartado que el importador de Excel lo pise: el UPSERT-por-nombre (`MateriasPrimas.tsx`,
+  import de productos) no envía `tipo_producto` ni `origen` al actualizar un existente.
+- `sincronizarTipoProducto()` en `recetas.controller.js` sí marca el producto como `receta`
+  siempre que la receta se guarde con `producto_id` — y esto funciona hoy para otras recetas
+  (`ADICION QUESO` muestra bien el badge "Receta"). Hipótesis más probable: al crear cada
+  receta de aromática se usó "+ Crear nuevo" en el selector de producto en vez de buscar y
+  elegir la aromática que ya existía del Excel original → quedó un **producto duplicado**
+  (uno viejo `compra_venta` que es el que se ve/vende, otro nuevo `receta` al que apunta la
+  receta pero que nadie usa) — mismo patrón ya visto con "REPISA" duplicado en Esquina del
+  Crédito. Reforzado por un hallazgo real: **"AROMATICA FRUTOS ROJOS" vive en la categoría
+  "Bebidas Calientes"**, no en "Aromáticas" como sus 9 hermanas — típico de un producto creado
+  al vuelo desde el formulario de receta. No se confirmó aún con una búsqueda directa si hay
+  fila duplicada — pendiente, es corrección de datos, no de código.
+- **El bloqueo por stock=0 es solo visual, del lado del frontend** (`ProductCard` en
+  `POS.tsx` deshabilita el click si `stock_actual<=0` salvo `origen==='receta'`) —
+  `ventas.controller.js` nunca valida stock al crear una venta. Por eso la clasificación mal
+  hecha **no bloquea** el modal nuevo (ver abajo), que no tiene ese chequeo.
+
+**Modal Sabor para Aromáticas** — mismo patrón que Jugos/Limonadas, pero **por nombre de
+producto, no por categoría** (decisión explícita del cliente, justo para que
+"AROMATICA FRUTOS ROJOS" entre al modal aunque esté mal categorizada):
+`saboresAromaticas` = productos cuyo nombre normalizado empieza con `aromatica`. Se
+generalizaron los 3 puntos que antes distinguían solo `'jugo'|'limonada'` a un tercer grupo
+`'aromatica'` (mismo flujo "solo sabor" que ya tenía Limonada — sin paso Agua/Leche), vía una
+lista `soloSaborList` que apunta a `saboresLimonada` o `saboresAromaticas` según el grupo.
+
+Sin backend, sin BD. `tsc --noEmit` + `npm run build` limpios.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
