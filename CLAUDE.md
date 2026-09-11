@@ -499,6 +499,20 @@ lista `soloSaborList` que apunta a `saboresLimonada` o `saboresAromaticas` segú
 
 Sin backend, sin BD. `tsc --noEmit` + `npm run build` limpios.
 
+**✅ Resuelto (2026-09-11) — no era bug, ni duplicado.** El cliente probó "AROMATICA FRUTOS
+ROJOS": una sola fila activa en Inventario (descarta duplicado), categoría ya corregida a
+"AROMATICAS". Se le pidió abrir esa receta en Recetas y volver a guardarla **sin cambiar
+nada** — como `sincronizarTipoProducto()` se dispara sin condición en cada guardado de
+receta, si el `producto_id` coincide con esa fila, el simple re-guardado la sincroniza. Así
+fue: 9 de las 10 aromáticas pasaron a badge "Receta" con solo reabrir y guardar cada receta,
+sin tocar código ni BD directamente. Causa real de por qué no se habían sincronizado nunca:
+sin determinar (probablemente creadas/editadas antes de una versión donde este flujo no se
+disparaba igual, o simplemente nunca se volvió a guardar la receta después de vincular el
+producto) — no se investigó más porque el cliente ya lo resolvió con el re-guardado y no vale
+la pena seguir cavando en algo que ya no reproduce. Queda 1 excepción sin resolver:
+"AROMATICAS PANELITA" sigue en "Compra y venta"/Agotado — pendiente de confirmar con el
+cliente si le corresponde receta también.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
