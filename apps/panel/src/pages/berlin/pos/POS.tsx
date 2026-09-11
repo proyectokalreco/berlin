@@ -763,14 +763,16 @@ export default function POS() {
   // ── Jugos/Limonadas — modal de Sabor + Base en vez de grilla suelta ──
   // Detección por nombre de categoría (acento/case-insensitive vía normalizar) — no
   // depende de IDs fijos, así que sigue funcionando si el cliente crea/renombra categorías.
+  // `includes` (no `startsWith`) — tolera emoji u otro texto adelante del nombre
+  // (ej. "🍋 Limonadas"), que es como algunos clientes escriben el nombre de la categoría.
   const idsJugosAgua  = useMemo(() => new Set(
-    categorias.filter(c => { const n = normalizar(c.nombre); return n.startsWith('jugos') && n.includes('agua') }).map(c => c.id)
+    categorias.filter(c => { const n = normalizar(c.nombre); return n.includes('jugos') && n.includes('agua') }).map(c => c.id)
   ), [categorias])
   const idsJugosLeche = useMemo(() => new Set(
-    categorias.filter(c => { const n = normalizar(c.nombre); return n.startsWith('jugos') && n.includes('leche') }).map(c => c.id)
+    categorias.filter(c => { const n = normalizar(c.nombre); return n.includes('jugos') && n.includes('leche') }).map(c => c.id)
   ), [categorias])
   const idsLimonadas  = useMemo(() => new Set(
-    categorias.filter(c => normalizar(c.nombre).startsWith('limonada')).map(c => c.id)
+    categorias.filter(c => normalizar(c.nombre).includes('limonada')).map(c => c.id)
   ), [categorias])
 
   interface SaborJugo { sabor: string; agua?: Producto; leche?: Producto }

@@ -1,7 +1,15 @@
-import { useState, useRef, useCallback, ChangeEvent } from 'react'
+import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react'
 import { useAuthStore } from '../../../store/authStore'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, useSortable, arrayMove, verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { api } from '../../../lib/api'
 import type { Insumo, Producto, Categoria } from '../../../types'
 import Button from '../../../components/ui/Button'
@@ -10,7 +18,7 @@ import {
   Package, Package2, AlertTriangle, CheckCircle, Plus, Search,
   X, Upload, Download, FileSpreadsheet, ChevronDown, ChevronUp,
   Pencil, Trash2, Barcode, ShoppingCart, FlaskConical,
-  Settings2, Tag, Camera, Smile, ChevronLeft, Globe,
+  Settings2, Tag, Camera, Smile, ChevronLeft, Globe, GripVertical,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { coincide } from '../../../lib/buscar'
@@ -1116,6 +1124,41 @@ function ProductImageInput({
 // ═════════════════════════════════════════════════════════════
 // MODAL GESTIÓN DE CATEGORÍAS
 // ═════════════════════════════════════════════════════════════
+
+// Envoltorio arrastrable — mismo patrón que SortableModuleCard en BerlinDashboard.tsx.
+// El drag solo se activa desde el ícono de agarre (listeners ahí, no en toda la fila),
+// así que Editar/Eliminar/Expandir siguen funcionando con un clic normal.
+function SortableCategoriaRow({ id, dragMode, children }: {
+  id: string; dragMode: boolean; children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity:  isDragging ? 0.5 : 1,
+        position: 'relative',
+      }}
+      {...attributes}
+    >
+      {dragMode && (
+        <button
+          {...listeners}
+          onClick={e => e.preventDefault()}
+          className="absolute -left-1 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-lg bg-black/50
+                     border border-white/10 text-gray-400 hover:text-white cursor-grab active:cursor-grabbing"
+          title="Arrastrar para reordenar"
+        >
+          <GripVertical size={13} />
+        </button>
+      )}
+      <div className={dragMode ? 'pl-7' : ''}>{children}</div>
+    </div>
+  )
+}
+
 function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
   const queryClient     = useQueryClient()
   const [nombre,  setNombre]  = useState('')
@@ -1136,6 +1179,41 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
     queryKey: ['productos'],
     queryFn:  () => api.get('/berlin/productos').then(r => r.data),
   })
+
+  // ── Reordenar categorías (arrastrar y soltar) ──
+  // El backend ya ordena por `orden` (columna existente, sin migración) — solo faltaba
+  // una forma de editarlo desde el panel. Mismo patrón que el "Reordenar" del Dashboard.
+  const [dragMode, setDragMode] = useState(false)
+  const [ordenIds, setOrdenIds] = useState<string[]>([])
+  useEffect(() => {
+    if (categorias.length) setOrdenIds(categorias.map(c => c.id))
+  }, [categorias])
+  const categoriasOrdenadas = ordenIds
+    .map(id => categorias.find(c => c.id === id))
+    .filter((c): c is Categoria => !!c)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
+
+  const { mutate: guardarOrden } = useMutation({
+    mutationFn: (ids: string[]) =>
+      Promise.all(ids.map((id, idx) => api.put(`/berlin/categorias/${id}`, { orden: idx }))),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categorias-pan'] }),
+    onError: () => toast.error('No se pudo guardar el nuevo orden'),
+  })
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setOrdenIds(prev => {
+      const oldIdx = prev.indexOf(active.id as string)
+      const newIdx = prev.indexOf(over.id as string)
+      const siguiente = arrayMove(prev, oldIdx, newIdx)
+      guardarOrden(siguiente)
+      return siguiente
+    })
+  }, [guardarOrden])
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['categorias-pan'] })
@@ -1247,9 +1325,30 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
 
           {/* Lista de categorías */}
           <div className="space-y-2">
-            <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
-              {categorias.length} {categorias.length === 1 ? 'categoría' : 'categorías'}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
+                {categorias.length} {categorias.length === 1 ? 'categoría' : 'categorías'}
+              </p>
+              {categorias.length > 1 && (
+                <button
+                  onClick={() => setDragMode(v => !v)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors',
+                    dragMode
+                      ? 'bg-brand-teal/15 border-brand-teal/30 text-brand-teal'
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300',
+                  )}
+                >
+                  <GripVertical size={12} />
+                  {dragMode ? 'Listo' : 'Reordenar'}
+                </button>
+              )}
+            </div>
+            {dragMode && (
+              <p className="text-[11px] text-brand-teal/70 flex items-center gap-1">
+                <GripVertical size={11} /> Arrastra las categorías para cambiar el orden en que aparecen en POS, Mesas e Inventario.
+              </p>
+            )}
 
             {isLoading ? (
               <p className="text-sm text-gray-500 text-center py-4">Cargando…</p>
@@ -1258,13 +1357,16 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                 No hay categorías todavía. Crea la primera arriba.
               </div>
             ) : (
-              categorias.map(cat => {
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={ordenIds} strategy={verticalListSortingStrategy}>
+              {categoriasOrdenadas.map(cat => {
                 const count = prodCount(cat)
                 const isEditing = editId === cat.id
                 const isConfirmDel = confirmDelId === cat.id
 
                 return (
-                  <div key={cat.id} className="bg-brand-dark rounded-xl border border-white/5 overflow-hidden">
+                  <SortableCategoriaRow key={cat.id} id={cat.id} dragMode={dragMode}>
+                  <div className="bg-brand-dark rounded-xl border border-white/5 overflow-hidden">
                     {isEditing ? (
                       /* ── Modo edición ── */
                       <div className="p-3 space-y-2">
@@ -1385,8 +1487,11 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                       </>
                     )}
                   </div>
+                  </SortableCategoriaRow>
                 )
-              })
+              })}
+              </SortableContext>
+              </DndContext>
             )}
           </div>
         </div>

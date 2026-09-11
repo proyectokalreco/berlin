@@ -412,6 +412,32 @@ exacta en vez de +1).
 Sin backend, sin BD. Alcance: solo POS — Mesas no se tocó (decisión del cliente). `tsc
 --noEmit` + `npm run build` limpios.
 
+**Desplegado 2026-09-11 — el cliente reportó 2 problemas al probar:**
+
+1. **"Limonadas" no abría el modal aunque "Jugos" sí.** Causa probable: la detección usaba
+   `normalizar(nombre).startsWith('jugos'|'limonada')` — si el nombre real de esa categoría
+   tiene algo antes (típico: el cliente tecleó un emoji dentro del campo *nombre* en vez de en
+   el campo *emoji* aparte de `ModalGestionCategorias`), `startsWith` no matchea.
+   **Fix:** `startsWith` → `includes` en las 3 detecciones (jugos agua, jugos leche,
+   limonadas) — mismo criterio, más tolerante.
+2. **La barra de categorías no se puede reordenar** — "JUGOS EN AGUA"/"JUGOS EN LECHE" (creadas
+   el 11-sep, después de las 17 categorías originales) quedan al final de la barra, hay que
+   scrollear con la flechita para llegar. `br_categorias.orden` ya existía en la BD y el
+   backend ya ordenaba por ahí (`categorias.controller.js` línea 63) — **nada en el panel
+   dejaba editarlo** (toda categoría nueva nace con `orden: 0`).
+   **Fix:** arrastrar-y-soltar en Inventario → Categorías (`ModalGestionCategorias`,
+   `MateriasPrimas.tsx`), mismo patrón `@dnd-kit` que ya usa `BerlinDashboard.tsx` para
+   reordenar los tiles (`SortableCategoriaRow`, drag solo desde el ícono de agarre — Editar/
+   Eliminar/Expandir siguen funcionando con clic normal). Al soltar, `PUT
+   /berlin/categorias/:id` con `orden` secuencial (endpoint ya lo soportaba, solo faltaba
+   quien lo llamara). Afecta el orden en POS, Mesas e Inventario por igual — todos leen el
+   mismo endpoint. ⚠️ El cliente todavía tiene que hacer **una pasada manual** arrastrando
+   Jugos/Limonada al principio — antes de eso, con todas las categorías en `orden=0`, el orden
+   entre ellas sigue siendo el que Postgres devuelva (probablemente creación), sin cambios.
+
+Sin migración, sin cambios de backend (el campo y el endpoint ya soportaban esto). `tsc
+--noEmit` + `npm run build` limpios.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
