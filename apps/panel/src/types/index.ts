@@ -58,7 +58,7 @@ export interface Receta {
   producto_id:           string
   nombre:                string
   rendimiento:           number
-  tipo_receta:           'horneada' | 'congelada' | 'frito'
+  tipo_receta:           string // 'horneada'|'congelada'|'frito'|'bebida_caliente'|'bebida_fria', o combo "a+b"
   tiempo_prep_min:       number
   tiempo_horno_min:      number
   tiempo_congelado_min?: number

@@ -357,6 +357,33 @@ Esquina/Hogar tienen el mismo patrón, quedan para otra sesión). Commit `f990ee
 **✅ Desplegado (rebuild de `panel`) y confirmado por el usuario en producción (2026-09-09):**
 buscar "jug" en Inventario encuentra "JUGO EN AGUA" / "JUGO EN LECHE".
 
+### 18. Badge de receta mostraba "Horneada" para recetas Frito/Bebida (2026-09-11) — solo frontend
+
+Reporte del cliente: recetas creadas como "Frito" o "Bebida Fría" (jugos, limonadas) aparecían
+en la lista con el badge "Horneada". El dato guardado en BD **era correcto** — el modal de
+edición leía y resaltaba bien el tipo real; el bug era solo de visualización en la lista.
+
+**Causa** (`RecetasPage.tsx`, componente `RecetaCard`): el badge y el bloque de detalle
+comparaban `tipo_receta` contra solo 2 valores (`'congelada'`, `'frito'`) con un `if/else` de
+2 ramas — cualquier otro valor (`'bebida_caliente'`, `'bebida_fria'`, o un combo `"a+b"`) caía
+al `else` y mostraba "Horneada" sin importar el tipo real. Quedó desactualizado cuando se
+agregaron Bebida Caliente/Bebida Fría al selector (el modal de creación sí los contemplaba,
+la lista nunca se actualizó a la par).
+
+**Fix:**
+- Badge: nuevo lookup `TIPO_BADGE` (los 5 tipos, icono+color+label) — recorre
+  `tipo_receta.split('+')` y muestra un badge por proceso (soporta combos reales, ej.
+  `"horneada+frito"`), en vez de un `if/else` de 2 casos con default incorrecto.
+- Detalle (acordeón): temperatura/tiempo de horno y tiempo de congelado pasaron de
+  mutuamente excluyentes (`if/else`) a condiciones independientes por `.includes()` sobre el
+  split — un combo horno+congelado ahora muestra ambos; frito/bebidas no muestran nada extra
+  (no tienen campos propios en el schema, correcto).
+- `types/index.ts`: `Receta.tipo_receta` ensanchado de `'horneada'|'congelada'|'frito'` a
+  `string` — el tipo mentía, ya admitía `bebida_caliente`/`bebida_fria`/combos desde antes.
+
+Sin cambios de backend ni de BD — el dato siempre estuvo bien, era puramente de presentación.
+`tsc --noEmit` + `npm run build` limpios.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.

@@ -25,6 +25,15 @@ interface IngredienteForm {
 
 const UNIDADES = ['g', 'kg', 'ml', 'l', 'unidad', 'bolsa', 'bulto']
 
+// ── Badges de tipo de proceso — un tipo_receta puede ser combo "a+b" ──
+const TIPO_BADGE: Record<string, { label: string; icon: JSX.Element; cls: string }> = {
+  horneada:         { label: 'Horneada',        icon: <Flame       size={11} />, cls: 'bg-orange-500/15 border-orange-500/30 text-orange-300' },
+  congelada:        { label: 'Congelada',       icon: <Snowflake   size={11} />, cls: 'bg-blue-500/15   border-blue-500/30   text-blue-300'   },
+  frito:            { label: 'Frito',           icon: <Zap         size={11} />, cls: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-300' },
+  bebida_caliente:  { label: 'Bebida Caliente', icon: <Coffee      size={11} />, cls: 'bg-red-500/15    border-red-500/30    text-red-300'    },
+  bebida_fria:      { label: 'Bebida Fría',     icon: <Thermometer size={11} />, cls: 'bg-cyan-500/15   border-cyan-500/30   text-cyan-300'   },
+}
+
 // ── Modal Receta (crear y editar) ─────────────────────────────
 function ModalReceta({
   receta,
@@ -730,23 +739,17 @@ function RecetaCard({
 
         {/* Zona derecha: badges + acciones + chevron */}
         <div className="flex items-center gap-1.5 pr-4 flex-shrink-0">
-          {/* Badge tipo receta */}
-          {receta.tipo_receta === 'congelada' ? (
-            <span className="hidden sm:flex items-center gap-1 text-xs bg-blue-500/15 border border-blue-500/30
-                             text-blue-300 px-2 py-0.5 rounded-full mr-1">
-              <Snowflake size={11} /> Congelada
-            </span>
-          ) : receta.tipo_receta === 'frito' ? (
-            <span className="hidden sm:flex items-center gap-1 text-xs bg-yellow-500/15 border border-yellow-500/30
-                             text-yellow-300 px-2 py-0.5 rounded-full mr-1">
-              <Zap size={11} /> Frito
-            </span>
-          ) : (
-            <span className="hidden sm:flex items-center gap-1 text-xs bg-orange-500/15 border border-orange-500/30
-                             text-orange-300 px-2 py-0.5 rounded-full mr-1">
-              <Flame size={11} /> Horneada
-            </span>
-          )}
+          {/* Badges tipo receta — uno por proceso (combo "a+b" posible) */}
+          {receta.tipo_receta.split('+').map(t => t.trim()).map(t => {
+            const b = TIPO_BADGE[t] ?? TIPO_BADGE.horneada
+            return (
+              <span key={t} className={cn(
+                'hidden sm:flex items-center gap-1 text-xs border px-2 py-0.5 rounded-full mr-1', b.cls,
+              )}>
+                {b.icon} {b.label}
+              </span>
+            )
+          })}
 
           {/* Costo */}
           <span className="hidden md:flex items-center gap-1 text-xs text-green-400 mr-2">
@@ -821,7 +824,8 @@ function RecetaCard({
       {open && (
         <div className="px-5 pb-5 pt-1 space-y-4 border-t border-white/5">
           <div className="flex flex-wrap gap-4 text-sm">
-            {receta.tipo_receta === 'horneada' ? (
+            {/* Detalle por proceso — independientes, un combo "a+b" muestra ambos */}
+            {receta.tipo_receta.split('+').includes('horneada') && (
               <>
                 {receta.temperatura_horno && (
                   <div className="flex items-center gap-1.5 text-orange-400">
@@ -834,12 +838,11 @@ function RecetaCard({
                   </div>
                 )}
               </>
-            ) : (
-              (receta.tiempo_congelado_min ?? 0) > 0 && (
-                <div className="flex items-center gap-1.5 text-blue-400">
-                  <Snowflake size={14} />{receta.tiempo_congelado_min} min de congelado
-                </div>
-              )
+            )}
+            {receta.tipo_receta.split('+').includes('congelada') && (receta.tiempo_congelado_min ?? 0) > 0 && (
+              <div className="flex items-center gap-1.5 text-blue-400">
+                <Snowflake size={14} />{receta.tiempo_congelado_min} min de congelado
+              </div>
             )}
             {receta.tiempo_prep_min > 0 && (
               <div className="flex items-center gap-1.5 text-gray-400">
