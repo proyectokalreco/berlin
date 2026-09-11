@@ -384,6 +384,34 @@ la lista nunca se actualizó a la par).
 Sin cambios de backend ni de BD — el dato siempre estuvo bien, era puramente de presentación.
 `tsc --noEmit` + `npm run build` limpios.
 
+### 19. POS — modal Sabor + Base para Jugos/Limonadas (2026-09-11)
+
+Pedido del cliente: cada combo sabor+base (JUGO FRESA AGUA, JUGO FRESA LECHE, JUGO LULO
+AGUA...) es un producto/receta aparte — la categoría "JUGOS EN LECHE" sola ya tiene 7 cards,
+más las de "JUGOS EN AGUA", lentifica encontrar un jugo en el POS. Tocar el chip de esas
+categorías (o "LIMONADAS") ahora abre un modal en vez de la grilla suelta.
+
+**Detección de categorías por nombre, no por ID fijo** (`POS.tsx`, reutiliza
+`normalizar()`/`coincide()` de `lib/buscar.ts`, mismo helper del incidente 17): jugos =
+categoría cuyo nombre normalizado empieza con `jugos` y contiene `agua`/`leche`; limonadas =
+empieza con `limonada`. Sin config en BD — agregar otra familia (sodas, malteadas) es una
+línea más en el propio archivo, sin migración.
+
+**`saboresJugos`** cruza los productos de las 2 categorías de jugo, agrupando por el nombre
+del producto sin la palabra final Agua/Leche (el sabor sale del nombre real, no de una lista
+hardcodeada) → `{sabor, agua?, leche?}`. **`saboresLimonada`** son los productos de la
+categoría limonadas tal cual (decisión del cliente: solo sabor, sin paso de base — hoy no
+existen limonadas en leche).
+
+**Modal** (mismo patrón visual que "Venta Libre", ya existente en el mismo archivo): paso 1
+elegir sabor (grid de botones), paso 2 (solo jugos) elegir Agua/Leche — deshabilitada la base
+que no exista para ese sabor —, cantidad, botón Agregar resuelve el producto real y lo mete al
+carrito con `agregarConCantidad` (mismo patrón de merge que `addItem`, pero con la cantidad
+exacta en vez de +1).
+
+Sin backend, sin BD. Alcance: solo POS — Mesas no se tocó (decisión del cliente). `tsc
+--noEmit` + `npm run build` limpios.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
