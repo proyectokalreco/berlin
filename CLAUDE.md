@@ -509,9 +509,8 @@ sin tocar código ni BD directamente. Causa real de por qué no se habían sincr
 sin determinar (probablemente creadas/editadas antes de una versión donde este flujo no se
 disparaba igual, o simplemente nunca se volvió a guardar la receta después de vincular el
 producto) — no se investigó más porque el cliente ya lo resolvió con el re-guardado y no vale
-la pena seguir cavando en algo que ya no reproduce. Queda 1 excepción sin resolver:
-"AROMATICAS PANELITA" sigue en "Compra y venta"/Agotado — pendiente de confirmar con el
-cliente si le corresponde receta también.
+la pena seguir cavando en algo que ya no reproduce. Quedaba 1 excepción: "AROMATICAS PANELITA" sigue en "Compra y venta"/Agotado — consultado
+con el cliente, **caso cerrado, se deja así** (no se toca).
 
 ## 📄 Documentación relacionada
 
