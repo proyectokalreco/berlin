@@ -438,6 +438,28 @@ Sin backend, sin BD. Alcance: solo POS — Mesas no se tocó (decisión del clie
 Sin migración, sin cambios de backend (el campo y el endpoint ya soportaban esto). `tsc
 --noEmit` + `npm run build` limpios.
 
+**⚠️ Falsa alarma tras el segundo deploy — Service Worker (PWA), no bug de código.** El
+cliente reportó que ni "Limonadas" abría el modal ni aparecía el botón "Reordenar", **con el
+código ya desplegado y caché del navegador "limpiada"**. Se verificó con captura la categoría
+"LIMONADAS" en Inventario: bien nombrada (sin emoji ni prefijo), 6 productos bien asignados —
+descartaba de plano mi hipótesis de nombre raro. La pista real: el botón "Reordenar" tampoco
+aparecía, y ese código no depende para nada de nombres de categoría — si un cambio sin
+relación tampoco se veía, el navegador simplemente no estaba corriendo el bundle nuevo.
+
+Mismo patrón ya documentado en este proyecto ("los 401/MIME eran caché vieja del Service
+Worker tras el deploy, no bug de código", incidente sesión 2026-08-30): esta app es una PWA
+con Service Worker — **"limpiar caché del navegador" (Ctrl+Shift+Supr) no limpia el caché del
+Service Worker**, son almacenamientos distintos. Confirmado pidiendo al cliente probar en
+ventana de incógnito (bypasea el SW por completo) — ahí sí funcionó todo (modal de Limonadas
+abre con los 6 sabores, botón Reordenar visible) — y al reintentar en la ventana normal
+también empezó a andar (el SW se actualizó solo). **Ninguna de las dos features tenía bug —
+las dos ya funcionaban desde el commit `8c41d54`.**
+
+**Lección para la próxima vez que "ya desplegué pero sigue igual":** antes de asumir bug de
+código, probar en una ventana de incógnito. Si ahí funciona, es el Service Worker — solución
+del lado del navegador (F12 → Application → Service Workers → Unregister → Storage → Clear
+site data → recargar), no hace falta tocar el repo.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
