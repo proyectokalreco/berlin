@@ -196,8 +196,12 @@ function MesaCard({
       {/* Número */}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-2xl font-black text-white">{mesa.numero}</p>
-          {mesa.nombre && <p className="text-[10px] text-gray-500">{mesa.nombre}</p>}
+          {mesa.nombre
+            ? <>
+                <p className="text-lg font-black text-white leading-tight">{mesa.nombre}</p>
+                <p className="text-[11px] text-gray-500">Mesa {mesa.numero}</p>
+              </>
+            : <p className="text-2xl font-black text-white">{mesa.numero}</p>}
         </div>
         <div className={cn('w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
           libre ? 'bg-gray-500/15' : 'bg-green-500/10')}>
