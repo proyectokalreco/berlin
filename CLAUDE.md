@@ -531,6 +531,94 @@ usa `text-sm`, no reportado como problema). `tsc --noEmit` + `npm run build` lim
 captura: nombres de mesa (MESA 1, MESA 2, MESA BAÑO...) ahora en blanco grande, número como
 referencia chica debajo.
 
+### 22. Roles, login con username, y caja/POS bloqueados por el horario del negocio (2026-09-14, commit `6dc8e95`)
+
+Cuatro pedidos del cliente en un solo mensaje, con captura de un intento de login fallido
+(`cajero.berlin@kalreco.com` → "No tienes acceso a este negocio").
+
+1. **Cajero bloqueado en login.** `ROLES_PERMITIDOS` del login (`auth/routes.js`) solo tenía
+   `['super_admin', 'admin_berlin']` — decisión explícita del incidente 16 ("por ahora no se
+   crean usuarios cajero/vendedor"). El cliente ya quería crear cajeros → se agrega `'cajero'`
+   a la lista.
+2. **Login con username** (migración 098, repo `kalreco`): `usuarios.username TEXT UNIQUE
+   NULL` — columna en la tabla central, compartida con los 4 negocios de Multicentros
+   (nullable, no afecta a nadie que no la use). El login (`identificador`) prueba `email` si
+   trae `@`, si no prueba `username` — convive con el correo, no lo reemplaza.
+3. **Solo 2 cargos en el selector de Empleados** (Cajero/Administrador) — el resto de `CARGOS`
+   se conserva para mostrar bien el badge de empleados ya creados con otro cargo, solo se
+   ocultan del `<select>`. Además, un empleado creado **sin** acceso al sistema ahora puede
+   recibir acceso después desde "Editar empleado" (antes esa opción solo existía al crear —
+   confirmado por el cliente con captura: el toggle "Acceso al sistema" no dejaba hacer nada
+   en modo edición).
+4. **Bug real de horario, no solo un ajuste — el negocio opera de 1pm a 5am del día
+   siguiente.** El sistema decidía "hay turno abierto" comparando la columna `fecha` del
+   turno contra la fecha calendario de **hoy** (`fechaColombia()`). Pasada la medianoche esa
+   fecha cambia, y aunque la caja de la 1pm siguiera abierta:
+   - El cajero (no el admin, que tiene bypass) quedaba bloqueado del POS/Mesas entre 12am y
+     5am ("POS Bloqueado").
+   - Si alguien cerraba la caja a esa hora, solo sumaba las ventas de medianoche en
+     adelante — **perdía todas las ventas de la tarde/noche anterior** (`cerrarCaja` sumaba
+     por `rangoDiaColombia(hoy)`, un rango calendario, no el turno real).
+   - El KPI "Ventas del turno" en vivo también quedaba en $0 tras medianoche.
+
+   **Fix** (`caja.controller.js`, solo Caja/POS — sin tocar Reportes/Libro Diario/Planilla,
+   que siguen por fecha calendario normal): "turno activo" pasa a ser simplemente el único
+   turno con `estado='abierto'` (ya garantizado por `abrirCaja` que solo hay uno a la vez),
+   sin filtrar por `fecha`. Las ventas que se suman al cerrar/al KPI en vivo se calculan
+   desde `apertura_at` del turno hasta el momento actual, no por rango de día calendario. El
+   aviso de "turno olvidado de un día anterior" (`turno-pendiente`) pasa de disparar por
+   `fecha ≠ hoy` a disparar por antigüedad (>20h abierto), para seguir avisando si de verdad
+   se les quedó una caja sin cerrar sin molestar durante el turno normal de madrugada.
+
+Sin migración de este repo aparte de la 098 (`kalreco`). `tsc --noEmit` + `npm run build`
+(panel) y `node -c` (backend) limpios. **✅ Desplegado y confirmado por el usuario en
+producción (2026-09-14, commit `6dc8e95`)** — requirió que el usuario corriera primero
+`git pull` en `/opt/kalreco` (el archivo de la migración 098 no estaba ahí todavía) antes de
+aplicar la migración y reconstruir Berlín.
+
+### 23. Formato de miles, username editable, Mi Perfil, fix crear proveedor desde factura (2026-09-14, commit `6eaa980`)
+
+Cuatro pedidos más del cliente el mismo día, tras confirmar el incidente 22 en producción.
+
+1. **Formato de miles en toda la plata del sistema.** Helper nuevo `apps/panel/src/lib/
+   dinero.ts` (`fmtDinero`/`soloDigitos`) — mismo patrón que ya existía suelto en
+   `CajaPage.tsx` (`fmtInput`/`stripDigits`) y en `MateriasPrimas.tsx`/`FormCrear*Rapido.tsx`
+   (`parseInt(...).toLocaleString('es-CO')`), centralizado para no repetirlo. Aplicado a los
+   **13 campos de dinero** que seguían en `type="number"` sin formato: `ProveedoresPage.tsx`
+   (costo insumo, precio producto, precio_unitario/precio_venta de ítems de factura,
+   precio_unitario de pedido, monto de compra — 6 campos en un solo archivo), `MateriasPrimas.tsx`
+   (costo_unitario x2, formulario principal + edición rápida), `EmpleadosPage.tsx` (salario),
+   `GastosPage.tsx` (monto), `POS.tsx`/`MesasPage.tsx` (precio de Venta Libre),
+   `PlanillaPage.tsx` (precioVenta). **No se tocó** cantidad/stock/porcentaje/tiempo/número de
+   mesa/capacidad — se revisó campo por campo antes de tocar nada, eso no es plata.
+2. **Username editable en un empleado ya creado** — el `select` del backend
+   (`empleados.controller.js`, listar/crear/actualizar) no traía la columna `username`
+   (agregada el mismo día en el incidente 22); el modal de edición solo mostraba el correo
+   de solo lectura. Ahora trae el campo y `actualizar()` lo guarda si viene explícito en el
+   body (`usuario_username !== undefined`), sin pisar el username existente en cada guardado
+   normal del formulario.
+3. **"Mi Perfil" — feature nueva, no existía nada.** El avatar/nombre del header
+   (`BerlinShell.tsx`) era puramente decorativo, sin `onClick`. Ahora abre
+   `components/PerfilModal.tsx` — nombre, apellido, correo, username y cambio de contraseña
+   (con contraseña actual obligatoria para cambiarla). Backend `PUT /api/auth/perfil` ya
+   existía (nombre/apellido/email/password) desde antes de este repo — se le agregó soporte
+   de `username` con validación de unicidad; `GET /api/auth/me` y el login también devuelven
+   `username` ahora para que quede disponible en el store desde el arranque.
+4. **Bug real — "no me deja crear un proveedor" era un problema de capas visuales, no de
+   lógica.** El cliente aclaró que el fallo específico era el link "+ Crear proveedor nuevo"
+   **desde adentro** del modal "Registrar factura proveedor" (no el botón normal de la
+   pestaña Proveedores, que sí funcionaba). Investigado frontend (mutación/validación),
+   ruta, backend (`crear()`) y schema de `br_proveedores` — los 3 niveles estaban correctos.
+   La causa real: ambos modales usan `fixed inset-0 z-50`, y el modal de factura se define
+   **después** en el JSX (pinta encima en el DOM) — al abrir "Nuevo proveedor" desde dentro
+   de la factura, el modal nuevo quedaba **pintado detrás** de la factura, invisible. El
+   clic sí funcionaba (el estado cambiaba), solo que no se veía nada distinto en pantalla.
+   Fix: `z-[60]` en el modal "Nuevo proveedor" — gana la pelea de capas sin importar el
+   orden del JSX.
+
+Sin migración. `tsc --noEmit` + `npm run build` limpios. **✅ Desplegado y confirmado por el
+usuario en producción (2026-09-14, commit `6eaa980`).**
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
