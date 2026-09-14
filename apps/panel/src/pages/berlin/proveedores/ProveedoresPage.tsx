@@ -9,6 +9,7 @@ import {
   Search, Package, Printer, Trash2, CreditCard, Banknote, Shield,
 } from 'lucide-react'
 import { useAuthStore } from '../../../store/authStore'
+import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 
 function imprimirProveedor(p: Proveedor) {
   const origin = window.location.origin
@@ -243,7 +244,7 @@ function FormCrearInsumoRapido({ nombreInicial, onCreado, onCancelar }:
         </select>
         <div className="relative">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-          <input type="number" min="0" step="0.01" value={costo} onChange={e => setCosto(e.target.value)} placeholder="Costo/u"
+          <input type="text" inputMode="numeric" value={fmtDinero(costo)} onChange={e => setCosto(soloDigitos(e.target.value))} placeholder="Costo/u"
             className="w-full bg-brand-navy border border-white/10 rounded-lg pl-6 pr-3 py-2 text-white text-sm focus:outline-none"/>
         </div>
       </div>
@@ -310,7 +311,7 @@ function FormCrearTerminadoRapido({ nombreInicial, onCreado, onCancelar }:
       <div className="grid grid-cols-2 gap-2">
         <div className="relative">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-          <input type="number" min="0" step="0.01" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="Precio venta"
+          <input type="text" inputMode="numeric" value={fmtDinero(precio)} onChange={e => setPrecio(soloDigitos(e.target.value))} placeholder="Precio venta"
             className="w-full bg-brand-navy border border-white/10 rounded-lg pl-6 pr-3 py-2 text-white text-sm focus:outline-none"/>
         </div>
         <input type="number" min="0" value={stockMin} onChange={e => setStockMin(e.target.value)} placeholder="Stock mínimo"
@@ -475,8 +476,8 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">P.Compra/u</p>
           <div className="relative">
             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-600 text-[10px]">$</span>
-            <input type="number" min="0" step="0.01" value={item.precio_unitario}
-              onChange={e => onPatch({ precio_unitario: e.target.value })}
+            <input type="text" inputMode="numeric" value={fmtDinero(item.precio_unitario)}
+              onChange={e => onPatch({ precio_unitario: soloDigitos(e.target.value) })}
               placeholder="0"
               className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-4 pr-1 py-2
                          text-xs text-white focus:outline-none focus:border-brand-teal
@@ -487,8 +488,8 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">P.Venta/u</p>
           <div className="relative">
             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-600 text-[10px]">$</span>
-            <input type="number" min="0" step="0.01" value={item.precio_venta}
-              onChange={e => onPatch({ precio_venta: e.target.value })}
+            <input type="text" inputMode="numeric" value={fmtDinero(item.precio_venta)}
+              onChange={e => onPatch({ precio_venta: soloDigitos(e.target.value) })}
               placeholder="0"
               className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-4 pr-1 py-2
                          text-xs text-white focus:outline-none focus:border-brand-teal
@@ -610,8 +611,8 @@ function ItemPedidoRow({ item, index, canRemove, onChange, onRemove }:
           <label className="text-[10px] text-gray-500 mb-1 block">Precio unit.</label>
           <div className="relative">
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-            <input type="number" min="0" value={item.precio_unitario}
-              onChange={e => onChange({ precio_unitario: e.target.value })} placeholder="0"
+            <input type="text" inputMode="numeric" value={fmtDinero(item.precio_unitario)}
+              onChange={e => onChange({ precio_unitario: soloDigitos(e.target.value) })} placeholder="0"
               className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-5 pr-2 py-2 text-sm text-white focus:outline-none focus:border-brand-teal/50"/>
           </div>
           {item.cantidad && item.precio_unitario && (
@@ -1498,8 +1499,8 @@ export default function ProveedoresPage() {
                   <label className="text-xs text-gray-400 mb-1.5 block">Monto total *</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-                    <input type="number" min="0" value={formCompra.monto}
-                      onChange={e => setFormCompra(f => ({ ...f, monto: e.target.value }))} placeholder="0"
+                    <input type="text" inputMode="numeric" value={fmtDinero(formCompra.monto)}
+                      onChange={e => setFormCompra(f => ({ ...f, monto: soloDigitos(e.target.value) }))} placeholder="0"
                       className="w-full bg-brand-dark border border-white/10 rounded-xl pl-6 pr-3 py-3 text-sm text-white focus:outline-none min-h-[48px]"/>
                   </div>
                 </div>
@@ -1545,7 +1546,12 @@ export default function ProveedoresPage() {
 
       {/* Modal proveedor */}
       {showProv && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        // z-[60]: este modal se abre tanto desde la pestaña Proveedores como desde
+        // adentro del modal "Registrar factura proveedor" (mismo z-50, JSX anterior a
+        // este en el archivo) — con el mismo z-index quedaba pintado DEBAJO de la
+        // factura y el clic en "+ Crear proveedor nuevo" no se veía (no era que no
+        // funcionara, el modal abría oculto detrás del otro).
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-[#2C2925] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-white font-bold">{editProv ? 'Editar proveedor' : 'Nuevo proveedor'}</h3>

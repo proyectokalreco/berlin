@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { api } from '../../../lib/api'
+import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import type { Insumo, Producto, Categoria } from '../../../types'
 import Button from '../../../components/ui/Button'
 import toast from 'react-hot-toast'
@@ -164,7 +165,7 @@ function ModalCrearInsumo({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Costo por {form.unidad_medida} ($)</label>
-              <input type="number" min="0" step="0.01" value={form.costo_unitario} onChange={e => set('costo_unitario', e.target.value)}
+              <input type="text" inputMode="numeric" value={fmtDinero(form.costo_unitario)} onChange={e => set('costo_unitario', soloDigitos(e.target.value))}
                 className="w-full bg-brand-dark border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-brand-teal" />
             </div>
           </div>
@@ -350,7 +351,7 @@ function ModalEditarInsumo({ insumo, onClose }: { insumo: Insumo; onClose: () =>
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1">Costo por {unidad} ($)</label>
-              <input type="number" min="0" value={costo} onChange={e => setCosto(e.target.value)}
+              <input type="text" inputMode="numeric" value={fmtDinero(costo)} onChange={e => setCosto(soloDigitos(e.target.value))}
                 className="w-full bg-brand-dark border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-brand-teal" />
             </div>
             <div>

@@ -16,7 +16,7 @@ const listar = async (req, res, next) => {
     const { activo = 'true', q } = req.query;
     let query = supabase
       .from('br_empleados')
-      .select('*, usuario:usuario_id(id, email, rol, activo)')
+      .select('*, usuario:usuario_id(id, email, username, rol, activo)')
       .eq('activo', activo !== 'false')
       .order('nombre');
 
@@ -103,7 +103,7 @@ const crear = async (req, res, next) => {
         negocio_id, usuario_id,
         activo: true,
       })
-      .select('*, usuario:usuario_id(id, email, rol, activo)')
+      .select('*, usuario:usuario_id(id, email, username, rol, activo)')
       .single();
 
     if (error) throw error;
@@ -135,7 +135,7 @@ const actualizar = async (req, res, next) => {
       .from('br_empleados')
       .update(updates)
       .eq('id', req.params.id)
-      .select('*, usuario:usuario_id(id, email, rol, activo)')
+      .select('*, usuario:usuario_id(id, email, username, rol, activo)')
       .single();
 
     if (error) throw error;
@@ -188,6 +188,24 @@ const actualizar = async (req, res, next) => {
 
       emp.usuario_id = nuevoUsuario.id;
       emp.usuario = nuevoUsuario;
+    }
+
+    // Editar el username de un usuario ya vinculado (independiente de la contraseña) —
+    // solo si el campo viene explícito en el body, para no borrar el username existente
+    // en cada guardado normal del formulario.
+    if (usuario_username !== undefined && emp.usuario_id) {
+      const nuevoUsername = usuario_username ? usuario_username.trim() : null;
+      if (nuevoUsername) {
+        const { data: existingU } = await supabase
+          .from('usuarios').select('id').eq('username', nuevoUsername).neq('id', emp.usuario_id).maybeSingle();
+        if (existingU) {
+          return res.status(409).json({ error: 'El usuario ya está registrado en el sistema' });
+        }
+      }
+      await supabase.from('usuarios')
+        .update({ username: nuevoUsername, updated_at: new Date() })
+        .eq('id', emp.usuario_id);
+      if (emp.usuario) emp.usuario.username = nuevoUsername;
     }
 
     // Si hay nueva contraseña y el empleado tiene usuario vinculado

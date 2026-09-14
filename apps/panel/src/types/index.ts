@@ -21,6 +21,7 @@ export type RolUsuario =
 export interface Usuario {
   id:         string
   email:      string
+  username?:  string | null
   nombre:     string
   apellido:   string
   rol:        RolUsuario

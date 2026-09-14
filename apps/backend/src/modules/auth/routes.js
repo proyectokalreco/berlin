@@ -33,7 +33,7 @@ router.post('/login', [
 
   const { data: user, error } = await supabase
     .from('usuarios')
-    .select('id, email, password_hash, nombre, apellido, rol, negocio_id, activo, avatar_url')
+    .select('id, email, username, password_hash, nombre, apellido, rol, negocio_id, activo, avatar_url')
     .eq(esEmail ? 'email' : 'username', esEmail ? identificador.toLowerCase() : identificador)
     .maybeSingle();
 
@@ -120,13 +120,14 @@ router.put('/perfil', authenticate, [
   body('nombre').optional().trim().isLength({ min: 1 }),
   body('apellido').optional().trim(),
   body('email').optional().isEmail().normalizeEmail(),
+  body('username').optional().trim(),
   body('password_nueva').optional().isLength({ min: 6 }),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(422).json({ error: 'Datos inválidos' });
 
-    const { nombre, apellido, email, password_actual, password_nueva } = req.body;
+    const { nombre, apellido, email, username, password_actual, password_nueva } = req.body;
     const userId = req.user.id;
 
     if (password_nueva) {
@@ -142,17 +143,29 @@ router.put('/perfil', authenticate, [
       if (existing) return res.status(400).json({ error: 'El correo ya está registrado por otro usuario' });
     }
 
+    // username: columna opcional (migración 098), null la deja libre
+    let usernameLimpio;
+    if (username !== undefined) {
+      usernameLimpio = username ? username.trim() : null;
+      if (usernameLimpio) {
+        const { data: existingU } = await supabase.from('usuarios')
+          .select('id').eq('username', usernameLimpio).neq('id', userId).maybeSingle();
+        if (existingU) return res.status(400).json({ error: 'Ese usuario ya está en uso por otra cuenta' });
+      }
+    }
+
     const updates = {};
     if (nombre)              updates.nombre        = nombre;
     if (apellido !== undefined && apellido !== null) updates.apellido = apellido;
     if (email)               updates.email         = email;
+    if (usernameLimpio !== undefined) updates.username = usernameLimpio;
     if (password_nueva)      updates.password_hash = await bcrypt.hash(password_nueva, 10);
 
     if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nada que actualizar' });
 
     const { data: updated, error } = await supabase.from('usuarios')
       .update(updates).eq('id', userId)
-      .select('id, email, nombre, apellido, rol, negocio_id, avatar_url').single();
+      .select('id, email, username, nombre, apellido, rol, negocio_id, avatar_url').single();
     if (error) throw error;
 
     res.json({ user: updated });
@@ -175,7 +188,7 @@ router.post('/logout', authenticate, async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   const { data: user } = await supabase
     .from('usuarios')
-    .select('id, email, nombre, apellido, rol, negocio_id, avatar_url, ultimo_acceso')
+    .select('id, email, username, nombre, apellido, rol, negocio_id, avatar_url, ultimo_acceso')
     .eq('id', req.user.id)
     .single();
 

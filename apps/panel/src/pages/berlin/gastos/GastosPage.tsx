@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
+import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import toast from 'react-hot-toast'
 import { Receipt, Plus, Trash2, X, TrendingDown, Calendar, Tag } from 'lucide-react'
 import { cn } from '../../../lib/utils'
@@ -193,7 +194,7 @@ export default function GastosPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 mb-1.5 block">Monto *</label>
-                <input type="number" min="0" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))}
+                <input type="text" inputMode="numeric" value={fmtDinero(form.monto)} onChange={e => setForm(f => ({ ...f, monto: soloDigitos(e.target.value) }))}
                   placeholder="0"
                   className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white
                              placeholder:text-gray-600 focus:outline-none focus:border-orange-500/50 min-h-[48px]" />

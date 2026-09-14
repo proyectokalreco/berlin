@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import type { Producto, Categoria } from '../../../types'
 import { cn } from '../../../lib/utils'
 import { coincide } from '../../../lib/buscar'
+import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import { useAuthStore } from '../../../store/authStore'
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -850,12 +851,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest mb-1 block">Precio</label>
                 <input
                   id="vl-mesa-precio"
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="numeric"
                   className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
                              text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#EA580C]/60"
-                  value={ventaLibreModal.precio}
-                  onChange={e => setVentaLibreModal(prev => prev ? { ...prev, precio: e.target.value } : prev)}
+                  value={fmtDinero(ventaLibreModal.precio)}
+                  onChange={e => setVentaLibreModal(prev => prev ? { ...prev, precio: soloDigitos(e.target.value) } : prev)}
                   onKeyDown={e => { if (e.key === 'Enter') document.getElementById('vl-mesa-cantidad')?.focus() }}
                   placeholder="0"
                 />

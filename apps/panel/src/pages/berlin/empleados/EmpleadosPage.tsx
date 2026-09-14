@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
+import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import toast from 'react-hot-toast'
 import { UserCheck, Plus, X, Phone, Edit2, ShieldCheck, Eye, EyeOff, KeyRound, Trash2, AlertTriangle } from 'lucide-react'
 import { cn } from '../../../lib/utils'
@@ -30,7 +31,7 @@ const EMPTY = {
   crear_usuario: false, usuario_email: '', usuario_username: '', usuario_password: '', nueva_password: '',
 }
 
-interface UsuarioVinculado { id: string; email: string; rol: string; activo: boolean }
+interface UsuarioVinculado { id: string; email: string; username?: string | null; rol: string; activo: boolean }
 interface Empleado {
   id: string; nombre: string; apellido?: string; cedula?: string
   cargo: string; salario?: number; fecha_ingreso?: string
@@ -81,13 +82,16 @@ export default function EmpleadosPage() {
         ...(editando
           ? {
               nueva_password: form.nueva_password || undefined,
-              // Dar acceso al sistema a un empleado que no lo tenía todavía
+              // Dar acceso al sistema a un empleado que no lo tenía todavía;
+              // si ya tiene usuario, permitir editar su username desde acá
               ...(!editando.usuario_id ? {
                 crear_usuario:    form.crear_usuario,
                 usuario_email:    form.crear_usuario ? form.usuario_email : undefined,
                 usuario_username: form.crear_usuario ? (form.usuario_username || undefined) : undefined,
                 usuario_password: form.crear_usuario ? form.usuario_password : undefined,
-              } : {}),
+              } : {
+                usuario_username: form.usuario_username.trim() || null,
+              }),
             }
           : {
               crear_usuario:    form.crear_usuario,
@@ -120,7 +124,7 @@ export default function EmpleadosPage() {
       email: e.email ?? '', notas: '',
       crear_usuario: false,
       usuario_email: e.usuario?.email ?? '',
-      usuario_username: '',
+      usuario_username: e.usuario?.username ?? '',
       usuario_password: '', nueva_password: '',
     })
     setShowModal(true)
@@ -312,7 +316,7 @@ export default function EmpleadosPage() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1.5 block">Salario</label>
-                  <input type="number" value={form.salario} onChange={e => setForm(f => ({ ...f, salario: e.target.value }))}
+                  <input type="text" inputMode="numeric" value={fmtDinero(form.salario)} onChange={e => setForm(f => ({ ...f, salario: soloDigitos(e.target.value) }))}
                     placeholder="0"
                     className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white
                                placeholder:text-gray-600 focus:outline-none focus:border-teal-500/50 min-h-[48px]" />
@@ -417,6 +421,15 @@ export default function EmpleadosPage() {
                             : 'bg-red-500/15 text-red-400')}>
                           {editando.usuario?.activo ? 'Activo' : 'Inactivo'}
                         </span>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1.5 block">Usuario (opcional, para entrar sin correo)</label>
+                        <input type="text" value={form.usuario_username}
+                          onChange={e => setForm(f => ({ ...f, usuario_username: e.target.value.trim() }))}
+                          placeholder="ej. cajero1"
+                          autoComplete="off"
+                          className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white
+                                     focus:outline-none focus:border-teal-500/50 min-h-[48px]"/>
                       </div>
                       <div>
                         <label className="text-xs text-gray-400 mb-1.5 block flex items-center gap-1">

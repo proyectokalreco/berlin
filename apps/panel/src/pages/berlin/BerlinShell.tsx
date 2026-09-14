@@ -11,6 +11,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { cn } from '../../lib/utils'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
+import PerfilModal from '../../components/PerfilModal'
 
 // ── Paleta Berlín Café Bar (tomada del logo) ───────────────────
 const GOLD  = '#D9A652'
@@ -170,6 +171,7 @@ export default function BerlinShell() {
   const rol             = user?.rol ?? ''
   const tabs            = getTabsByRol(rol)
 
+  const [showPerfil, setShowPerfil] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   useEffect(() => {
     const on  = () => setIsOnline(true)
@@ -212,7 +214,13 @@ export default function BerlinShell() {
 
           {/* Usuario + Bell + Cerrar sesión */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="hidden sm:flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowPerfil(true)}
+              title="Mi Perfil"
+              className="hidden sm:flex items-center gap-1.5 rounded-full pr-2 -ml-1 pl-1 py-0.5
+                         hover:bg-white/5 transition-colors"
+            >
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs"
                 style={{ background: 'rgba(217,166,82,0.22)', color: GOLD }}
@@ -222,7 +230,7 @@ export default function BerlinShell() {
               <span className="text-xs max-w-[90px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>
                 {user?.nombre}
               </span>
-            </div>
+            </button>
             {/* Indicador de red */}
             <div
               title={isOnline ? 'En línea' : 'Sin conexión — las ventas se guardan en cola'}
@@ -278,6 +286,8 @@ export default function BerlinShell() {
       <div className="flex-1 p-4 sm:p-6">
         <Outlet />
       </div>
+
+      {showPerfil && <PerfilModal onClose={() => setShowPerfil(false)} />}
     </div>
   )
 }

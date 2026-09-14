@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronUp, Package, Search, Lock, AlertTriangle, Printer,
 } from 'lucide-react'
 import { api } from '../../../lib/api'
+import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import FormCrearProductoRapido from '../../../components/FormCrearProductoRapido'
 import toast from 'react-hot-toast'
 import type { Planilla, PlanillaItem, Producto, Receta } from '../../../types'
@@ -358,8 +359,8 @@ function FilaLinea({
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">V.Neto/u.</p>
           <div className="relative">
             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-600 text-[10px]">$</span>
-            <input type="number" min="0" value={linea.precioVenta}
-              onChange={e => onPatch({ precioVenta: e.target.value })}
+            <input type="text" inputMode="numeric" value={fmtDinero(linea.precioVenta)}
+              onChange={e => onPatch({ precioVenta: soloDigitos(e.target.value) })}
               placeholder="0"
               className="w-full bg-[#1C1A18] border border-white/10 rounded-lg pl-4 pr-1 py-2
                          text-xs text-white focus:outline-none focus:border-brand-teal
