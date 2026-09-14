@@ -512,6 +512,25 @@ producto) — no se investigó más porque el cliente ya lo resolvió con el re-
 la pena seguir cavando en algo que ya no reproduce. Quedaba 1 excepción: "AROMATICAS PANELITA" sigue en "Compra y venta"/Agotado — consultado
 con el cliente, **caso cerrado, se deja así** (no se toca).
 
+### 21. Mesas — nombre de mesa poco visible (2026-09-14) — solo frontend
+
+Reporte del cliente con captura: en la tarjeta de mesa, el **nombre** (`MESA LENCERIA`, `MESA
+CONO`, etc.) se veía en `text-[10px] text-gray-500` — gris apagado, casi ilegible — mientras el
+**número** (`1`, `2`...) era el texto grande (`text-2xl font-black text-white`). El cliente
+pidió que el nombre sea lo que más resalte.
+
+**Fix** (`MesaCard`, `MesasPage.tsx`): cuando la mesa tiene nombre, el nombre pasa a ser el
+texto principal (`text-lg font-black text-white`) y el número baja a referencia chica debajo
+(`Mesa N`, `text-[11px] text-gray-500`). Mesas sin nombre (solo número, ej. mesas 3, 4, 5...)
+quedan igual que antes — no hay nombre que resaltar.
+
+Sin backend, sin BD, sin tocar `ModalGestionCategorias` ni el modal de gestión de mesas (ese ya
+usa `text-sm`, no reportado como problema). `tsc --noEmit` + `npm run build` limpios.
+
+**✅ Desplegado y confirmado por el usuario en producción (2026-09-14, commit `154025a`)** con
+captura: nombres de mesa (MESA 1, MESA 2, MESA BAÑO...) ahora en blanco grande, número como
+referencia chica debajo.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
