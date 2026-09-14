@@ -110,18 +110,18 @@ export default function Login() {
 
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Correo electrónico
+                Correo o usuario
               </label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500" />
                 <input
-                  type="email"
+                  type="text"
                   name="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
-                  autoComplete="email"
-                  placeholder="admin.berlin@kalreco.com"
+                  autoComplete="username"
+                  placeholder="admin.berlin@kalreco.com o usuario"
                   className="w-full rounded-xl pl-10 pr-4 py-3 text-white
                              placeholder-gray-600 transition-all outline-none"
                   style={{ background: 'rgba(255,255,255,0.04)', border: '1.5px solid rgba(255,255,255,0.1)' }}

@@ -14,15 +14,20 @@ const CARGOS = [
   { value: 'cajero',         label: 'Cajero',          color: '#22C55E', rol: 'cajero'           },
   { value: 'vendedor',       label: 'Vendedor',        color: '#3B82F6', rol: 'vendedor'         },
   { value: 'domicilios',     label: 'Domicilios',      color: '#A855F7', rol: 'domiciliario'     },
-  { value: 'administrativo', label: 'Administrativo',  color: '#EAB308', rol: 'admin_berlin'  },
+  { value: 'administrativo', label: 'Administrador',  color: '#EAB308', rol: 'admin_berlin'  },
   { value: 'mesero',         label: 'Mesero',          color: '#06B6D4', rol: 'mesero'           },
   { value: 'otro',           label: 'Otro',            color: '#6B7280', rol: 'vendedor'         },
 ]
 
+// Solo estos 2 perfiles se ofrecen al crear/editar empleados en Berlín — el resto de
+// CARGOS se conserva arriba para mostrar bien el badge de empleados ya creados con otro
+// cargo (importados/clonados de Tulio), pero no se ofrecen como opción nueva.
+const CARGOS_DISPONIBLES = CARGOS.filter(c => c.value === 'cajero' || c.value === 'administrativo')
+
 const EMPTY = {
-  nombre: '', apellido: '', cedula: '', cargo: 'vendedor',
+  nombre: '', apellido: '', cedula: '', cargo: 'cajero',
   salario: '', fecha_ingreso: '', telefono: '', email: '', notas: '',
-  crear_usuario: false, usuario_email: '', usuario_password: '', nueva_password: '',
+  crear_usuario: false, usuario_email: '', usuario_username: '', usuario_password: '', nueva_password: '',
 }
 
 interface UsuarioVinculado { id: string; email: string; rol: string; activo: boolean }
@@ -74,10 +79,20 @@ export default function EmpleadosPage() {
         email:            form.email,
         notas:            form.notas,
         ...(editando
-          ? { nueva_password: form.nueva_password || undefined }
+          ? {
+              nueva_password: form.nueva_password || undefined,
+              // Dar acceso al sistema a un empleado que no lo tenía todavía
+              ...(!editando.usuario_id ? {
+                crear_usuario:    form.crear_usuario,
+                usuario_email:    form.crear_usuario ? form.usuario_email : undefined,
+                usuario_username: form.crear_usuario ? (form.usuario_username || undefined) : undefined,
+                usuario_password: form.crear_usuario ? form.usuario_password : undefined,
+              } : {}),
+            }
           : {
               crear_usuario:    form.crear_usuario,
               usuario_email:    form.crear_usuario ? form.usuario_email : undefined,
+              usuario_username: form.crear_usuario ? (form.usuario_username || undefined) : undefined,
               usuario_password: form.crear_usuario ? form.usuario_password : undefined,
             }
         ),
@@ -105,6 +120,7 @@ export default function EmpleadosPage() {
       email: e.email ?? '', notas: '',
       crear_usuario: false,
       usuario_email: e.usuario?.email ?? '',
+      usuario_username: '',
       usuario_password: '', nueva_password: '',
     })
     setShowModal(true)
@@ -288,7 +304,7 @@ export default function EmpleadosPage() {
                   <select value={form.cargo} onChange={e => setForm(f => ({ ...f, cargo: e.target.value }))}
                     className="w-full bg-brand-dark border border-white/10 rounded-xl px-3 py-3 text-sm text-white
                                focus:outline-none focus:border-teal-500/50 min-h-[48px]">
-                    {CARGOS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    {CARGOS_DISPONIBLES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                   <p className="text-[10px] text-gray-600 mt-1">
                     Rol sistema: <span className="text-teal-400">{cargoActual.rol}</span>
@@ -331,8 +347,12 @@ export default function EmpleadosPage() {
                       <ShieldCheck size={15} className="text-teal-400"/>
                       <span className="text-sm text-teal-300 font-semibold">Acceso al sistema</span>
                     </div>
-                    {!editando ? (
-                      /* Crear: toggle activar */
+                    {editando?.usuario_id ? (
+                      <span className="text-[10px] text-teal-400 flex items-center gap-1">
+                        <ShieldCheck size={10}/> Vinculado
+                      </span>
+                    ) : (
+                      /* Crear, o editar un empleado que todavía no tiene acceso: toggle activar */
                       <button type="button"
                         onClick={() => setForm(f => ({ ...f, crear_usuario: !f.crear_usuario }))}
                         className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
@@ -340,17 +360,11 @@ export default function EmpleadosPage() {
                         <span className={cn('inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
                           form.crear_usuario ? 'translate-x-6' : 'translate-x-1')}/>
                       </button>
-                    ) : editando.usuario_id ? (
-                      <span className="text-[10px] text-teal-400 flex items-center gap-1">
-                        <ShieldCheck size={10}/> Vinculado
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-gray-500">Sin acceso</span>
                     )}
                   </div>
 
-                  {/* Crear nuevo: email + contraseña */}
-                  {!editando && form.crear_usuario && (
+                  {/* Crear nuevo, o dar acceso a un empleado existente sin usuario: email + usuario + contraseña */}
+                  {!editando?.usuario_id && form.crear_usuario && (
                     <div className="p-4 space-y-3 bg-brand-dark/30">
                       <p className="text-[10px] text-gray-500">
                         Se creará un usuario con rol <span className="text-teal-400 font-semibold">{cargoActual.rol}</span> para este empleado.
@@ -361,6 +375,15 @@ export default function EmpleadosPage() {
                           onChange={e => setForm(f => ({ ...f, usuario_email: e.target.value }))}
                           placeholder="empleado@berlin.com"
                           autoComplete="new-password"
+                          className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white
+                                     focus:outline-none focus:border-teal-500/50 min-h-[48px]"/>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1.5 block">Usuario (opcional, para entrar sin correo)</label>
+                        <input type="text" value={form.usuario_username}
+                          onChange={e => setForm(f => ({ ...f, usuario_username: e.target.value.trim() }))}
+                          placeholder="ej. cajero1"
+                          autoComplete="off"
                           className="w-full bg-brand-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white
                                      focus:outline-none focus:border-teal-500/50 min-h-[48px]"/>
                       </div>
@@ -428,7 +451,7 @@ export default function EmpleadosPage() {
               <button
                 disabled={
                   !form.nombre || isPending ||
-                  (!editando && form.crear_usuario && (!form.usuario_email || !form.usuario_password))
+                  (!editando?.usuario_id && form.crear_usuario && (!form.usuario_email || !form.usuario_password))
                 }
                 onClick={() => guardar()}
                 className="flex-1 py-3 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold

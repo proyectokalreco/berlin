@@ -39,7 +39,7 @@ const crear = async (req, res, next) => {
       telefono, email, notas,
       // campos para crear usuario del sistema
       crear_usuario = false,
-      usuario_email, usuario_password,
+      usuario_email, usuario_password, usuario_username,
     } = req.body;
 
     // negocio_id: admin_berlin usa el suyo; super_admin/admin puede elegir
@@ -61,6 +61,15 @@ const crear = async (req, res, next) => {
         return res.status(409).json({ error: 'El email ya está registrado en el sistema' });
       }
 
+      // Verificar username único (columna opcional, migración 098)
+      if (usuario_username) {
+        const { data: existingU } = await supabase
+          .from('usuarios').select('id').eq('username', usuario_username).maybeSingle();
+        if (existingU) {
+          return res.status(409).json({ error: 'El usuario ya está registrado en el sistema' });
+        }
+      }
+
       const rol = CARGO_A_ROL[cargo] || 'vendedor';
       const password_hash = await bcrypt.hash(usuario_password, 10);
 
@@ -68,6 +77,7 @@ const crear = async (req, res, next) => {
         .from('usuarios')
         .insert({
           email: usuario_email,
+          username: usuario_username || null,
           password_hash,
           nombre,
           apellido: apellido || null,
@@ -108,6 +118,9 @@ const actualizar = async (req, res, next) => {
       telefono, email, notas, activo,
       // actualizar contraseña del usuario vinculado
       nueva_password,
+      // dar acceso al sistema a un empleado que todavía no lo tenía
+      crear_usuario = false,
+      usuario_email, usuario_password, usuario_username,
     } = req.body;
 
     const updates = {
@@ -126,6 +139,56 @@ const actualizar = async (req, res, next) => {
       .single();
 
     if (error) throw error;
+
+    // Dar acceso al sistema por primera vez — empleado sin usuario_id todavía
+    if (crear_usuario && !emp.usuario_id && usuario_email && usuario_password) {
+      if (usuario_password.length < 8) {
+        return res.status(422).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+      }
+
+      const { data: existing } = await supabase
+        .from('usuarios').select('id').eq('email', usuario_email).maybeSingle();
+      if (existing) {
+        return res.status(409).json({ error: 'El email ya está registrado en el sistema' });
+      }
+      if (usuario_username) {
+        const { data: existingU } = await supabase
+          .from('usuarios').select('id').eq('username', usuario_username).maybeSingle();
+        if (existingU) {
+          return res.status(409).json({ error: 'El usuario ya está registrado en el sistema' });
+        }
+      }
+
+      const rol = CARGO_A_ROL[cargo || emp.cargo] || 'vendedor';
+      const password_hash = await bcrypt.hash(usuario_password, 10);
+
+      const { data: nuevoUsuario, error: uErr } = await supabase
+        .from('usuarios')
+        .insert({
+          email: usuario_email,
+          username: usuario_username || null,
+          password_hash,
+          nombre: emp.nombre,
+          apellido: emp.apellido || null,
+          telefono: emp.telefono || null,
+          rol,
+          negocio_id: emp.negocio_id,
+          activo: true,
+        })
+        .select('id, email, rol, activo')
+        .single();
+
+      if (uErr) throw uErr;
+
+      const { error: linkErr } = await supabase
+        .from('br_empleados')
+        .update({ usuario_id: nuevoUsuario.id })
+        .eq('id', emp.id);
+      if (linkErr) throw linkErr;
+
+      emp.usuario_id = nuevoUsuario.id;
+      emp.usuario = nuevoUsuario;
+    }
 
     // Si hay nueva contraseña y el empleado tiene usuario vinculado
     if (nueva_password && emp.usuario_id) {

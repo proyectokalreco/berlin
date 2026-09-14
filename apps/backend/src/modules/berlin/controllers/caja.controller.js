@@ -8,34 +8,49 @@ const esAdminRol  = (rol) => ROLES_ADMIN.includes(rol);
 // que esté abierto, sin importar quién lo abrió. Cada venta ya guarda vendedor_id
 // (br_ventas), así que se sabe quién hizo qué. Migración 094 cambió el índice único
 // de (fecha, usuario_apertura_id) a solo (fecha). Mismo criterio que Esquina (079).
+//
+// ⚠️ Horario del negocio 1pm–5am del día siguiente (2026-09-14): "turno activo" NUNCA
+// se filtra por fecha calendario — solo por estado='abierto'. abrirCaja ya garantiza que
+// como máximo hay 1 turno abierto a la vez, así que ese único turno ES el activo, sin
+// importar si su columna `fecha` quedó "de ayer" tras pasar la medianoche. Filtrar por
+// `fecha = hoy()` bloqueaba al cajero del POS/Mesas justo entre 12am y 5am (ver incidente
+// 21/22 en berlin/CLAUDE.md) y hacía que el cierre solo sumara las ventas de después de
+// medianoche, perdiendo las de la tarde/noche anterior.
+const TURNO_LIMITE_HORAS_OLVIDADO = 20 // más que esto sin cerrar = probable turno olvidado
+
+const obtenerTurnoAbierto = async (select) => {
+  const { data, error } = await supabase
+    .from('br_turnos_caja')
+    .select(select)
+    .eq('estado', 'abierto')
+    .order('apertura_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
 
 // ── GET /api/panaderia/caja/turno-activo
 const turnoActivo = async (req, res, next) => {
   try {
-    const hoy = fechaColombia();
-    const { data, error } = await supabase
-      .from('br_turnos_caja')
-      .select(`*, usuario_apertura:usuario_apertura_id(id, nombre, rol), usuario_cierre:usuario_cierre_id(id, nombre)`)
-      .eq('fecha', hoy)
-      .eq('estado', 'abierto')
-      .maybeSingle();
-
-    if (error) throw error;
+    const data = await obtenerTurnoAbierto(
+      `*, usuario_apertura:usuario_apertura_id(id, nombre, rol), usuario_cierre:usuario_cierre_id(id, nombre)`
+    );
     res.set('Cache-Control', 'no-store');
     res.json(data || null);
   } catch (err) { next(err); }
 };
 
-// ── GET /api/panaderia/caja/turno-pendiente  (turno abierto de días anteriores)
+// ── GET /api/panaderia/caja/turno-pendiente  (turno abierto olvidado, > 20h sin cerrar)
 const turnoPendiente = async (req, res, next) => {
   try {
-    const hoy = fechaColombia();
+    const limite = new Date(Date.now() - TURNO_LIMITE_HORAS_OLVIDADO * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('br_turnos_caja')
-      .select(`id, fecha, estado, monto_inicial, usuario_apertura:usuario_apertura_id(id, nombre)`)
+      .select(`id, fecha, estado, monto_inicial, apertura_at, usuario_apertura:usuario_apertura_id(id, nombre)`)
       .eq('estado', 'abierto')
-      .neq('fecha', hoy)
-      .order('fecha', { ascending: false })
+      .lt('apertura_at', limite)
+      .order('apertura_at', { ascending: true })
       .limit(1)
       .maybeSingle();
 
@@ -125,20 +140,20 @@ const abrirCaja = async (req, res, next) => {
 const cerrarCaja = async (req, res, next) => {
   try {
     const hoy = fechaColombia();
-    const { desde, hasta } = rangoDiaColombia(hoy);
     const { monto_final_real, notas_cierre } = req.body;
 
-    // Turno compartido del negocio (no filtra por usuario)
-    const { data: turno } = await supabase
-      .from('br_turnos_caja')
-      .select('*, usuario_apertura:usuario_apertura_id(id, nombre, rol)')
-      .eq('fecha', hoy)
-      .eq('estado', 'abierto')
-      .maybeSingle();
+    // Turno compartido del negocio (no filtra por usuario ni por fecha calendario —
+    // ver nota de horario 1pm-5am arriba)
+    const turno = await obtenerTurnoAbierto('*, usuario_apertura:usuario_apertura_id(id, nombre, rol)');
 
     if (!turno) {
-      return res.status(404).json({ error: 'No hay una caja abierta hoy' });
+      return res.status(404).json({ error: 'No hay una caja abierta' });
     }
+
+    // Ventas de todo el turno (desde que se abrió hasta ahora), no por fecha calendario —
+    // un turno de 1pm a 5am cruza medianoche y rangoDiaColombia() perdía la mitad.
+    const desde = turno.apertura_at;
+    const hasta = new Date().toISOString();
 
     // Permiso para cerrar: admin del negocio siempre puede. Si la abrió un cajero,
     // ese mismo cajero también puede cerrarla. Si la abrió un vendedor, solo un
@@ -375,18 +390,12 @@ const historial = async (req, res, next) => {
 };
 
 // ── GET /api/panaderia/caja/turno-negocio-activo
-// Caja compartida: hay un solo turno por negocio por día (br_ es single-tenant),
-// así que basta con buscar el turno abierto de hoy — sin resolver usuarios del negocio.
+// Caja compartida: hay un solo turno abierto por negocio a la vez (br_ es single-tenant,
+// garantizado por abrirCaja) — sin filtrar por fecha calendario, mismo criterio que
+// turnoActivo (ver nota de horario 1pm-5am arriba).
 const turnoNegocioActivo = async (req, res, next) => {
   try {
-    const hoy = fechaColombia();
-    const { data, error } = await supabase.from('br_turnos_caja')
-      .select('id, estado')
-      .eq('fecha', hoy)
-      .eq('estado', 'abierto')
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
+    const data = await obtenerTurnoAbierto('id, estado');
     res.set('Cache-Control', 'no-store');
     res.json(data || null);
   } catch (err) { next(err); }
@@ -394,17 +403,20 @@ const turnoNegocioActivo = async (req, res, next) => {
 
 // ── GET /api/panaderia/caja/ventas-turno
 // Caja compartida: el turno es del negocio, así que este resumen es de TODAS las
-// ventas del día, no solo las del usuario que consulta.
+// ventas del turno en curso (desde que se abrió, no por fecha calendario) — no solo
+// las del usuario que consulta.
 const ventasTurno = async (req, res, next) => {
   try {
-    const hoy = fechaColombia();
-    const { desde, hasta } = rangoDiaColombia(hoy);
+    const turno = await obtenerTurnoAbierto('apertura_at');
+    if (!turno) {
+      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, ticket_promedio: 0 });
+    }
+
     const { data } = await supabase
       .from('br_ventas')
       .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia')
       .eq('estado', 'completada')
-      .gte('fecha', desde)
-      .lte('fecha', hasta);
+      .gte('fecha', turno.apertura_at);
 
     const ventas     = data || [];
     const totalVentas = ventas.reduce((s, v) => s + parseFloat(v.total), 0);

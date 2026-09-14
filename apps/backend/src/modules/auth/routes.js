@@ -8,15 +8,18 @@ const { authenticate } = require('../../middleware/auth');
 const router = express.Router();
 
 // ⚠️ Roles permitidos a entrar por este login — Berlín es un negocio
-// aislado: SOLO admin_berlin + super_admin (soporte de plataforma).
+// aislado: SOLO admin_berlin + cajero + super_admin (soporte de plataforma).
 // A diferencia del login compartido de Kalreco, acá el candado va explícito
 // en el backend (no solo en el frontend) — así ningún otro rol con
 // negocio_id NULL (ej. admin_grupo) puede entrar aunque adivine la URL.
-const ROLES_PERMITIDOS = ['super_admin', 'admin_berlin'];
+const ROLES_PERMITIDOS = ['super_admin', 'admin_berlin', 'cajero'];
 
 // ── POST /api/auth/login
+// `identificador` acepta correo O username (columna usuarios.username, migración 098) —
+// convive con el correo, no lo reemplaza. Se sigue llamando `email` en el body/validación
+// por compatibilidad con el frontend existente, pero ya no exige formato de correo.
 router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
+  body('email').trim().notEmpty(),
   body('password').isLength({ min: 6 }),
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -24,13 +27,15 @@ router.post('/login', [
     return res.status(422).json({ error: 'Datos inválidos', details: errors.array() });
   }
 
-  const { email, password } = req.body;
+  const identificador = String(req.body.email).trim();
+  const { password } = req.body;
+  const esEmail = identificador.includes('@');
 
   const { data: user, error } = await supabase
     .from('usuarios')
     .select('id, email, password_hash, nombre, apellido, rol, negocio_id, activo, avatar_url')
-    .eq('email', email)
-    .single();
+    .eq(esEmail ? 'email' : 'username', esEmail ? identificador.toLowerCase() : identificador)
+    .maybeSingle();
 
   if (error || !user) {
     return res.status(401).json({ error: 'Credenciales inválidas' });
