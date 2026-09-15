@@ -24,6 +24,7 @@ const mesasCtrl           = require('./controllers/mesas.controller');
 const meserosCtrl         = require('./controllers/meseros.controller');
 const configuracionCtrl   = require('./controllers/configuracion.controller');
 const notificacionesCtrl  = require('./controllers/notificaciones.controller');
+const estacionesCtrl      = require('./controllers/estaciones.controller');
 
 const router = express.Router();
 router.use(authenticate);
@@ -40,6 +41,12 @@ router.get   ('/categorias',      productosCtrl.listarCategorias);
 router.post  ('/categorias',      productosCtrl.crearCategoria);
 router.put   ('/categorias/:id',  productosCtrl.actualizarCategoria);
 router.delete('/categorias/:id',  productosCtrl.eliminarCategoria);
+
+// ── ESTACIONES (comandas — fase 1: solo esquema/CRUD)
+router.get   ('/estaciones',      estacionesCtrl.listar);
+router.post  ('/estaciones',      estacionesCtrl.crear);
+router.put   ('/estaciones/:id',  estacionesCtrl.actualizar);
+router.delete('/estaciones/:id',  estacionesCtrl.eliminar);
 
 // ── INSUMOS
 router.get   ('/insumos',             insumosCtrl.listar);

@@ -12,7 +12,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { api } from '../../../lib/api'
 import { fmtDinero, soloDigitos } from '../../../lib/dinero'
-import type { Insumo, Producto, Categoria } from '../../../types'
+import type { Insumo, Producto, Categoria, Estacion } from '../../../types'
 import Button from '../../../components/ui/Button'
 import toast from 'react-hot-toast'
 import {
@@ -1164,9 +1164,11 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
   const queryClient     = useQueryClient()
   const [nombre,  setNombre]  = useState('')
   const [emoji,   setEmoji]   = useState('')
+  const [estacionId, setEstacionId] = useState('')
   const [editId,  setEditId]  = useState<string | null>(null)
   const [editNom, setEditNom] = useState('')
   const [editEmoji, setEditEmoji] = useState('')
+  const [editEstacionId, setEditEstacionId] = useState('')
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null)
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null)
   const [agregarProdId, setAgregarProdId] = useState('')
@@ -1179,6 +1181,11 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
   const { data: productos = [] } = useQuery<Producto[]>({
     queryKey: ['productos'],
     queryFn:  () => api.get('/berlin/productos').then(r => r.data),
+  })
+
+  const { data: estaciones = [] } = useQuery<Estacion[]>({
+    queryKey: ['estaciones'],
+    queryFn:  () => api.get('/berlin/estaciones').then(r => r.data),
   })
 
   // ── Reordenar categorías (arrastrar y soltar) ──
@@ -1230,12 +1237,12 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
 
   const { mutate: crear, isPending: creando } = useMutation({
     mutationFn: () => api.post('/berlin/categorias', {
-      nombre: nombre.trim(), emoji: emoji.trim() || null,
+      nombre: nombre.trim(), emoji: emoji.trim() || null, estacion_id: estacionId || null,
     }),
     onSuccess: () => {
       toast.success(`Categoría "${nombre}" creada ✅`)
       invalidate()
-      setNombre(''); setEmoji('')
+      setNombre(''); setEmoji(''); setEstacionId('')
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -1247,11 +1254,12 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
     setEditId(cat.id)
     setEditNom(cat.nombre)
     setEditEmoji(cat.emoji ?? '')
+    setEditEstacionId(cat.estacion_id ?? '')
   }
 
   const { mutate: actualizar, isPending: actualizando } = useMutation({
     mutationFn: () => api.put(`/berlin/categorias/${editId}`, {
-      nombre: editNom.trim(), emoji: editEmoji.trim() || null,
+      nombre: editNom.trim(), emoji: editEmoji.trim() || null, estacion_id: editEstacionId || null,
     }),
     onSuccess: () => {
       toast.success('Categoría actualizada')
@@ -1322,6 +1330,14 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                 <Plus size={14} /> Crear
               </button>
             </div>
+            {estaciones.length > 0 && (
+              <select value={estacionId} onChange={e => setEstacionId(e.target.value)}
+                className="w-full bg-brand-navy border border-white/10 rounded-lg px-3 py-2 text-sm text-white
+                           focus:outline-none focus:border-brand-teal">
+                <option value="">Sin estación (no aparece en Comandas)</option>
+                {estaciones.map(es => <option key={es.id} value={es.id}>{es.nombre}</option>)}
+              </select>
+            )}
           </div>
 
           {/* Lista de categorías */}
@@ -1381,6 +1397,14 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                                        focus:outline-none focus:border-brand-teal"
                           />
                         </div>
+                        {estaciones.length > 0 && (
+                          <select value={editEstacionId} onChange={e => setEditEstacionId(e.target.value)}
+                            className="w-full bg-brand-navy border border-white/10 rounded-lg px-3 py-2 text-xs text-white
+                                       focus:outline-none focus:border-brand-teal">
+                            <option value="">Sin estación (no aparece en Comandas)</option>
+                            {estaciones.map(es => <option key={es.id} value={es.id}>{es.nombre}</option>)}
+                          </select>
+                        )}
                         <div className="flex gap-2">
                           <button onClick={() => setEditId(null)}
                             className="flex-1 py-1.5 text-xs rounded-lg border border-white/10 text-gray-400 hover:text-white transition-colors">
@@ -1421,7 +1445,15 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                           <span className="text-xl w-7 text-center flex-shrink-0">{cat.emoji ?? '📦'}</span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-white truncate">{cat.nombre}</p>
-                            <p className="text-xs text-gray-500">{count} producto{count !== 1 ? 's' : ''}</p>
+                            <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                              {count} producto{count !== 1 ? 's' : ''}
+                              {cat.estacion && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold"
+                                  style={{ background: `${cat.estacion.color ?? '#EA580C'}22`, color: cat.estacion.color ?? '#EA580C' }}>
+                                  {cat.estacion.nombre}
+                                </span>
+                              )}
+                            </p>
                           </div>
                           {expandedCatId === cat.id
                             ? <ChevronUp size={14} className="text-gray-500 flex-shrink-0" />

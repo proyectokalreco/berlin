@@ -71,6 +71,14 @@ export interface Receta {
   ingredientes?:         RecetaIngrediente[]
 }
 
+export interface Estacion {
+  id:     string
+  nombre: string
+  color?: string
+  orden?: number
+  activa: boolean
+}
+
 export interface Categoria {
   id:                string
   nombre:            string
@@ -79,6 +87,8 @@ export interface Categoria {
   orden?:            number
   activo:            boolean
   sin_stock_control?: boolean
+  estacion_id?:      string | null
+  estacion?:         Estacion | null
   productos?:        { count: number }[]
 }
 

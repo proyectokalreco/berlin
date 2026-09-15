@@ -16,7 +16,7 @@ const listar = async (req, res, next) => {
     const { activo = 'true', q } = req.query;
     let query = supabase
       .from('br_empleados')
-      .select('*, usuario:usuario_id(id, email, username, rol, activo)')
+      .select('*, usuario:usuario_id(id, email, username, rol, activo), estacion:estacion_id(id, nombre, color)')
       .eq('activo', activo !== 'false')
       .order('nombre');
 
@@ -36,7 +36,7 @@ const crear = async (req, res, next) => {
   try {
     const {
       nombre, apellido, cedula, cargo, salario, fecha_ingreso,
-      telefono, email, notas,
+      telefono, email, notas, estacion_id,
       // campos para crear usuario del sistema
       crear_usuario = false,
       usuario_email, usuario_password, usuario_username,
@@ -100,10 +100,11 @@ const crear = async (req, res, next) => {
         salario: parseFloat(salario) || 0,
         fecha_ingreso: fecha_ingreso || null,
         telefono, email, notas,
+        estacion_id: estacion_id || null,
         negocio_id, usuario_id,
         activo: true,
       })
-      .select('*, usuario:usuario_id(id, email, username, rol, activo)')
+      .select('*, usuario:usuario_id(id, email, username, rol, activo), estacion:estacion_id(id, nombre, color)')
       .single();
 
     if (error) throw error;
@@ -115,7 +116,7 @@ const actualizar = async (req, res, next) => {
   try {
     const {
       nombre, apellido, cedula, cargo, salario, fecha_ingreso,
-      telefono, email, notas, activo,
+      telefono, email, notas, activo, estacion_id,
       // actualizar contraseña del usuario vinculado
       nueva_password,
       // dar acceso al sistema a un empleado que todavía no lo tenía
@@ -130,12 +131,13 @@ const actualizar = async (req, res, next) => {
       telefono, email, notas,
     };
     if (activo !== undefined) updates.activo = activo;
+    if (estacion_id !== undefined) updates.estacion_id = estacion_id || null;
 
     const { data: emp, error } = await supabase
       .from('br_empleados')
       .update(updates)
       .eq('id', req.params.id)
-      .select('*, usuario:usuario_id(id, email, username, rol, activo)')
+      .select('*, usuario:usuario_id(id, email, username, rol, activo), estacion:estacion_id(id, nombre, color)')
       .single();
 
     if (error) throw error;

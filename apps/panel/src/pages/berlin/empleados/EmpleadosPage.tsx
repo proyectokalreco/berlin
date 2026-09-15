@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { UserCheck, Plus, X, Phone, Edit2, ShieldCheck, Eye, EyeOff, KeyRound, Trash2, AlertTriangle } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { useAuthStore } from '../../../store/authStore'
+import type { Estacion } from '../../../types'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -26,7 +27,7 @@ const CARGOS = [
 const CARGOS_DISPONIBLES = CARGOS.filter(c => c.value === 'cajero' || c.value === 'administrativo')
 
 const EMPTY = {
-  nombre: '', apellido: '', cedula: '', cargo: 'cajero',
+  nombre: '', apellido: '', cedula: '', cargo: 'cajero', estacion_id: '',
   salario: '', fecha_ingreso: '', telefono: '', email: '', notas: '',
   crear_usuario: false, usuario_email: '', usuario_username: '', usuario_password: '', nueva_password: '',
 }
@@ -38,6 +39,8 @@ interface Empleado {
   telefono?: string; email?: string; activo: boolean
   usuario_id?: string | null
   usuario?: UsuarioVinculado | null
+  estacion_id?: string | null
+  estacion?: Estacion | null
 }
 
 export default function EmpleadosPage() {
@@ -53,6 +56,11 @@ export default function EmpleadosPage() {
   const { data: empleados = [], isLoading } = useQuery<Empleado[]>({
     queryKey: ['empleados'],
     queryFn:  () => api.get('/berlin/empleados').then(r => r.data),
+  })
+
+  const { data: estaciones = [] } = useQuery<Estacion[]>({
+    queryKey: ['estaciones'],
+    queryFn:  () => api.get('/berlin/estaciones').then(r => r.data),
   })
 
   const { mutate: eliminarEmpleado, isPending: eliminando } = useMutation({
@@ -79,6 +87,7 @@ export default function EmpleadosPage() {
         telefono:         form.telefono,
         email:            form.email,
         notas:            form.notas,
+        estacion_id:      form.cargo === 'cajero' ? (form.estacion_id || null) : null,
         ...(editando
           ? {
               nueva_password: form.nueva_password || undefined,
@@ -119,7 +128,8 @@ export default function EmpleadosPage() {
     setEditando(e)
     setForm({
       nombre: e.nombre, apellido: e.apellido ?? '', cedula: e.cedula ?? '',
-      cargo: e.cargo, salario: e.salario?.toString() ?? '',
+      cargo: e.cargo, estacion_id: e.estacion_id ?? '',
+      salario: e.salario?.toString() ?? '',
       fecha_ingreso: e.fecha_ingreso ?? '', telefono: e.telefono ?? '',
       email: e.email ?? '', notas: '',
       crear_usuario: false,
@@ -322,6 +332,22 @@ export default function EmpleadosPage() {
                                placeholder:text-gray-600 focus:outline-none focus:border-teal-500/50 min-h-[48px]" />
                 </div>
               </div>
+
+              {/* Estación (solo cajeros) — quién gestiona/prepara qué en Comandas */}
+              {form.cargo === 'cajero' && (
+                <div>
+                  <label className="text-xs text-gray-400 mb-1.5 block">Estación / área que gestiona</label>
+                  <select value={form.estacion_id} onChange={e => setForm(f => ({ ...f, estacion_id: e.target.value }))}
+                    className="w-full bg-brand-dark border border-white/10 rounded-xl px-3 py-3 text-sm text-white
+                               focus:outline-none focus:border-teal-500/50 min-h-[48px]">
+                    <option value="">Sin asignar</option>
+                    {estaciones.map(es => <option key={es.id} value={es.id}>{es.nombre}</option>)}
+                  </select>
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    Define qué productos de las Comandas de mesa le llegan a este cajero.
+                  </p>
+                </div>
+              )}
 
               {/* Cédula / Teléfono */}
               <div className="grid grid-cols-2 gap-3">
