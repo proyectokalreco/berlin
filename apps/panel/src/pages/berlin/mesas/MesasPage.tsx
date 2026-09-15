@@ -4,6 +4,7 @@ import {
   LayoutGrid, X, Plus, Minus, Trash2, Search, ChevronLeft,
   Lock, Unlock, CreditCard, Banknote, Smartphone, Layers,
   Settings, Edit2, Check, Send, AlertTriangle, Delete, RefreshCw,
+  GlassWater, Droplet, Milk,
 } from 'lucide-react'
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
 import type { QueuedCobro } from './useOfflineMesasCobro'
@@ -11,7 +12,7 @@ import { api } from '../../../lib/api'
 import toast from 'react-hot-toast'
 import type { Producto, Categoria } from '../../../types'
 import { cn } from '../../../lib/utils'
-import { coincide } from '../../../lib/buscar'
+import { coincide, normalizar } from '../../../lib/buscar'
 import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import { useAuthStore } from '../../../store/authStore'
 
@@ -370,6 +371,73 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     onError: () => toast.error('Error al agregar producto'),
   })
 
+  // ── Jugos/Limonadas/Aromáticas — mismo modal Sabor(+Base) que POS.tsx.
+  // Detección por nombre normalizado, no por ID fijo (ver POS.tsx para el porqué de
+  // `includes` en vez de `startsWith`, y por qué Aromáticas es por nombre de producto).
+  const idsJugosAgua  = useMemo(() => new Set(
+    categorias.filter(c => { const n = normalizar(c.nombre); return n.includes('jugos') && n.includes('agua') }).map(c => c.id)
+  ), [categorias])
+  const idsJugosLeche = useMemo(() => new Set(
+    categorias.filter(c => { const n = normalizar(c.nombre); return n.includes('jugos') && n.includes('leche') }).map(c => c.id)
+  ), [categorias])
+  const idsLimonadas  = useMemo(() => new Set(
+    categorias.filter(c => normalizar(c.nombre).includes('limonada')).map(c => c.id)
+  ), [categorias])
+
+  interface SaborJugo { sabor: string; agua?: Producto; leche?: Producto }
+  const saboresJugos = useMemo(() => {
+    const map = new Map<string, SaborJugo>()
+    productos.forEach(p => {
+      const catId   = p.categoria_id ?? ''
+      const enAgua  = idsJugosAgua.has(catId)
+      const enLeche = idsJugosLeche.has(catId)
+      if (!enAgua && !enLeche) return
+      const palabras = p.nombre.trim().split(/\s+/)
+      const ultima   = normalizar(palabras[palabras.length - 1])
+      const sabor    = (ultima === 'agua' || ultima === 'leche') ? palabras.slice(0, -1).join(' ') : p.nombre
+      const key      = normalizar(sabor)
+      const entry    = map.get(key) ?? { sabor }
+      if (enAgua)  entry.agua  = p
+      if (enLeche) entry.leche = p
+      map.set(key, entry)
+    })
+    return Array.from(map.values()).sort((a, b) => a.sabor.localeCompare(b.sabor))
+  }, [productos, idsJugosAgua, idsJugosLeche])
+
+  const saboresLimonada = useMemo(
+    () => productos.filter(p => idsLimonadas.has(p.categoria_id ?? '')).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [productos, idsLimonadas],
+  )
+
+  const saboresAromaticas = useMemo(
+    () => productos.filter(p => normalizar(p.nombre).startsWith('aromatica')).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [productos],
+  )
+
+  const [modalVariante, setModalVariante] = useState<{
+    grupo:    'jugo' | 'limonada' | 'aromatica'
+    saborKey: string | null
+    base:     'agua' | 'leche' | null
+    cantidad: string
+  } | null>(null)
+
+  // Igual que agregarProd, pero con cantidad exacta (no +1) — usado por el modal
+  const agregarConCantidad = (p: Producto, cantidad: number) => agregarProd({ producto_id: p.id, cantidad })
+
+  const confirmarModalVariante = () => {
+    if (!modalVariante) return
+    const cantidad = parseInt(modalVariante.cantidad) || 1
+    const producto = modalVariante.grupo === 'jugo'
+      ? saboresJugos.find(s => normalizar(s.sabor) === modalVariante.saborKey)?.[
+          modalVariante.base === 'leche' ? 'leche' : 'agua'
+        ]
+      : (modalVariante.grupo === 'aromatica' ? saboresAromaticas : saboresLimonada)
+          .find(p => p.id === modalVariante.saborKey)
+    if (!producto) { toast.error('Selecciona sabor y presentación'); return }
+    agregarConCantidad(producto, cantidad)
+    setModalVariante(null)
+  }
+
   const handleClickProducto = (p: Producto) => {
     if (Number(p.precio_venta) === 1 && p.nombre.toLowerCase().includes('venta libre')) {
       setVentaLibreModal({ producto: p, nombre: p.nombre, precio: '', cantidad: '1' })
@@ -568,13 +636,24 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                 !catActiva ? 'bg-brand-teal text-brand-dark' : 'bg-brand-navy text-gray-400 hover:text-white border border-white/10')}>
               Todos
             </button>
-            {categorias.map(c => (
-              <button key={c.id} onClick={() => setCatActiva(catActiva === c.id ? null : c.id)}
-                className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
-                  catActiva === c.id ? 'bg-brand-teal text-brand-dark' : 'bg-brand-navy text-gray-400 hover:text-white border border-white/10')}>
-                {c.emoji} {c.nombre}
-              </button>
-            ))}
+            {categorias.map(c => {
+              const esJugo      = idsJugosAgua.has(c.id) || idsJugosLeche.has(c.id)
+              const esLimonada  = idsLimonadas.has(c.id)
+              const esAromatica = normalizar(c.nombre).includes('aromatica')
+              const onClickCat = () => {
+                if (esJugo)      { setModalVariante({ grupo: 'jugo', saborKey: null, base: null, cantidad: '1' }); return }
+                if (esLimonada)  { setModalVariante({ grupo: 'limonada', saborKey: null, base: null, cantidad: '1' }); return }
+                if (esAromatica) { setModalVariante({ grupo: 'aromatica', saborKey: null, base: null, cantidad: '1' }); return }
+                setCatActiva(catActiva === c.id ? null : c.id)
+              }
+              return (
+                <button key={c.id} onClick={onClickCat}
+                  className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0',
+                    catActiva === c.id ? 'bg-brand-teal text-brand-dark' : 'bg-brand-navy text-gray-400 hover:text-white border border-white/10')}>
+                  {c.emoji} {c.nombre}
+                </button>
+              )
+            })}
           </div>
 
           {/* Grid productos */}
@@ -950,6 +1029,151 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
           </div>
         </div>
       )}
+
+      {/* ── Modal Jugos/Limonadas/Aromáticas — Sabor + Base (Agua/Leche), igual que POS ── */}
+      {modalVariante && (() => {
+        const saborActual = modalVariante.grupo === 'jugo'
+          ? saboresJugos.find(s => normalizar(s.sabor) === modalVariante.saborKey)
+          : null
+        const soloSaborList = modalVariante.grupo === 'aromatica' ? saboresAromaticas
+          : modalVariante.grupo === 'limonada' ? saboresLimonada : []
+        const soloSaborLabel = modalVariante.grupo === 'aromatica' ? 'aromáticas' : 'limonadas'
+        const soloSaborActual = modalVariante.grupo !== 'jugo'
+          ? soloSaborList.find(p => p.id === modalVariante.saborKey)
+          : undefined
+        const titulo = modalVariante.grupo === 'jugo' ? 'Jugos'
+          : modalVariante.grupo === 'limonada' ? 'Limonadas' : 'Aromáticas'
+        const pasoBase = modalVariante.grupo === 'jugo' && modalVariante.saborKey !== null
+        const listo = modalVariante.grupo === 'jugo'
+          ? !!saborActual && !!modalVariante.base
+          : !!soloSaborActual
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+               style={{ background: 'rgba(0,0,0,0.7)' }}>
+            <div className="bg-[#2C2925] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+              <div className="flex items-center gap-2 mb-1">
+                <GlassWater size={18} className="text-[#EA580C]" />
+                <h3 className="text-white font-bold text-lg">{titulo}</h3>
+              </div>
+              <p className="text-gray-500 text-xs mb-5">
+                {!pasoBase && !soloSaborActual ? 'Elige el sabor' : 'Confirma la cantidad'}
+              </p>
+
+              {modalVariante.grupo === 'jugo' && !modalVariante.saborKey && (
+                <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                  {saboresJugos.map(s => (
+                    <button key={normalizar(s.sabor)}
+                      onClick={() => setModalVariante(prev => prev && ({ ...prev, saborKey: normalizar(s.sabor) }))}
+                      className="bg-[#1C1A18] hover:bg-white/5 border border-white/10 rounded-xl px-3 py-3
+                                 text-white text-sm font-medium text-left transition-colors">
+                      {s.sabor}
+                    </button>
+                  ))}
+                  {saboresJugos.length === 0 && (
+                    <p className="col-span-2 text-gray-500 text-sm text-center py-4">
+                      No hay jugos cargados en Inventario.
+                    </p>
+                  )}
+                </div>
+              )}
+              {modalVariante.grupo !== 'jugo' && !modalVariante.saborKey && (
+                <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                  {soloSaborList.map(p => (
+                    <button key={p.id}
+                      onClick={() => setModalVariante(prev => prev && ({ ...prev, saborKey: p.id }))}
+                      className="bg-[#1C1A18] hover:bg-white/5 border border-white/10 rounded-xl px-3 py-3
+                                 text-white text-sm font-medium text-left transition-colors">
+                      {p.nombre}
+                    </button>
+                  ))}
+                  {soloSaborList.length === 0 && (
+                    <p className="col-span-2 text-gray-500 text-sm text-center py-4">
+                      No hay {soloSaborLabel} cargadas en Inventario.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {(pasoBase || soloSaborActual) && (
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setModalVariante(prev => prev && ({ ...prev, saborKey: null, base: null }))}
+                    className="text-xs text-gray-500 hover:text-white transition-colors"
+                  >
+                    ← Cambiar sabor
+                  </button>
+
+                  <p className="text-white text-sm font-semibold">
+                    {saborActual?.sabor ?? soloSaborActual?.nombre}
+                  </p>
+
+                  {modalVariante.grupo === 'jugo' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        disabled={!saborActual?.agua}
+                        onClick={() => setModalVariante(prev => prev && ({ ...prev, base: 'agua' }))}
+                        className={cn(
+                          'flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-semibold transition-colors',
+                          !saborActual?.agua ? 'opacity-30 cursor-not-allowed border-white/5 text-gray-600'
+                            : modalVariante.base === 'agua' ? 'bg-[#EA580C] border-[#EA580C] text-white'
+                            : 'bg-[#1C1A18] border-white/10 text-gray-300 hover:bg-white/5',
+                        )}>
+                        <Droplet size={15} /> Agua
+                      </button>
+                      <button
+                        disabled={!saborActual?.leche}
+                        onClick={() => setModalVariante(prev => prev && ({ ...prev, base: 'leche' }))}
+                        className={cn(
+                          'flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-semibold transition-colors',
+                          !saborActual?.leche ? 'opacity-30 cursor-not-allowed border-white/5 text-gray-600'
+                            : modalVariante.base === 'leche' ? 'bg-[#EA580C] border-[#EA580C] text-white'
+                            : 'bg-[#1C1A18] border-white/10 text-gray-300 hover:bg-white/5',
+                        )}>
+                        <Milk size={15} /> Leche
+                      </button>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-[11px] text-gray-400 uppercase tracking-wider mb-1 block">
+                      Cantidad
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      autoFocus={modalVariante.grupo !== 'jugo'}
+                      className="w-full bg-[#1C1A18] border border-white/10 rounded-xl px-3 py-2.5
+                                 text-white text-sm placeholder:text-gray-600 focus:outline-none
+                                 focus:border-[#EA580C]/60"
+                      value={modalVariante.cantidad}
+                      onChange={e => setModalVariante(prev => prev && ({ ...prev, cantidad: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter' && listo) confirmarModalVariante() }}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setModalVariante(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-400
+                             hover:bg-white/5 text-sm font-medium transition-colors">
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarModalVariante}
+                  disabled={!listo}
+                  className="flex-1 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2460A]
+                             text-white text-sm font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                  Agregar al pedido
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }
