@@ -211,6 +211,11 @@ router.post  ('/mesas/:id/cobrar',                    mesasCtrl.cobrar);
 router.post  ('/mesas/:id/cancelar-orden',            mesasCtrl.cancelarOrden);
 router.post  ('/mesas/:id/enviar-pedido',             mesasCtrl.enviarPedido);
 
+// ── COMANDAS (fase 2) — pantalla/panel de pedidos pendientes por estación
+router.get   ('/comandas/pendientes',                 mesasCtrl.comandasPendientes);
+router.patch ('/comandas/items/:itemId/visto',        mesasCtrl.marcarVistoItem);
+router.patch ('/comandas/mesas/:ordenId/visto',       mesasCtrl.marcarVistoMesa);
+
 // ── NOTIFICACIONES
 router.get ('/notificaciones/pendientes',      notificacionesCtrl.pendientes);
 router.put ('/notificaciones/leer-todas',      notificacionesCtrl.leerTodas);

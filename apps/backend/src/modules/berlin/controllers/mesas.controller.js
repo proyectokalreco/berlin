@@ -452,7 +452,9 @@ const cancelarOrden = async (req, res, next) => {
 }
 
 // ── POST /mesas/:id/enviar-pedido ────────────────────────────
-// Mesero notifica al cajero que el pedido está listo para cobrar
+// El mesero/cajero envía a las estaciones (Comandas) solo los ítems
+// nuevos desde el último envío de esta mesa (enviado_at IS NULL).
+// Ya no bloquea reenviar — cada tanda de productos se manda aparte.
 const enviarPedido = async (req, res, next) => {
   try {
     const mesaId = req.params.id
@@ -460,7 +462,7 @@ const enviarPedido = async (req, res, next) => {
     const { data: orden } = await supabase.from('br_ordenes_mesa')
       .select(`
         id, total,
-        items:br_orden_mesa_items(id),
+        items:br_orden_mesa_items(id, cantidad, notas, enviado_at, producto:producto_id(nombre)),
         mesero:mesero_id(nombre),
         mesa:mesa_id(numero, nombre)
       `)
@@ -469,32 +471,122 @@ const enviarPedido = async (req, res, next) => {
       .maybeSingle()
     if (!orden) return res.status(404).json({ error: 'Sin orden activa' })
 
-    // Verificar que no haya ya una notificación pendiente para esta orden
-    const { data: notifExistente } = await supabase.from('br_notificaciones')
-      .select('id')
-      .eq('leida', false)
-      .contains('datos', { orden_id: orden.id })
-      .maybeSingle()
-    if (notifExistente) {
-      return res.status(400).json({ error: 'El pedido ya fue enviado al cajero y está pendiente de cobro.' })
+    const nuevos = (orden.items || []).filter(i => !i.enviado_at)
+    if (!nuevos.length) {
+      return res.status(400).json({ error: 'No hay productos nuevos para enviar — ya se mandaron todos a las estaciones.' })
     }
+
+    const ahora = new Date().toISOString()
+    await supabase.from('br_orden_mesa_items')
+      .update({ enviado_at: ahora })
+      .in('id', nuevos.map(i => i.id))
 
     const mesa      = orden.mesa
     const mesero    = orden.mesero
-    const numItems  = orden.items?.length ?? 0
     const mesaNom   = mesa?.nombre ? `${mesa.numero} — ${mesa.nombre}` : `Mesa ${mesa?.numero ?? ''}`
-    const totalFmt  = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(orden.total))
 
     const { error } = await supabase.from('br_notificaciones').insert({
       tipo:       'nueva_orden_mesa',
-      titulo:     `🍽️ Pedido listo — ${mesaNom}`,
-      mensaje:    `${mesero?.nombre ?? 'Mesero'} envió pedido · ${numItems} producto${numItems !== 1 ? 's' : ''} · Total ${totalFmt}`,
-      datos:      { mesa_id: mesaId, orden_id: orden.id, mesa_numero: mesa?.numero, total: orden.total },
+      titulo:     `🍽️ Pedido — ${mesaNom}`,
+      mensaje:    `${mesero?.nombre ?? 'Mesero'} envió ${nuevos.length} producto${nuevos.length !== 1 ? 's' : ''} nuevo${nuevos.length !== 1 ? 's' : ''}`,
+      datos:      { mesa_id: mesaId, orden_id: orden.id, mesa_numero: mesa?.numero },
       creada_por: req.user.id,
     })
     if (error) throw error
 
+    res.json({ ok: true, enviados: nuevos.length })
+  } catch (err) { next(err) }
+}
+
+// ── GET /comandas/pendientes ─────────────────────────────────
+// Ítems ya enviados (enviado_at) y aún no atendidos (visto_at IS NULL)
+// de mesas con orden abierta, agrupados por mesa. admin_berlin/
+// super_admin ven todas las estaciones; un cajero solo ve la suya
+// (br_empleados.estacion_id vinculado a su usuario_id).
+const comandasPendientes = async (req, res, next) => {
+  try {
+    const ROLES_ADMIN = ['super_admin', 'admin', 'admin_berlin']
+    let estacionId = null
+
+    if (!ROLES_ADMIN.includes(req.user.rol)) {
+      const { data: emp } = await supabase.from('br_empleados')
+        .select('estacion_id').eq('usuario_id', req.user.id).maybeSingle()
+      if (!emp?.estacion_id) return res.json([]) // cajero sin estación asignada: nada que mostrar
+      estacionId = emp.estacion_id
+    }
+
+    const { data: ordenes, error } = await supabase.from('br_ordenes_mesa')
+      .select(`
+        id,
+        mesa:mesa_id(id, numero, nombre),
+        items:br_orden_mesa_items(
+          id, cantidad, notas, enviado_at,
+          producto:producto_id(nombre, categoria:categoria_id(id, estacion_id, estacion:estacion_id(id, nombre, color)))
+        )
+      `)
+      .eq('estado', 'abierta')
+    if (error) throw error
+
+    const resultado = (ordenes || [])
+      .map(o => ({
+        orden_id: o.id,
+        mesa:     o.mesa,
+        items: (o.items || [])
+          .filter(i => i.enviado_at && !i.visto_at)
+          .filter(i => !estacionId || i.producto?.categoria?.estacion_id === estacionId)
+          .map(i => ({
+            id: i.id, cantidad: i.cantidad, notas: i.notas, enviado_at: i.enviado_at,
+            nombre: i.producto?.nombre ?? 'Producto',
+            estacion: i.producto?.categoria?.estacion ?? null,
+          })),
+      }))
+      .filter(o => o.items.length > 0)
+
+    res.set('Cache-Control', 'no-store')
+    res.json(resultado)
+  } catch (err) { next(err) }
+}
+
+// ── PATCH /comandas/items/:itemId/visto ──────────────────────
+const marcarVistoItem = async (req, res, next) => {
+  try {
+    const { error } = await supabase.from('br_orden_mesa_items')
+      .update({ visto_at: new Date().toISOString() })
+      .eq('id', req.params.itemId)
+    if (error) throw error
     res.json({ ok: true })
+  } catch (err) { next(err) }
+}
+
+// ── PATCH /comandas/mesas/:ordenId/visto ─────────────────────
+// Marca de una vez todos los ítems pendientes de esa orden (por
+// estación del usuario que marca, o todos si es admin).
+const marcarVistoMesa = async (req, res, next) => {
+  try {
+    const ROLES_ADMIN = ['super_admin', 'admin', 'admin_berlin']
+    let estacionId = null
+    if (!ROLES_ADMIN.includes(req.user.rol)) {
+      const { data: emp } = await supabase.from('br_empleados')
+        .select('estacion_id').eq('usuario_id', req.user.id).maybeSingle()
+      estacionId = emp?.estacion_id ?? null
+    }
+
+    const { data: items } = await supabase.from('br_orden_mesa_items')
+      .select('id, producto:producto_id(categoria:categoria_id(estacion_id))')
+      .eq('orden_id', req.params.ordenId)
+      .not('enviado_at', 'is', null)
+      .is('visto_at', null)
+
+    const idsAMarcar = (items || [])
+      .filter(i => !estacionId || i.producto?.categoria?.estacion_id === estacionId)
+      .map(i => i.id)
+    if (!idsAMarcar.length) return res.json({ ok: true, marcados: 0 })
+
+    await supabase.from('br_orden_mesa_items')
+      .update({ visto_at: new Date().toISOString() })
+      .in('id', idsAMarcar)
+
+    res.json({ ok: true, marcados: idsAMarcar.length })
   } catch (err) { next(err) }
 }
 
@@ -509,4 +601,8 @@ const eliminar = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { listar, crear, actualizar, eliminar, abrirMesa, tomarMesa, obtenerOrden, agregarItem, actualizarItem, eliminarItem, cobrar, cancelarOrden, enviarPedido }
+module.exports = {
+  listar, crear, actualizar, eliminar, abrirMesa, tomarMesa, obtenerOrden,
+  agregarItem, actualizarItem, eliminarItem, cobrar, cancelarOrden, enviarPedido,
+  comandasPendientes, marcarVistoItem, marcarVistoMesa,
+}

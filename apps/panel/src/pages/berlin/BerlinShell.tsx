@@ -12,6 +12,7 @@ import { cn } from '../../lib/utils'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
 import PerfilModal from '../../components/PerfilModal'
+import ComandasPanel from '../../components/ComandasPanel'
 
 // ── Paleta Berlín Café Bar (tomada del logo) ───────────────────
 const GOLD  = '#D9A652'
@@ -245,6 +246,7 @@ export default function BerlinShell() {
               <span className="hidden sm:inline">{isOnline ? 'En línea' : 'Sin conexión'}</span>
             </div>
 
+            <ComandasPanel />
             <NotifBell rol={rol} />
             <button
               onClick={() => signOut()}
