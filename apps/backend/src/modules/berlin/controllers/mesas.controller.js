@@ -309,7 +309,10 @@ const eliminarItem = async (req, res, next) => {
 // Crea br_venta desde la orden + libera la mesa
 const cobrar = async (req, res, next) => {
   try {
-    const { metodo_pago = 'efectivo', cliente_id, caja_id, redondeo = 0, idempotency_key } = req.body
+    const {
+      metodo_pago = 'efectivo', cliente_id, caja_id, redondeo = 0, idempotency_key,
+      monto_efectivo, monto_transferencia,
+    } = req.body
     const mesaId = req.params.id
 
     // Idempotencia: si ya se cobró esta mesa con este key, devolver la venta existente
@@ -334,6 +337,19 @@ const cobrar = async (req, res, next) => {
     const subtotal    = orden.items.reduce((s, i) => s + Number(i.subtotal), 0)
     const redondeoNum = Number(redondeo) || 0
     const total       = Math.max(0, subtotal + redondeoNum)
+
+    let montoEfectivoVal = null
+    let montoTransferenciaVal = null
+    if (metodo_pago === 'mixto') {
+      montoEfectivoVal = parseFloat(monto_efectivo)
+      montoTransferenciaVal = parseFloat(monto_transferencia)
+      if (!Number.isFinite(montoEfectivoVal) || !Number.isFinite(montoTransferenciaVal) || montoEfectivoVal < 0 || montoTransferenciaVal < 0) {
+        return res.status(400).json({ error: 'Pago mixto requiere monto_efectivo y monto_transferencia' })
+      }
+      if (Math.abs((montoEfectivoVal + montoTransferenciaVal) - total) > 1) {
+        return res.status(400).json({ error: 'La suma de efectivo + transferencia no coincide con el total' })
+      }
+    }
 
     // Generar número de venta (timezone Colombia)
     const hoy   = fechaColombia()
@@ -363,6 +379,8 @@ const cobrar = async (req, res, next) => {
         notas:           `Mesa ${mesa?.numero ?? ''}${mesa?.nombre ? ' - ' + mesa.nombre : ''}`,
         idempotency_key: idempotency_key || null,
         saldo_pendiente: metodo_pago === 'credito' ? total : null,
+        monto_efectivo:      montoEfectivoVal,
+        monto_transferencia: montoTransferenciaVal,
       })
       .select().single()
     if (errVenta) throw errVenta
@@ -400,14 +418,29 @@ const cobrar = async (req, res, next) => {
 
     // Actualizar totales del turno activo (br_turnos_caja) si se proveyó caja_id
     if (caja_id && metodo_pago !== 'credito') {
-      const tipo_turno = metodo_pago === 'transferencia' ? 'venta_transferencia'
-        : metodo_pago.includes('qr') ? 'venta_qr' : 'venta_efectivo'
-      await supabase.rpc('br_actualizar_totales_turno', {
-        p_turno_id:   caja_id,
-        p_monto:      total,
-        p_tipo:       tipo_turno,
-        p_num_ventas: 1,
-      }) // error silencioso — no bloquear la venta
+      if (metodo_pago === 'mixto') {
+        // Reparte entre los 2 bolsillos — nunca contarlo todo como efectivo
+        if (montoEfectivoVal > 0) {
+          await supabase.rpc('br_actualizar_totales_turno', {
+            p_turno_id: caja_id, p_monto: montoEfectivoVal, p_tipo: 'venta_efectivo', p_num_ventas: 1,
+          })
+        }
+        if (montoTransferenciaVal > 0) {
+          await supabase.rpc('br_actualizar_totales_turno', {
+            p_turno_id: caja_id, p_monto: montoTransferenciaVal, p_tipo: 'venta_transferencia',
+            p_num_ventas: montoEfectivoVal > 0 ? 0 : 1,
+          })
+        }
+      } else {
+        const tipo_turno = metodo_pago === 'transferencia' ? 'venta_transferencia'
+          : metodo_pago.includes('qr') ? 'venta_qr' : 'venta_efectivo'
+        await supabase.rpc('br_actualizar_totales_turno', {
+          p_turno_id:   caja_id,
+          p_monto:      total,
+          p_tipo:       tipo_turno,
+          p_num_ventas: 1,
+        }) // error silencioso — no bloquear la venta
+      }
     }
 
     // Movimiento contable (schema: tipo, categoria, concepto, monto, referencia_tipo, referencia_id, registrado_por)

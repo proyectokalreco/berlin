@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutGrid, X, Plus, Minus, Trash2, Search, ChevronLeft,
-  Lock, Unlock, CreditCard, Banknote, Smartphone,
+  Lock, Unlock, CreditCard, Banknote, Smartphone, Layers,
   Settings, Edit2, Check, Send, AlertTriangle, Delete, RefreshCw,
 } from 'lucide-react'
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
@@ -64,6 +64,8 @@ function imprimirTicketMesa(datos: {
   metodo_pago:       string
   efectivo_recibido?: number
   cambio?:           number
+  mixto_efectivo?:      number
+  mixto_transferencia?: number
 }) {
   const fecha = new Date().toLocaleString('es-CO', {
     day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
@@ -130,10 +132,14 @@ ${datos.redondeo !== 0
 </div>
 <div class="sep"></div>
 <div class="row b"><span>Método de pago:</span><span>${
-  datos.metodo_pago === 'transferencia' || datos.metodo_pago === 'qr' ? 'Pago Electrónico'
+  datos.metodo_pago === 'mixto' ? 'Mixto'
+  : datos.metodo_pago === 'transferencia' || datos.metodo_pago === 'qr' ? 'Pago Electrónico'
   : datos.metodo_pago === 'credito' ? 'Crédito'
   : 'Efectivo'
 }</span></div>
+${datos.metodo_pago === 'mixto' ? `
+<div class="row"><span>Efectivo:</span><span class="amt">${fmt(datos.mixto_efectivo ?? 0)}</span></div>
+<div class="row"><span>Pago Electrónico:</span><span class="amt">${fmt(datos.mixto_transferencia ?? 0)}</span></div>` : ''}
 ${datos.efectivo_recibido && datos.metodo_pago === 'efectivo' ? `
 <div class="row"><span>Efectivo recibido:</span><span class="amt">${fmt(datos.efectivo_recibido)}</span></div>
 <div class="row b" style="color:#000"><span>Cambio:</span><span class="amt">${fmt(datos.cambio ?? 0)}</span></div>` : ''}
@@ -290,11 +296,13 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const [cobrarKey] = useState(() => crypto.randomUUID())
   const [busqueda,    setBusqueda]    = useState('')
   const [catActiva,   setCatActiva]   = useState<string|null>(null)
-  const [metodoPago,       setMetodoPago]       = useState<'efectivo'|'exacto'|'transferencia'|'credito'>('efectivo')
+  const [metodoPago,       setMetodoPago]       = useState<'efectivo'|'exacto'|'transferencia'|'credito'|'mixto'>('efectivo')
   const [showCobrar,       setShowCobrar]       = useState(false)
   const [clienteId,        setClienteId]        = useState<string>('')
   const [buscandoCli,      setBuscandoCli]      = useState('')
   const [efectivoRecibido, setEfectivoRecibido] = useState<string>('')
+  const [mixtoEfectivo,      setMixtoEfectivo]      = useState('')
+  const [mixtoTransferencia, setMixtoTransferencia] = useState('')
   const [ventaLibreModal,  setVentaLibreModal]  = useState<{ producto: Producto; nombre: string; precio: string; cantidad: string } | null>(null)
 
   // ── Teclado físico cuando el modal está abierto en modo efectivo ──
@@ -415,6 +423,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
       caja_id:         cajaId || undefined,
       redondeo:        orden ? redondear(orden.total) - orden.total : 0,
       idempotency_key: cobrarKey,
+      monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+      monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
     }),
     onSuccess: (res) => {
       toast.success(`¡Cobrado! ${fmt(res.data.venta.total)}`)
@@ -438,6 +448,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
         metodo_pago:       metodoPago === 'exacto' ? 'efectivo' : metodoPago,
         efectivo_recibido: metodoPago === 'efectivo' && efectivoNum > 0 ? efectivoNum : undefined,
         cambio:            metodoPago === 'efectivo' && efectivoNum > 0 ? cambio : undefined,
+        mixto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+        mixto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
       })
       onVolver()
     },
@@ -458,6 +470,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
             caja_id:         cajaId || undefined,
             redondeo:        orden ? redondear(orden.total) - orden.total : 0,
             idempotency_key: cobrarKey,
+            monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+            monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
           },
           queued_at: Date.now(),
         })
@@ -481,6 +495,10 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const mesero     = mesa.orden_activa?.mesero
   const efectivoNum = parseInt(efectivoRecibido.replace(/\D/g, '') || '0', 10)
   const cambio     = efectivoNum > totalFinal ? efectivoNum - totalFinal : 0
+  const mixtoEfeNum = parseInt(mixtoEfectivo.replace(/\D/g, '') || '0', 10)
+  const mixtoTraNum = parseInt(mixtoTransferencia.replace(/\D/g, '') || '0', 10)
+  const mixtoSuma   = mixtoEfeNum + mixtoTraNum
+  const mixtoValido = Math.abs(mixtoSuma - totalFinal) <= 1
 
   // Mostrar todos los productos; productos con stock=0 y tipo=receta quedan deshabilitados
   const catNameMap = useMemo(() => new Map(categorias.map(c => [c.id, c.nombre])), [categorias])
@@ -500,11 +518,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
       const canCobrar = !cobrando
         && !(metodoPago === 'credito' && !clienteId)
         && !(metodoPago === 'efectivo' && efectivoNum > 0 && efectivoNum < totalFinal)
+        && !(metodoPago === 'mixto' && !mixtoValido)
       if (canCobrar) cobrar()
     }
     window.addEventListener('keydown', onEnter)
     return () => window.removeEventListener('keydown', onEnter)
-  }, [showCobrar, metodoPago, cobrando, clienteId, efectivoNum, totalFinal, cobrar])
+  }, [showCobrar, metodoPago, cobrando, clienteId, efectivoNum, totalFinal, mixtoValido, cobrar])
 
   return (
     <>
@@ -729,17 +748,28 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                 <span className="text-lg font-bold text-brand-teal tabular-nums">{fmt(totalFinal)}</span>
               </div>
 
-              {/* Método pago */}
+              {/* Método pago — mismo patrón que POS: Pago Completo destacado + grid 2 columnas */}
               <div>
                 <label className="text-xs text-gray-400 mb-2 block">Método de pago</label>
-                <div className="grid grid-cols-3 gap-2">
+                <button type="button"
+                  onClick={() => { setMetodoPago('exacto'); setEfectivoRecibido(''); setMixtoEfectivo(''); setMixtoTransferencia('') }}
+                  className={cn(
+                    'w-full py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5 mb-2',
+                    metodoPago === 'exacto'
+                      ? 'bg-brand-teal text-brand-dark border border-brand-teal'
+                      : 'bg-brand-dark border border-white/5 text-gray-400 hover:text-white hover:bg-white/5',
+                  )}>
+                  <Check size={14}/> Pago completo
+                </button>
+                <div className="grid grid-cols-2 gap-2">
                   {([
                     { id:'efectivo',      label:'Efectivo',      icon: Banknote },
-                    { id:'exacto',        label:'Pago completo', icon: Check },
                     { id:'transferencia', label:'Pago Electrónico',  icon: Smartphone },
+                    { id:'mixto',         label:'Mixto',         icon: Layers },
                     { id:'credito',       label:'Crédito',       icon: CreditCard },
                   ] as const).map(m => (
-                    <button key={m.id} type="button" onClick={() => { setMetodoPago(m.id); setEfectivoRecibido('') }}
+                    <button key={m.id} type="button"
+                      onClick={() => { setMetodoPago(m.id); setEfectivoRecibido(''); setMixtoEfectivo(''); setMixtoTransferencia('') }}
                       className={cn(
                         'flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all',
                         metodoPago === m.id
@@ -807,6 +837,34 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                   )}
                 </div>
               )}
+
+              {/* Mixto: divide el pago entre efectivo y transferencia (igual que POS) */}
+              {metodoPago === 'mixto' && (
+                <div className="space-y-2 rounded-xl border border-white/8 bg-[#403A32] p-2.5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Dividir pago</p>
+                  {[
+                    { label: 'Efectivo',      val: mixtoEfectivo,      set: setMixtoEfectivo      },
+                    { label: 'Pago Electrónico', val: mixtoTransferencia, set: setMixtoTransferencia },
+                  ].map(({ label, val, set }) => (
+                    <div key={label}>
+                      <label className="text-[10px] text-gray-500 mb-0.5 block">{label}</label>
+                      <input
+                        type="text" inputMode="numeric"
+                        value={val ? new Intl.NumberFormat('es-CO').format(parseInt(val, 10)) : ''}
+                        onChange={e => set(e.target.value.replace(/\D/g, ''))}
+                        placeholder="0"
+                        className="w-full bg-brand-dark text-white border border-white/10 rounded-lg px-3 py-1.5
+                                   text-sm focus:outline-none focus:border-brand-teal/50"
+                      />
+                    </div>
+                  ))}
+                  <div className={cn('flex justify-between text-[11px] font-semibold px-0.5',
+                    mixtoValido ? 'text-green-400' : 'text-red-400')}>
+                    <span>Suma: {fmt(mixtoSuma)}</span>
+                    <span>Total: {fmt(totalFinal)}</span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="px-5 pb-5 flex gap-3">
               <button onClick={() => setShowCobrar(false)}
@@ -816,6 +874,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                   cobrando
                   || (metodoPago === 'credito' && !clienteId)
                   || (metodoPago === 'efectivo' && efectivoNum > 0 && efectivoNum < totalFinal)
+                  || (metodoPago === 'mixto' && !mixtoValido)
                 }
                 onClick={() => cobrar()}
                 className="flex-1 py-3 rounded-xl bg-brand-teal hover:bg-[#00A882] text-brand-dark font-bold text-sm disabled:opacity-40">

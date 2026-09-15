@@ -13,6 +13,8 @@ export interface QueuedCobro {
     caja_id?:        string
     redondeo?:       number
     idempotency_key: string
+    monto_efectivo?:      number
+    monto_transferencia?: number
   }
   queued_at: number
 }
