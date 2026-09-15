@@ -104,19 +104,18 @@ const abrirMesa = async (req, res, next) => {
 const tomarMesa = async (req, res, next) => {
   try {
     const mesaId   = req.params.id
-    const { id: userId, nombre, apellido, negocio_id: negocioId, rol } = req.user
-    const hoy      = fechaColombia()
+    const { id: userId, nombre, apellido, rol } = req.user
     const ROLES_SIN_CAJA = ['admin_berlin', 'admin', 'super_admin']
 
-    // 1. Verificar que haya caja abierta en este negocio (admin/superadmin exentos)
-    const { data: negocioUsers } = await supabase.from('usuarios')
-      .select('id').eq('negocio_id', negocioId).eq('activo', true)
-    const userIds = (negocioUsers || []).map(u => u.id)
-
-    if (userIds.length && !ROLES_SIN_CAJA.includes(rol)) {
+    // 1. Verificar que haya caja abierta en el negocio (admin/superadmin exentos).
+    // Caja compartida: el único turno con estado='abierto' es el activo, sin
+    // filtrar por fecha calendario ni por quién lo abrió — mismo criterio que
+    // caja.controller.js (horario 1pm-5am, ver incidente 22). Filtrar por
+    // fecha=hoy() rompía esto justo después de medianoche con un turno de la
+    // tarde anterior todavía abierto.
+    if (!ROLES_SIN_CAJA.includes(rol)) {
       const { data: turno } = await supabase.from('br_turnos_caja')
-        .select('id').eq('fecha', hoy).eq('estado', 'abierto')
-        .in('usuario_apertura_id', userIds).limit(1).maybeSingle()
+        .select('id').eq('estado', 'abierto').limit(1).maybeSingle()
       if (!turno) {
         return res.status(400).json({
           error: 'No hay caja abierta. Un cajero debe abrir el turno antes de atender mesas.'
