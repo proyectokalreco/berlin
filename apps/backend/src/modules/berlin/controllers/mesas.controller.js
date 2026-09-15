@@ -228,11 +228,35 @@ const agregarItem = async (req, res, next) => {
       ? `[${nombre_libre.trim()}]${notas ? ' ' + notas.trim() : ''}`
       : (notas?.trim() || null)
 
-    // Insertar ítem
-    const { data: item, error } = await supabase.from('br_orden_mesa_items')
-      .insert({ orden_id: orden.id, producto_id, cantidad: qty, precio_unitario: precio, subtotal, notas: notasFinal })
-      .select(`id, cantidad, precio_unitario, subtotal, notas, producto:producto_id(id, nombre, imagen_url, precio_venta, unidad_venta)`)
-      .single()
+    // Igual que el carrito de POS: si el mismo producto (mismo precio/nota) ya está
+    // en la orden y todavía NO se envió a las estaciones (enviado_at NULL), se suma
+    // a esa línea en vez de crear una fila aparte — un producto = una línea con
+    // cantidad, no N filas repetidas. Un ítem ya enviado nunca se toca (evita que
+    // una unidad nueva quede oculta para la cocina sin re-enviarse).
+    let itemQuery = supabase.from('br_orden_mesa_items')
+      .select('id, cantidad, subtotal')
+      .eq('orden_id', orden.id)
+      .eq('producto_id', producto_id)
+      .eq('precio_unitario', precio)
+      .is('enviado_at', null)
+    itemQuery = notasFinal ? itemQuery.eq('notas', notasFinal) : itemQuery.is('notas', null)
+    const { data: existente } = await itemQuery.maybeSingle()
+
+    let item, error
+    if (existente) {
+      const nuevaCantidad = Number(existente.cantidad) + qty
+      const nuevoSubtotal = precio * nuevaCantidad
+      ;({ data: item, error } = await supabase.from('br_orden_mesa_items')
+        .update({ cantidad: nuevaCantidad, subtotal: nuevoSubtotal })
+        .eq('id', existente.id)
+        .select(`id, cantidad, precio_unitario, subtotal, notas, producto:producto_id(id, nombre, imagen_url, precio_venta, unidad_venta)`)
+        .single())
+    } else {
+      ;({ data: item, error } = await supabase.from('br_orden_mesa_items')
+        .insert({ orden_id: orden.id, producto_id, cantidad: qty, precio_unitario: precio, subtotal, notas: notasFinal })
+        .select(`id, cantidad, precio_unitario, subtotal, notas, producto:producto_id(id, nombre, imagen_url, precio_venta, unidad_venta)`)
+        .single())
+    }
     if (error) throw error
 
     // Recalcular total desde ítems reales (evita race condition al agregar rápido)

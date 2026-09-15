@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Beer, BarChart2, Package, ShoppingCart,
-  Banknote, PieChart, BookOpen, LogOut, ClipboardList, Bell, LayoutGrid,
+  Banknote, PieChart, BookOpen, LogOut, ClipboardList, LayoutGrid,
   Wifi, WifiOff,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
@@ -63,106 +63,6 @@ function getTabsByRol(rol: string) {
   if (rol === 'mesero')
     return ALL_TABS.filter(t => ['Dashboard','Mesas','Inventario'].includes(t.label))
   return ALL_TABS // admin_berlin, super_admin
-}
-
-// ── Roles que reciben notificaciones de mesas ─────────────────
-const ROLES_NOTIF = ['cajero', 'admin_berlin', 'super_admin', 'vendedor']
-
-interface Notificacion {
-  id: string; tipo: string; titulo: string; mensaje?: string
-  datos: Record<string,unknown>; created_at: string
-}
-
-// ── Bell de notificaciones (solo para cajero/admin) ───────────
-function NotifBell({ rol }: { rol: string }) {
-  const qc = useQueryClient()
-  const [open, setOpen] = useState(false)
-
-  const { data: notifs = [] } = useQuery<Notificacion[]>({
-    queryKey: ['notificaciones-pendientes'],
-    queryFn:  () => api.get('/berlin/notificaciones/pendientes').then(r => r.data),
-    refetchInterval: 4_000,
-    enabled: ROLES_NOTIF.includes(rol),
-  })
-
-  const { mutate: leerTodas } = useMutation({
-    mutationFn: () => api.put('/berlin/notificaciones/leer-todas'),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notificaciones-pendientes'] })
-      toast.success('Notificaciones marcadas como leídas')
-      setOpen(false)
-    },
-  })
-
-  if (!ROLES_NOTIF.includes(rol)) return null
-
-  const count = notifs.length
-
-  return (
-    <div className="relative flex-shrink-0">
-      <button
-        onClick={() => setOpen(o => !o)}
-        title="Notificaciones de mesas"
-        className="relative p-2 rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
-        style={{ color: count > 0 ? GOLD : 'rgba(255,255,255,0.45)' }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)' }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-      >
-        <Bell size={18} className={count > 0 ? 'animate-pulse' : ''} />
-        {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-white
-                           text-[9px] font-bold flex items-center justify-center leading-none"
-                style={{ background: GOLD }}>
-            {count > 9 ? '9+' : count}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-50 w-80 bg-[#2C2925] rounded-2xl border border-white/10
-                          shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <p className="text-sm font-bold text-white">
-                Pedidos de mesas {count > 0 && <span style={{ color: GOLD }}>({count})</span>}
-              </p>
-              <div className="flex items-center gap-1">
-                {count > 0 && (
-                  <button onClick={() => leerTodas()}
-                    className="text-[10px] text-gray-400 hover:text-white px-2 py-1 rounded-lg hover:bg-white/5 transition-colors">
-                    Marcar leído
-                  </button>
-                )}
-                <button onClick={() => setOpen(false)}
-                  className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-white rounded-lg hover:bg-white/5">
-                  ×
-                </button>
-              </div>
-            </div>
-            <div className="max-h-72 overflow-y-auto">
-              {notifs.length === 0 ? (
-                <div className="py-8 text-center text-gray-600">
-                  <Bell size={24} className="mx-auto mb-2 opacity-20"/>
-                  <p className="text-xs">Sin notificaciones pendientes</p>
-                </div>
-              ) : (
-                notifs.map(n => (
-                  <div key={n.id} className="px-4 py-3 border-b border-white/5 hover:bg-white/3 transition-colors">
-                    <p className="text-xs font-semibold text-white">{n.titulo}</p>
-                    {n.mensaje && <p className="text-[11px] text-gray-400 mt-0.5">{n.mensaje}</p>}
-                    <p className="text-[10px] text-gray-600 mt-1">
-                      {new Date(n.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  )
 }
 
 // ── Shell principal — app de un solo negocio, sin Sidebar global ──
@@ -247,7 +147,6 @@ export default function BerlinShell() {
             </div>
 
             <ComandasPanel />
-            <NotifBell rol={rol} />
             <button
               onClick={() => signOut()}
               title="Cerrar sesión"
