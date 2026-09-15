@@ -18,6 +18,48 @@ const esAdminRol  = (rol) => ROLES_ADMIN.includes(rol);
 // medianoche, perdiendo las de la tarde/noche anterior.
 const TURNO_LIMITE_HORAS_OLVIDADO = 20 // más que esto sin cerrar = probable turno olvidado
 
+// ── Desglose por estación (Comandas Fase 4) — solo ventas de mesa (origen='mesa')
+// en el rango dado, agrupadas por Cocina/Bebidas/etc, con detalle de qué producto
+// salió, cuántas unidades y por cuánto valor. Reporte operativo, no toca el dinero
+// del arqueo (ese sigue calculándose igual, sin filtrar por origen).
+const obtenerDesgloseEstaciones = async (desde, hasta) => {
+  const { data: ventas } = await supabase
+    .from('br_ventas')
+    .select(`
+      id,
+      items:br_venta_items(
+        cantidad, subtotal,
+        producto:producto_id(nombre, categoria:categoria_id(estacion_id, estacion:estacion_id(id, nombre, color)))
+      )
+    `)
+    .eq('estado', 'completada')
+    .eq('origen', 'mesa')
+    .gte('fecha', desde)
+    .lte('fecha', hasta)
+
+  const estaciones = new Map()
+  for (const v of ventas || []) {
+    for (const it of v.items || []) {
+      const est = it.producto?.categoria?.estacion
+      const key = est?.id ?? 'sin_estacion'
+      if (!estaciones.has(key)) {
+        estaciones.set(key, { id: key, nombre: est?.nombre ?? 'Sin estación', color: est?.color ?? '#6B7280', total: 0, items: new Map() })
+      }
+      const bucket = estaciones.get(key)
+      bucket.total += Number(it.subtotal)
+      const nombreProd = it.producto?.nombre ?? 'Producto'
+      const acc = bucket.items.get(nombreProd) || { nombre: nombreProd, cantidad: 0, valor: 0 }
+      acc.cantidad += Number(it.cantidad)
+      acc.valor += Number(it.subtotal)
+      bucket.items.set(nombreProd, acc)
+    }
+  }
+
+  return Array.from(estaciones.values())
+    .map(e => ({ ...e, items: Array.from(e.items.values()).sort((a, b) => b.valor - a.valor) }))
+    .sort((a, b) => b.total - a.total)
+}
+
 const obtenerTurnoAbierto = async (select) => {
   const { data, error } = await supabase
     .from('br_turnos_caja')
@@ -259,7 +301,9 @@ const cerrarCaja = async (req, res, next) => {
       registrado_por:  req.user.id,
     });
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_vendedores: desglosePorVendedor });
+    const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta)
+
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_vendedores: desglosePorVendedor, desglose_estaciones });
   } catch (err) { next(err); }
 };
 
@@ -362,7 +406,9 @@ const cerrarTurnoHistorico = async (req, res, next) => {
       registrado_por:  req.user.id,
     });
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado });
+    const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta);
+
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_estaciones });
   } catch (err) { next(err); }
 };
 
@@ -438,4 +484,21 @@ const ventasTurno = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { turnoActivo, turnoPendiente, turnoNegocioActivo, obtenerCajaHoy, abrirCaja, cerrarCaja, cerrarTurnoHistorico, historial, ventasTurno };
+// ── GET /api/panaderia/caja/desglose-estaciones
+// Vista en vivo (turno abierto, desde apertura_at hasta ahora) — usada por el
+// cierre parcial en el panel. El cierre real recalcula esto mismo con el rango
+// exacto de cada cierre (ver cerrarCaja/cerrarTurnoHistorico).
+const desgloseEstacionesTurno = async (req, res, next) => {
+  try {
+    const turno = await obtenerTurnoAbierto('apertura_at');
+    if (!turno) return res.json([]);
+    const data = await obtenerDesgloseEstaciones(turno.apertura_at, new Date().toISOString());
+    res.set('Cache-Control', 'no-store');
+    res.json(data);
+  } catch (err) { next(err); }
+};
+
+module.exports = {
+  turnoActivo, turnoPendiente, turnoNegocioActivo, obtenerCajaHoy, abrirCaja,
+  cerrarCaja, cerrarTurnoHistorico, historial, ventasTurno, desgloseEstacionesTurno,
+};

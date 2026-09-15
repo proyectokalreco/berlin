@@ -375,6 +375,7 @@ const cobrar = async (req, res, next) => {
         redondeo:        redondeoNum,
         total,
         metodo_pago,
+        origen:          'mesa',
         caja_id:         null,
         notas:           `Mesa ${mesa?.numero ?? ''}${mesa?.nombre ? ' - ' + mesa.nombre : ''}`,
         idempotency_key: idempotency_key || null,

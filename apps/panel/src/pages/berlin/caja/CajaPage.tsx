@@ -42,6 +42,7 @@ interface TurnoCaja {
   usuario_apertura?: { id: string; nombre: string; rol?: string }
   usuario_cierre?: { id: string; nombre: string }
   desglose_vendedores?: { vendedor_id: string | null; nombre: string; total: number; num_ventas: number }[]
+  desglose_estaciones?: { id: string; nombre: string; color: string; total: number; items: { nombre: string; cantidad: number; valor: number }[] }[]
 }
 
 // ── Imprimir reporte de cierre de caja ───────────────────────────
@@ -109,6 +110,15 @@ ${(turno.desglose_vendedores && turno.desglose_vendedores.length > 1) ? `
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">VENTAS POR VENDEDOR</p>
 ${turno.desglose_vendedores.map(d => `<div class="row sm"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>`).join('')}
+` : ''}
+
+${(turno.desglose_estaciones && turno.desglose_estaciones.length > 0) ? `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS</p>
+${turno.desglose_estaciones.map(e => `
+<div class="row b sm" style="margin-top:3px"><span>${e.nombre}</span><span class="amt">${fmt(e.total)}</span></div>
+${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}
+`).join('')}
 ` : ''}
 
 <div class="sep"></div>
@@ -189,6 +199,14 @@ export default function CajaPage() {
   }>({
     queryKey: ['ventas-turno-actual'],
     queryFn:  () => api.get('/berlin/caja/ventas-turno').then(r => r.data),
+    refetchInterval: 30_000,
+    enabled: !!turnoActivo,
+  })
+
+  // ── Despacho por área (Mesas) del turno en curso — para el cierre parcial
+  const { data: estacionesTurno = [] } = useQuery<NonNullable<TurnoCaja['desglose_estaciones']>>({
+    queryKey: ['desglose-estaciones-turno'],
+    queryFn:  () => api.get('/berlin/caja/desglose-estaciones').then(r => r.data),
     refetchInterval: 30_000,
     enabled: !!turnoActivo,
   })
@@ -343,6 +361,14 @@ export default function CajaPage() {
 <div class="row b"><span>Efectivo esperado:</span><span class="amt">${fmt(efectivoEsperadoVivo)}</span></div>
 ${contado > 0 ? `<div class="row"><span>Efectivo contado:</span><span class="amt">${fmt(contado)}</span></div>` : ''}
 ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;border-top:2px solid #000"><span>Diferencia:</span><span class="amt">${dif >= 0 ? '+' : ''}${fmt(dif)}</span></div>` : ''}
+${estacionesTurno.length > 0 ? `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS</p>
+${estacionesTurno.map(e => `
+<div class="row b sm" style="margin-top:3px"><span>${e.nombre}</span><span class="amt">${fmt(e.total)}</span></div>
+${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}
+`).join('')}
+` : ''}
 <div class="sep"></div>
 <div class="c sm"><p>*** LA CAJA SIGUE ABIERTA ***</p><p>Sistema Kalreco v1.0</p></div>
 </body></html>`
