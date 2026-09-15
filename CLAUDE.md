@@ -619,6 +619,98 @@ Cuatro pedidos más del cliente el mismo día, tras confirmar el incidente 22 en
 Sin migración. `tsc --noEmit` + `npm run build` limpios. **✅ Desplegado y confirmado por el
 usuario en producción (2026-09-14, commit `6eaa980`).**
 
+### 24. Módulo Comandas — Mesas enruta a Cocina/Barra por categoría (2026-09-15, 4 fases)
+
+Restaurante con **2 puntos de despacho**: Cocina (comidas/preparaciones, gestionada por
+`cajero1.berlin`) y Bebidas y Barra (jugos/licores/gaseosas/pasteles/vitrina, gestionada por
+`cajero.berlin`). Pedido: al enviar un pedido de mesa, cada cajero debe ver en su propia
+pantalla solo los productos de su área, sin importar de qué mesa vienen, con impresión
+automática de la comanda (sin precios) para control.
+
+**Investigado antes de diseñar** (WebSearch, sistemas KDS reales — Toast/Square): categoría→
+estación con herencia, comanda (sin precio) vs cuenta (con precio) como 2 vistas del mismo
+pedido, ítems con **estado individual** (no "rondas" como entidades separadas) para que un
+pedido en curso distinga lo nuevo de lo ya despachado, cierre de caja (dinero) desacoplado del
+reporte operativo por estación.
+
+**Decisiones confirmadas con el cliente antes de tocar código** (`AskUserQuestion`): el rango
+de mesas mencionado inicialmente (1-8/9-14) NO es una regla real, solo categoría→estación
+enruta; cada "Enviar pedido" manda solo lo nuevo, no reemplaza todo; la comanda se imprime
+automático al enviar (cada estación tiene su propio dispositivo dedicado con la sesión del
+cajero abierta todo el turno, confirmado); el desglose del cierre es solo ventas de mesa, no
+todo el POS.
+
+**Fase 1 — esquema (commit `db9f8db`, migración 099):**
+`br_estaciones` (id, nombre, color, orden, activa) sembrada con "Cocina" y "Bebidas y Barra" —
+escalable a una 3ª estación agregando una fila, sin tocar código. `estacion_id` (FK nullable)
+en `br_categorias` y en `br_empleados` (solo aplica a cargo Cajero). Backend
+`estaciones.controller.js` (CRUD simple) + `/berlin/estaciones`. Selector de estación en
+`ModalGestionCategorias` (`MateriasPrimas.tsx`) y en `EmpleadosPage.tsx`.
+
+**Fase 2 — comandas por estación (commit `9ef1501`, migración 100):**
+`br_orden_mesa_items.enviado_at`/`visto_at`. `enviarPedido` deja de bloquear reenvíos (antes
+rechazaba si la notificación anterior seguía sin leer) — cada click manda solo los ítems con
+`enviado_at IS NULL`, los marca, y notifica. Nuevo `components/ComandasPanel.tsx` — ícono chef
+hat en el header (junto a lo que era la campana), modal **no bloqueante**, poll cada 4s (misma
+infraestructura que ya existía), agrupa por mesa filtrando por la estación del usuario
+(`br_empleados.estacion_id` vía `usuario_id`; admin ve las 2 estaciones juntas). Imprime sola
+la comanda (sin precios, 80mm) apenas detecta ítems nuevos — guarda ids ya impresos en un
+`ref` para no repetir en cada poll. Botón "Preparado" por mesa marca `visto_at` de los ítems
+de esa estación (`PATCH /comandas/mesas/:ordenId/visto`).
+
+**Fase 3 — Mixto en Mesas (commit `34a1637`):** el carrito de Mesas no tenía el método Mixto
+que ya tenía POS. Agregado con el mismo patrón visual (Pago Completo destacado + grid 2
+columnas + inputs "Dividir pago") y misma validación (suma = total, tolerancia $1).
+`mesas.controller.js#cobrar` valida y guarda `monto_efectivo`/`monto_transferencia` en
+`br_ventas` (columnas ya existían, migración 093); el RPC de turno reparte entre los 2
+bolsillos en vez de contar todo como efectivo (mismo bug ya corregido antes en
+`ventas.controller.js`, no se había replicado acá).
+
+**Fase 4 — desglose por estación en el cierre (commit `7018151`, migración 101):**
+`br_ventas.origen` ('pos'|'mesa', default 'pos'; ventas históricas con `notas LIKE 'Mesa %'`
+etiquetadas retroactivo). Helper `obtenerDesgloseEstaciones(desde, hasta)` en
+`caja.controller.js` — suma `br_venta_items` de ventas `origen='mesa'` agrupadas por la
+estación de la categoría del producto (nombre, cantidad, valor). Conectado en `cerrarCaja` y
+`cerrarTurnoHistorico` (mismo rango que ya usan para el arqueo — el dinero no cambia en nada).
+Endpoint `GET /caja/desglose-estaciones` para el cierre parcial (turno en curso). Sección
+"DESPACHO POR ÁREA — MESAS" nueva en el tiquete impreso de los 3 tipos de cierre.
+
+Requiere migraciones 099-101 (repo `kalreco`) aplicadas antes del deploy de cada fase.
+`tsc --noEmit`/`npm run build` (panel) y `node -c` (backend) limpios en las 4.
+**✅ Desplegado y confirmado por el usuario en producción, las 4 fases (2026-09-15).**
+
+### 25. 3 bugs reales encontrados al probar Comandas en producción (2026-09-15)
+
+**Bug 1 — Mesas no agrupaba productos repetidos (commit `675ed9d`).** Captura del cliente: 6
+filas separadas de "AGUA PEQUEÑA" (una por cada tap) en vez de 1 línea con cantidad 4 — el
+carrito de POS sí agrupa. Causa: `agregarItem` (`mesas.controller.js`) siempre insertaba una
+fila nueva, sin lógica de merge. Fix: si el producto (mismo `precio_unitario`/`notas`) ya está
+en la orden **y aún no se envió a las estaciones** (`enviado_at IS NULL`), se suma a esa línea
+en vez de crear otra; un ítem ya enviado nunca se toca — evita que una unidad nueva quede
+invisible para la cocina sin re-enviarse (regla de la Fase 2 intacta).
+
+**Bug 2 — campana de notificaciones sin utilidad, eliminada (mismo commit).** El cliente
+reportó que al desplegar la campana "no hacía nada, solo informar, generaba confusión" —
+confirmado en código: cada notificación era texto plano sin `onClick` ni acción por ítem,
+solo un botón genérico "Marcar leído". El panel de Comandas (Fase 2) ya cubre ese caso con
+acción real (ver ítems por mesa, imprimir, marcar preparado), así que la campana quedó
+redundante y confusa. Se eliminó `NotifBell` completo de `BerlinShell.tsx` (función + render
++ import `Bell` sin uso).
+
+**Bug 3 — Mesas decía "No hay caja abierta" con Caja mostrando "Turno abierto" (commit
+`796bb83`).** Mismo bug del incidente 22 (horario 1pm-5am) pero en un lugar que el fix
+original no tocó: `tomarMesa()` (`mesas.controller.js`) tenía su **propio** chequeo de caja
+duplicado, con la lógica vieja (`fecha=hoy()` + `usuario_apertura_id IN negocioUsers`) —
+nunca se corrigió cuando se arregló `turnoActivo`/`turnoNegocioActivo` en `caja.controller.js`.
+El turno de Luisa, abierto la tarde anterior, seguía abierto — `caja.controller.js` lo
+encontraba bien (sin filtro de fecha), pero `tomarMesa` con la lógica vieja no. Fix: mismo
+criterio en los dos lugares — el turno activo es el único con `estado='abierto'`, sin filtrar
+fecha ni usuario. La regla "solo cierra quien abrió + admin" (incidente 22) seguía bien, no
+se tocó.
+
+Sin migración en los 3. `node -c` limpio (bugs 1 y 3, solo backend); `tsc`+`build` limpios
+(bug 2, solo frontend). **✅ Desplegados y confirmados por el usuario en producción.**
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
