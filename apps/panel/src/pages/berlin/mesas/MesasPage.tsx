@@ -238,8 +238,9 @@ function MesaCard({
 }
 
 // ── Vista de orden (carrito) ──────────────────────────────────
-const ROLES_COBRAR    = ['cajero', 'admin_berlin', 'admin', 'super_admin', 'vendedor']
-const DENOMINACIONES  = [1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000]
+const ROLES_COBRAR      = ['cajero', 'admin_berlin', 'admin', 'super_admin', 'vendedor']
+const ROLES_ADMIN_MESA  = ['admin_berlin', 'admin', 'super_admin']
+const DENOMINACIONES    = [1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000]
 
 // ── Teclado numérico idéntico al POS ─────────────────────────
 function NumPadMesas({ valor, onChange, total }: { valor: string; onChange: (v: string) => void; total: number }) {
@@ -553,6 +554,10 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const { mutate: cancelar } = useMutation({
     mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/cancelar-orden`),
     onSuccess: () => { toast('Orden cancelada'); qc.invalidateQueries({ queryKey: ['mesas'] }); onVolver() },
+    onError: (err: unknown) => {
+      const msg = (err as {response?:{data?:{error?:string}}})?.response?.data?.error
+      toast.error(msg || 'Error al cancelar la orden')
+    },
   })
 
   const total      = orden?.total ?? 0
@@ -560,6 +565,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const totalFinal = total + redond
   const items      = orden?.items ?? []
   const mesero     = mesa.orden_activa?.mesero
+  // Cancelar orden: solo quien tomó la mesa o un admin — mismo criterio que el backend
+  // (antes cualquier cajero podía cancelar la orden de cualquier mesa, hueco real).
+  const nombrePropioCancel = user?.apellido ? `${user.nombre} ${user.apellido}` : user?.nombre ?? ''
+  const puedeCancelar = ROLES_ADMIN_MESA.includes(user?.rol ?? '')
+    || !mesero || mesero.usuario_id === user?.id
+    || (!mesero.usuario_id && !!nombrePropioCancel && mesero.nombre === nombrePropioCancel)
   const efectivoNum = parseInt(efectivoRecibido.replace(/\D/g, '') || '0', 10)
   const cambio     = efectivoNum > totalFinal ? efectivoNum - totalFinal : 0
   const mixtoEfeNum = parseInt(mixtoEfectivo.replace(/\D/g, '') || '0', 10)
@@ -610,10 +621,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
             </p>
           )}
         </div>
-        <button onClick={() => { if(confirm('¿Cancelar la orden y liberar la mesa?')) cancelar() }}
-          className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10">
-          Cancelar orden
-        </button>
+        {puedeCancelar && (
+          <button onClick={() => { if(confirm('¿Cancelar la orden y liberar la mesa?')) cancelar() }}
+            className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10">
+            Cancelar orden
+          </button>
+        )}
       </div>
 
       <div className="flex gap-3 flex-1 min-h-0">
@@ -793,7 +806,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                            text-[#EA580C] font-semibold text-xs transition-colors disabled:opacity-50 min-h-[40px]"
               >
                 <Send size={13}/>
-                {enviando ? 'Enviando…' : 'Enviar pedido al cajero'}
+                {enviando ? 'Enviando…' : 'Enviar pedido comanda'}
               </button>
 
               {/* Botón Cobrar — solo cajero/admin, no mesero */}

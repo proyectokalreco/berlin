@@ -496,11 +496,21 @@ const cobrar = async (req, res, next) => {
 }
 
 // ── POST /mesas/:id/cancelar-orden ───────────────────────────
+// Solo puede cancelar quien tomó la mesa (br_meseros.usuario_id) o un admin —
+// antes cualquier cajero autenticado podía cancelar la orden de cualquier mesa.
+const ROLES_ADMIN_MESA = ['super_admin', 'admin', 'admin_berlin']
 const cancelarOrden = async (req, res, next) => {
   try {
     const { data: orden } = await supabase.from('br_ordenes_mesa')
-      .select('id').eq('mesa_id', req.params.id).eq('estado', 'abierta').maybeSingle()
+      .select('id, mesero:mesero_id(usuario_id, nombre)')
+      .eq('mesa_id', req.params.id).eq('estado', 'abierta').maybeSingle()
     if (!orden) return res.status(404).json({ error: 'Sin orden activa' })
+
+    if (!ROLES_ADMIN_MESA.includes(req.user.rol) && orden.mesero?.usuario_id && orden.mesero.usuario_id !== req.user.id) {
+      return res.status(403).json({
+        error: `Solo ${orden.mesero?.nombre ?? 'quien tomó la mesa'} o un administrador pueden cancelar esta orden.`,
+      })
+    }
 
     await supabase.from('br_ordenes_mesa').update({ estado: 'cancelada' }).eq('id', orden.id)
     await supabase.from('br_mesas').update({ estado: 'libre' }).eq('id', req.params.id)
