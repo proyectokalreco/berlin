@@ -711,6 +711,41 @@ se tocó.
 Sin migración en los 3. `node -c` limpio (bugs 1 y 3, solo backend); `tsc`+`build` limpios
 (bug 2, solo frontend). **✅ Desplegados y confirmados por el usuario en producción.**
 
+### 26. Mesas — modal Sabor+Base Jugos/Limonadas/Aromáticas, igual que POS (2026-09-16, commit `6ff8dbe`)
+
+**Extensión de alcance pedida por el cliente** (no era bug): incidentes 19/20 habían dejado el
+modal Sabor+Base solo en POS por decisión del cliente ("Mesas no se tocó"). El cliente revirtió
+esa decisión: "debe funcionar igual que en el Módulo POS." Se portó verbatim la lógica de
+`POS.tsx` a `MesasPage.tsx` — detección de categoría (`idsJugosAgua`/`idsJugosLeche`/
+`idsLimonadas` vía `normalizar(cat.nombre).includes(...)`, Aromáticas por **nombre de producto**
+`startsWith('aromatica')`), estado `modalVariante`, `confirmarModalVariante`, intercept en el
+click de categoría, y el modal JSX completo (Paso 1 sabor → Paso 2 base+cantidad). `tsc`+`build`
+limpios, solo frontend, sin migración.
+
+**Falso bug reportado después de desplegar:** cliente probó con cajeros (Luisa/Isabela) y el
+modal no aparecía — solo grid plano — mientras que con Marivel (otro cajero) sí funcionaba.
+Parecía un problema de rol, pero `GET /berlin/categorias` no filtra por rol/estación — todos los
+usuarios reciben las mismas categorías, así que el código no podía distinguir por rol. Causa
+real: **Service Worker con bundle viejo cacheado** en el dispositivo de Luisa/Isabela (mismo
+patrón de [[feedback_pwa_service_worker_cache]], van 2 veces ya en Berlín). Confirmado probando
+en incógnito: funciona igual para todos los roles. **No tocar código por reportes de "funciona
+distinto según el usuario" sin antes descartar caché del SW — pedir prueba en incógnito primero.**
+
+**Bug real encontrado el mismo día: renombrar la categoría rompía el modal.** El cliente
+renombró "JUGOS EN LECHE" → "JUGOS" (fusionando/simplificando categorías en Inventario) y el
+modal dejó de aparecer, cayendo al grid plano — en POS y en Mesas. Causa: la detección original
+de `idsJugosAgua`/`idsJugosLeche` exigía que el **nombre de la categoría** contuviera literalmente
+"agua" o "leche" (`normalizar(c.nombre).includes('jugos') && includes('leche')`); al quitar esa
+palabra del nombre, la categoría dejaba de matchear cualquiera de los dos sets → `esJugo` daba
+`false`. Diseño frágil: el modal dependía de cómo el cliente decidiera nombrar sus categorías.
+Fix (POS.tsx y MesasPage.tsx): la categoría "es jugo" ahora solo requiere que el nombre contenga
+"jugo" (`idsJugos`, un único set, sin exigir agua/leche); la **base** (agua/leche) se deriva del
+**nombre del producto** (última palabra), no de en qué categoría vive — así el cliente puede
+fusionar/renombrar categorías de Inventario libremente sin romper el modal. Un producto sin
+sufijo agua/leche en su nombre (caso real: "JUGO MARACUYÁ", sin variante) queda disponible bajo
+cualquiera de los dos botones de base en vez de bloquear el paso 2. `tsc`+`build` limpios, solo
+frontend, sin migración.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.

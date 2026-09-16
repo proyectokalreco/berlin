@@ -372,13 +372,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   })
 
   // ── Jugos/Limonadas/Aromáticas — mismo modal Sabor(+Base) que POS.tsx.
-  // Detección por nombre normalizado, no por ID fijo (ver POS.tsx para el porqué de
-  // `includes` en vez de `startsWith`, y por qué Aromáticas es por nombre de producto).
-  const idsJugosAgua  = useMemo(() => new Set(
-    categorias.filter(c => { const n = normalizar(c.nombre); return n.includes('jugos') && n.includes('agua') }).map(c => c.id)
-  ), [categorias])
-  const idsJugosLeche = useMemo(() => new Set(
-    categorias.filter(c => { const n = normalizar(c.nombre); return n.includes('jugos') && n.includes('leche') }).map(c => c.id)
+  // Detección de categoría por nombre normalizado, no por ID fijo. La base (Agua/Leche) se
+  // deriva del NOMBRE DEL PRODUCTO, no de en qué categoría vive — si el cliente renombra o
+  // fusiona "Jugos en Agua"/"Jugos en Leche" en una sola categoría "Jugos", sigue funcionando
+  // (bug real 2026-09-16: se rompió al renombrar). Ver POS.tsx para el detalle.
+  const idsJugos      = useMemo(() => new Set(
+    categorias.filter(c => normalizar(c.nombre).includes('jugo')).map(c => c.id)
   ), [categorias])
   const idsLimonadas  = useMemo(() => new Set(
     categorias.filter(c => normalizar(c.nombre).includes('limonada')).map(c => c.id)
@@ -388,21 +387,21 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const saboresJugos = useMemo(() => {
     const map = new Map<string, SaborJugo>()
     productos.forEach(p => {
-      const catId   = p.categoria_id ?? ''
-      const enAgua  = idsJugosAgua.has(catId)
-      const enLeche = idsJugosLeche.has(catId)
-      if (!enAgua && !enLeche) return
+      if (!idsJugos.has(p.categoria_id ?? '')) return
       const palabras = p.nombre.trim().split(/\s+/)
       const ultima   = normalizar(palabras[palabras.length - 1])
-      const sabor    = (ultima === 'agua' || ultima === 'leche') ? palabras.slice(0, -1).join(' ') : p.nombre
+      const enAgua   = ultima === 'agua'
+      const enLeche  = ultima === 'leche'
+      const sabor    = (enAgua || enLeche) ? palabras.slice(0, -1).join(' ') : p.nombre
       const key      = normalizar(sabor)
       const entry    = map.get(key) ?? { sabor }
-      if (enAgua)  entry.agua  = p
-      if (enLeche) entry.leche = p
+      if (enAgua)              entry.agua  = p
+      if (enLeche)             entry.leche = p
+      if (!enAgua && !enLeche) { entry.agua = p; entry.leche = p } // producto único sin variante — disponible bajo cualquier base
       map.set(key, entry)
     })
     return Array.from(map.values()).sort((a, b) => a.sabor.localeCompare(b.sabor))
-  }, [productos, idsJugosAgua, idsJugosLeche])
+  }, [productos, idsJugos])
 
   const saboresLimonada = useMemo(
     () => productos.filter(p => idsLimonadas.has(p.categoria_id ?? '')).sort((a, b) => a.nombre.localeCompare(b.nombre)),
@@ -637,7 +636,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               Todos
             </button>
             {categorias.map(c => {
-              const esJugo      = idsJugosAgua.has(c.id) || idsJugosLeche.has(c.id)
+              const esJugo      = idsJugos.has(c.id)
               const esLimonada  = idsLimonadas.has(c.id)
               const esAromatica = normalizar(c.nombre).includes('aromatica')
               const onClickCat = () => {
