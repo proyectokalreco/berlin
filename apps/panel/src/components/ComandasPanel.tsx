@@ -75,9 +75,13 @@ export default function ComandasPanel() {
     enabled: habilitado,
   })
 
-  // Auto-imprimir solo lo nuevo (no reimprime lo ya visto en un poll anterior).
-  // La primera carga del componente (al iniciar sesión) no dispara impresión —
-  // solo lo que llegue después, mientras la pantalla está activa.
+  // Auto-imprimir + alertar solo lo nuevo (no reimprime/re-alerta lo ya visto en un
+  // poll anterior). La primera carga del componente (al iniciar sesión) no dispara
+  // nada de esto — solo lo que llegue después, mientras la pantalla está activa.
+  // Cubre tanto un pedido recién enviado como uno adicional sobre una mesa que esta
+  // misma estación ya había marcado "Preparado" antes (reaparece en la lista con
+  // ítems nuevos) — en ambos casos suena la alerta en la pantalla de cada cajero,
+  // cada una solo para lo que le corresponde a su estación.
   useEffect(() => {
     if (primerCargaRef.current) {
       ordenes.forEach(o => o.items.forEach(i => impresosRef.current.add(i.id)))
@@ -87,6 +91,11 @@ export default function ComandasPanel() {
     for (const o of ordenes) {
       const nuevos = o.items.filter(i => !impresosRef.current.has(i.id))
       if (nuevos.length) {
+        const mesaNom = o.mesa.nombre ? `${o.mesa.numero} — ${o.mesa.nombre}` : `Mesa ${o.mesa.numero}`
+        toast(`🔔 Pedido nuevo — ${mesaNom} (${nuevos.length} ítem${nuevos.length !== 1 ? 's' : ''})`, {
+          duration: 6000,
+          style: { background: '#2C2925', color: '#fff', border: '1px solid #D9A65255' },
+        })
         imprimirComanda(o.mesa, nuevos)
         nuevos.forEach(i => impresosRef.current.add(i.id))
       }
