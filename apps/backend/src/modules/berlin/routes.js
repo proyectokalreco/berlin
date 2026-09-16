@@ -207,6 +207,7 @@ router.post  ('/mesas/:id/tomar',                     mesasCtrl.tomarMesa);
 router.get   ('/mesas/:id/orden',                     mesasCtrl.obtenerOrden);
 router.post  ('/mesas/:id/orden/items',               mesasCtrl.agregarItem);
 router.patch ('/mesas/:id/orden/items/:itemId',       mesasCtrl.actualizarItem);
+router.patch ('/mesas/:id/orden/items/:itemId/servido', mesasCtrl.marcarServidoItem);
 router.delete('/mesas/:id/orden/items/:itemId',       mesasCtrl.eliminarItem);
 router.post  ('/mesas/:id/cobrar',                    mesasCtrl.cobrar);
 router.post  ('/mesas/:id/cancelar-orden',            mesasCtrl.cancelarOrden);

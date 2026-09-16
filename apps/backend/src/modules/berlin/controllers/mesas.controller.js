@@ -14,7 +14,7 @@ const SELECT_MESA = `
     id, mesero_id, estado, total, created_at, notas,
     mesero:mesero_id(id, nombre, color, usuario_id),
     items:br_orden_mesa_items(
-      id, cantidad, precio_unitario, subtotal, notas,
+      id, cantidad, precio_unitario, subtotal, notas, enviado_at, servido_at,
       producto:producto_id(id, nombre, imagen_url, precio_venta, unidad_venta)
     )
   )
@@ -190,7 +190,7 @@ const obtenerOrden = async (req, res, next) => {
         mesa:mesa_id(id, numero, nombre),
         mesero:mesero_id(id, nombre, color),
         items:br_orden_mesa_items(
-          id, cantidad, precio_unitario, subtotal, notas, created_at,
+          id, cantidad, precio_unitario, subtotal, notas, created_at, enviado_at, servido_at,
           producto:producto_id(id, nombre, imagen_url, precio_venta, unidad_venta)
         )
       `)
@@ -327,6 +327,27 @@ const eliminarItem = async (req, res, next) => {
       .eq('id', item.orden_id)
 
     res.json({ ok: true })
+  } catch (err) { next(err) }
+}
+
+// ── PATCH /mesas/:id/orden/items/:itemId/servido ─────────────
+// Estado manual "servido al cliente" — distinto de visto_at (cocina/
+// barra lo preparó). Lo marca el cajero que atiende la mesa. Toggle:
+// si ya estaba servido lo desmarca (por si se marcó por error).
+const marcarServidoItem = async (req, res, next) => {
+  try {
+    const { itemId } = req.params
+    const { data: item } = await supabase.from('br_orden_mesa_items')
+      .select('id, servido_at').eq('id', itemId).maybeSingle()
+    if (!item) return res.status(404).json({ error: 'Ítem no encontrado' })
+
+    const { data, error } = await supabase.from('br_orden_mesa_items')
+      .update({ servido_at: item.servido_at ? null : new Date().toISOString() })
+      .eq('id', itemId)
+      .select('id, servido_at')
+      .single()
+    if (error) throw error
+    res.json(data)
   } catch (err) { next(err) }
 }
 
@@ -673,5 +694,5 @@ const eliminar = async (req, res, next) => {
 module.exports = {
   listar, crear, actualizar, eliminar, abrirMesa, tomarMesa, obtenerOrden,
   agregarItem, actualizarItem, eliminarItem, cobrar, cancelarOrden, enviarPedido,
-  comandasPendientes, marcarVistoItem, marcarVistoMesa,
+  comandasPendientes, marcarVistoItem, marcarVistoMesa, marcarServidoItem,
 }

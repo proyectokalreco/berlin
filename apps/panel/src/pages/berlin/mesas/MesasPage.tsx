@@ -169,6 +169,7 @@ ${datos.efectivo_recibido && datos.metodo_pago === 'efectivo' ? `
 interface Mesero  { id: string; nombre: string; color: string; usuario_id?: string | null }
 interface OrdenItem {
   id: string; cantidad: number; precio_unitario: number; subtotal: number; notas?: string
+  enviado_at?: string | null; servido_at?: string | null
   producto?: { id:string; nombre:string; imagen_url?:string; precio_venta:number; unidad_venta:string }
 }
 interface Orden { id:string; total:number; estado:string; created_at:string; mesero?:Mesero; items:OrdenItem[] }
@@ -187,6 +188,14 @@ function MesaCard({
   // Mesa ocupada por otro: atenuar (fallback por nombre si usuario_id no está vinculado aún)
   const esMia  = !mesero || mesero.usuario_id === currentUserId || !currentUserId
     || (!mesero.usuario_id && !!currentUserName && mesero.nombre === currentUserName)
+
+  // Estado de servido (Fase E) — derivado de los ítems reales, sin columna nueva en mesa.
+  // Solo cuenta ítems ya enviados a las estaciones (enviado_at) — lo que aún está en el
+  // carrito sin enviar no aplica todavía.
+  const enviados = (mesa.orden_activa?.items ?? []).filter(i => i.enviado_at)
+  const estadoServido: 'falta' | 'servido' | null = enviados.length === 0
+    ? null
+    : enviados.some(i => !i.servido_at) ? 'falta' : 'servido'
 
   const tieneImagen = !!mesa.imagen_url
 
@@ -241,6 +250,14 @@ function MesaCard({
           </div>
           <p className="text-xs text-gray-500">{items} producto{items !== 1 ? 's' : ''}</p>
           {total > 0 && <p className="text-sm font-bold" style={{ color: mesero?.color ?? '#00C49A' }}>{fmt(total)}</p>}
+          {estadoServido && (
+            <p className={cn(
+              'text-[10px] font-semibold px-1.5 py-0.5 rounded-md inline-block',
+              estadoServido === 'servido' ? 'bg-green-500/15 text-green-400' : 'bg-[#EA580C]/15 text-[#EA580C]',
+            )}>
+              {estadoServido === 'servido' ? '✓ Todo servido' : '⏳ Falta servir'}
+            </p>
+          )}
         </div>
       )}
       </div>
@@ -481,6 +498,18 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const { mutate: quitarItem } = useMutation({
     mutationFn: (itemId: string) => api.delete(`/berlin/mesas/${mesa.id}/orden/items/${itemId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] }),
+  })
+
+  // Estado "Servido" manual (Fase E) — lo marca quien atiende la mesa al entregar el
+  // producto al cliente, independiente de "Preparado" (que es cocina/barra terminando
+  // de cocinarlo/servirlo en Comandas). Invalida también ['mesas'] para el badge del tablero.
+  const { mutate: marcarServido } = useMutation({
+    mutationFn: (itemId: string) => api.patch(`/berlin/mesas/${mesa.id}/orden/items/${itemId}/servido`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] })
+      qc.invalidateQueries({ queryKey: ['mesas'] })
+    },
+    onError: () => toast.error('Error al marcar servido'),
   })
 
   const { mutate: enviarPedido, isPending: enviando } = useMutation({
@@ -734,8 +763,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               </div>
             )}
             <div className="divide-y divide-white/5">
-              {items.map(item => (
-                <div key={item.id} className="flex items-center gap-2 py-2.5">
+              {items.map(item => {
+                const pendienteServir = !!item.enviado_at && !item.servido_at
+                return (
+                <div key={item.id}
+                  className={cn('flex items-center gap-2 py-2.5 pl-1.5 -ml-1.5',
+                    pendienteServir ? 'border-l-2 border-[#EA580C]/60' : '')}>
                   {/* Mini ícono */}
                   <MiniIconMesa
                     nombre={item.producto?.nombre ?? ''}
@@ -773,15 +806,26 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                     </button>
                   </div>
                   {/* Subtotal + eliminar */}
-                  <div className="text-right flex-shrink-0 min-w-[44px]">
+                  <div className="text-right flex-shrink-0 min-w-[44px] flex flex-col items-end gap-0.5">
                     <p className="text-xs font-bold text-white tabular-nums">{fmt(item.subtotal)}</p>
+                    {item.enviado_at && (
+                      <button
+                        title={item.servido_at ? 'Marcar como pendiente por servir' : 'Marcar como servido'}
+                        onClick={() => marcarServido(item.id)}
+                        className={cn('flex items-center gap-0.5 text-[9px] font-semibold px-1 py-0.5 rounded-md transition-colors',
+                          item.servido_at
+                            ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                            : 'bg-[#EA580C]/15 text-[#EA580C] hover:bg-[#EA580C]/25')}>
+                        <Check size={9}/> {item.servido_at ? 'Servido' : 'Servir'}
+                      </button>
+                    )}
                     <button onClick={() => quitarItem(item.id)}
-                      className="text-gray-600 hover:text-red-400 transition-colors mt-0.5">
+                      className="text-gray-600 hover:text-red-400 transition-colors">
                       <Trash2 size={10}/>
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
 
