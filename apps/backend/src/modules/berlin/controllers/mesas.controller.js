@@ -9,7 +9,7 @@ const supabase = require('../../../config/supabase')
 const { fechaColombia, rangoDiaColombia } = require('../../../utils/fecha')
 
 const SELECT_MESA = `
-  id, numero, nombre, capacidad, estado, activa,
+  id, numero, nombre, capacidad, estado, activa, imagen_url,
   orden_activa:br_ordenes_mesa(
     id, mesero_id, estado, total, created_at, notas,
     mesero:mesero_id(id, nombre, color, usuario_id),
@@ -42,10 +42,10 @@ const listar = async (req, res, next) => {
 // ── POST /mesas ───────────────────────────────────────────────
 const crear = async (req, res, next) => {
   try {
-    const { numero, nombre, capacidad } = req.body
+    const { numero, nombre, capacidad, imagen_url } = req.body
     if (!numero) return res.status(400).json({ error: 'numero requerido' })
     const { data, error } = await supabase.from('br_mesas')
-      .insert({ numero: parseInt(numero), nombre: nombre?.trim() || null, capacidad: parseInt(capacidad) || 4 })
+      .insert({ numero: parseInt(numero), nombre: nombre?.trim() || null, capacidad: parseInt(capacidad) || 4, imagen_url: imagen_url || null })
       .select().single()
     if (error) throw error
     res.status(201).json(data)
@@ -55,9 +55,11 @@ const crear = async (req, res, next) => {
 // ── PUT /mesas/:id ────────────────────────────────────────────
 const actualizar = async (req, res, next) => {
   try {
-    const { numero, nombre, capacidad, activa } = req.body
+    const { numero, nombre, capacidad, activa, imagen_url } = req.body
+    const updates = { numero, nombre: nombre?.trim() || null, capacidad, activa }
+    if (imagen_url !== undefined) updates.imagen_url = imagen_url || null
     const { data, error } = await supabase.from('br_mesas')
-      .update({ numero, nombre: nombre?.trim() || null, capacidad, activa })
+      .update(updates)
       .eq('id', req.params.id).select().single()
     if (error) throw error
     res.json(data)

@@ -15,6 +15,7 @@ import { cn } from '../../../lib/utils'
 import { coincide, normalizar } from '../../../lib/buscar'
 import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import { useAuthStore } from '../../../store/authStore'
+import ProductImageInput from '../../../components/ProductImageInput'
 
 // ── Helpers ───────────────────────────────────────────────────
 const fmt = (n: number) =>
@@ -171,7 +172,7 @@ interface OrdenItem {
   producto?: { id:string; nombre:string; imagen_url?:string; precio_venta:number; unidad_venta:string }
 }
 interface Orden { id:string; total:number; estado:string; created_at:string; mesero?:Mesero; items:OrdenItem[] }
-interface Mesa  { id:string; numero:number; nombre?:string; capacidad:number; estado:'libre'|'ocupada'|'reservada'; orden_activa?:Orden|null }
+interface Mesa  { id:string; numero:number; nombre?:string; capacidad:number; estado:'libre'|'ocupada'|'reservada'; imagen_url?:string|null; orden_activa?:Orden|null }
 
 // ── Card de mesa ──────────────────────────────────────────────
 function MesaCard({
@@ -187,10 +188,12 @@ function MesaCard({
   const esMia  = !mesero || mesero.usuario_id === currentUserId || !currentUserId
     || (!mesero.usuario_id && !!currentUserName && mesero.nombre === currentUserName)
 
+  const tieneImagen = !!mesa.imagen_url
+
   return (
     <button onClick={onClick}
       className={cn(
-        'relative rounded-2xl p-4 border-2 transition-all text-left w-full',
+        'relative rounded-2xl p-4 border-2 transition-all text-left w-full overflow-hidden',
         'hover:scale-[1.02] active:scale-[0.98]',
         libre
           ? 'bg-brand-navy border-white/10 hover:border-white/20'
@@ -201,6 +204,13 @@ function MesaCard({
       )}
       style={!libre ? { borderColor: mesero?.color ?? '#00C49A' } : {}}
     >
+      {tieneImagen && (
+        <>
+          <img src={mesa.imagen_url ?? ''} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(13,27,42,0.35) 0%, rgba(13,27,42,0.85) 100%)' }} />
+        </>
+      )}
+      <div className="relative">
       {/* Número */}
       <div className="flex items-start justify-between mb-3">
         <div>
@@ -233,6 +243,7 @@ function MesaCard({
           {total > 0 && <p className="text-sm font-bold" style={{ color: mesero?.color ?? '#00C49A' }}>{fmt(total)}</p>}
         </div>
       )}
+      </div>
     </button>
   )
 }
@@ -1267,6 +1278,7 @@ function ModalConfigMesas({ onClose }: { onClose: () => void }) {
   const [mNumero, setMNumero]   = useState('')
   const [mNombre, setMNombre]   = useState('')
   const [mCap,    setMCap]      = useState('4')
+  const [mImagen, setMImagen]   = useState('')
 
   const { data: meseros = [], refetch: refMes } = useQuery<(Mesero & { activo?: boolean })[]>({
     queryKey: ['meseros'], queryFn: () => api.get('/berlin/meseros').then(r => r.data),
@@ -1276,13 +1288,14 @@ function ModalConfigMesas({ onClose }: { onClose: () => void }) {
   })
 
   const resetMesero = () => { setFNombre(''); setFPin(''); setFColor('#00C49A'); setEditId(null); setShowNew(false) }
-  const resetMesa   = () => { setMNumero(''); setMNombre(''); setMCap('4'); setEditId(null); setShowNew(false) }
+  const resetMesa   = () => { setMNumero(''); setMNombre(''); setMCap('4'); setMImagen(''); setEditId(null); setShowNew(false) }
 
   const iniciarEditMesero = (m: Mesero) => {
     setEditId(m.id); setFNombre(m.nombre); setFPin(''); setFColor(m.color); setShowNew(false)
   }
   const iniciarEditMesa = (m: Mesa) => {
-    setEditId(m.id); setMNumero(String(m.numero)); setMNombre(m.nombre ?? ''); setMCap(String(m.capacidad)); setShowNew(false)
+    setEditId(m.id); setMNumero(String(m.numero)); setMNombre(m.nombre ?? ''); setMCap(String(m.capacidad))
+    setMImagen(m.imagen_url ?? ''); setShowNew(false)
   }
 
   // Crear mesero
@@ -1309,14 +1322,14 @@ function ModalConfigMesas({ onClose }: { onClose: () => void }) {
 
   // Crear mesa
   const { mutate: crearMesa, isPending: pendMesa } = useMutation({
-    mutationFn: () => api.post('/berlin/mesas', { numero: mNumero, nombre: mNombre.trim() || undefined, capacidad: mCap }),
+    mutationFn: () => api.post('/berlin/mesas', { numero: mNumero, nombre: mNombre.trim() || undefined, capacidad: mCap, imagen_url: mImagen || undefined }),
     onSuccess: () => { toast.success('Mesa creada ✅'); qc.invalidateQueries({ queryKey: ['mesas'] }); resetMesa() },
     onError: (e: unknown) => toast.error((e as any)?.response?.data?.error || 'Error'),
   })
 
   // Editar mesa
   const { mutate: editarMesa, isPending: pendEditMesa } = useMutation({
-    mutationFn: () => api.put(`/berlin/mesas/${editId}`, { numero: parseInt(mNumero), nombre: mNombre.trim() || null, capacidad: parseInt(mCap), activa: true }),
+    mutationFn: () => api.put(`/berlin/mesas/${editId}`, { numero: parseInt(mNumero), nombre: mNombre.trim() || null, capacidad: parseInt(mCap), activa: true, imagen_url: mImagen || null }),
     onSuccess: () => { toast.success('Mesa actualizada'); qc.invalidateQueries({ queryKey: ['mesas'] }); resetMesa() },
     onError: (e: unknown) => toast.error((e as any)?.response?.data?.error || 'Error'),
   })
@@ -1397,6 +1410,10 @@ function ModalConfigMesas({ onClose }: { onClose: () => void }) {
         <input value={mNombre} onChange={e => setMNombre(e.target.value)}
           placeholder="Ej: Terraza, VIP, Jardín…" autoComplete="off"
           className="w-full bg-brand-navy border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-teal"/>
+      </div>
+      <div>
+        <label className="text-xs text-gray-400 mb-1 block">Imagen (opcional)</label>
+        <ProductImageInput value={mImagen} onChange={setMImagen} />
       </div>
       <div className="flex gap-2">
         <button onClick={resetMesa}
