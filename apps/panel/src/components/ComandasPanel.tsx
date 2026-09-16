@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ChefHat, X, Check } from 'lucide-react'
+import { ChefHat, X, Check, Printer } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuthStore } from '../store/authStore'
 
@@ -148,14 +148,24 @@ export default function ComandasPanel() {
                       <p className="text-sm font-bold text-white">
                         {o.mesa.nombre ? `${o.mesa.numero} — ${o.mesa.nombre}` : `Mesa ${o.mesa.numero}`}
                       </p>
-                      <button
-                        disabled={marcando}
-                        onClick={() => marcarMesa(o.orden_id)}
-                        className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg
-                                   bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40"
-                      >
-                        <Check size={11} /> Preparado
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          title="Reimprimir esta comanda"
+                          onClick={() => imprimirComanda(o.mesa, o.items)}
+                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg
+                                     bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                          <Printer size={11} /> Imprimir
+                        </button>
+                        <button
+                          disabled={marcando}
+                          onClick={() => marcarMesa(o.orden_id)}
+                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg
+                                     bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40"
+                        >
+                          <Check size={11} /> Preparado
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-1">
                       {o.items.map(i => (
