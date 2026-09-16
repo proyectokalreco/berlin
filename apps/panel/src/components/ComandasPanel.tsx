@@ -79,6 +79,10 @@ export default function ComandasPanel() {
     queryKey: ['comandas-pendientes'],
     queryFn:  () => api.get('/berlin/comandas/pendientes').then(r => r.data),
     refetchInterval: 4_000,
+    // Sin esto React Query pausa el polling cuando la pestaña/ventana pierde el
+    // foco — en un dispositivo dedicado de cocina/barra que no siempre está en
+    // primer plano, un pedido nuevo no aparecía hasta volver a hacer clic ahí.
+    refetchIntervalInBackground: true,
     enabled: habilitado,
   })
 
@@ -111,14 +115,6 @@ export default function ComandasPanel() {
     }
     if (huboNuevos) setOpen(true)
   }, [ordenes])
-
-  const { mutate: marcarMesa, isPending: marcandoMesa } = useMutation({
-    mutationFn: (ordenId: string) => api.patch(`/berlin/comandas/mesas/${ordenId}/visto`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['comandas-pendientes'] })
-      toast.success('Mesa marcada como preparada')
-    },
-  })
 
   const { mutate: marcarPreparadoItem, isPending: marcandoPreparado } = useMutation({
     mutationFn: (itemId: string) => api.patch(`/berlin/comandas/items/${itemId}/visto`),
@@ -190,15 +186,6 @@ export default function ComandasPanel() {
                         >
                           <Printer size={11} /> Imprimir
                         </button>
-                        <button
-                          title="Marcar todos los ítems de esta mesa como preparados"
-                          disabled={marcandoMesa}
-                          onClick={() => marcarMesa(o.orden_id)}
-                          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg
-                                     bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40"
-                        >
-                          <Check size={11} /> Todo preparado
-                        </button>
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -212,12 +199,13 @@ export default function ComandasPanel() {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {!i.visto_at ? (
                               <button
+                                title="Marcar como preparado apenas termine"
                                 disabled={marcandoPreparado}
                                 onClick={() => marcarPreparadoItem(i.id)}
                                 className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md
-                                           bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40"
+                                           bg-[#EA580C]/15 text-[#EA580C] hover:bg-[#EA580C]/25 transition-colors disabled:opacity-40"
                               >
-                                <Check size={10} /> Preparado
+                                <Check size={10} /> Preparando
                               </button>
                             ) : (
                               <>
