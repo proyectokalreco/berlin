@@ -1,25 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ChefHat, X, Check, Printer } from 'lucide-react'
+import { ChefHat, X, Check, Printer, Utensils } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuthStore } from '../store/authStore'
 
-// Panel de Comandas — Fase 2. Ventana independiente (no bloquea el resto del
-// panel) que muestra, por estación del usuario logueado (Cocina / Bebidas y
-// Barra — br_empleados.estacion_id), los productos de mesa ya enviados y aún
-// no marcados como preparados. admin_berlin/super_admin ven las 2 estaciones
+// Panel de Comandas — Fase 2 (+ ajustes Fase D/E). Ventana independiente (no
+// bloquea el resto del panel) que muestra, por estación del usuario logueado
+// (Cocina / Bebidas y Barra — br_empleados.estacion_id), los productos de mesa
+// ya enviados y aún no servidos. admin_berlin/super_admin ven las 2 estaciones
 // juntas. Polling cada 4s — misma infraestructura que NotifBell.
 //
-// Imprime sola la comanda (sin precios) apenas detecta ítems nuevos — pensado
-// para un dispositivo dedicado por estación con la sesión del cajero abierta
-// todo el turno (confirmado con el cliente). Guarda los ids ya impresos en un
-// ref para no reimprimir en cada poll.
+// Un ítem tiene 2 estados independientes, visibles y accionables acá mismo:
+// "Preparado" (visto_at — cocina/barra terminó) y "Servido" (servido_at — el
+// cajero de la mesa ya lo entregó al cliente). El ítem NO desaparece al marcar
+// Preparado — sigue visible con el botón Servido hasta que también se marca
+// eso, para que el flujo completo quede a la vista en vez de esfumarse.
+//
+// Imprime sola la comanda (sin precios) + toast + auto-abre el panel apenas
+// detecta ítems nuevos (pedido nuevo, incluso sobre una mesa que esta misma
+// estación ya había marcado Preparado antes). Guarda los ids ya impresos en un
+// ref para no reimprimir/re-alertar en cada poll.
 
 const ROLES_COMANDAS = ['cajero', 'admin_berlin', 'super_admin']
 
 interface ComandaItem {
-  id: string; cantidad: number; notas?: string | null; enviado_at: string
+  id: string; cantidad: number; notas?: string | null
+  enviado_at: string; visto_at?: string | null; servido_at?: string | null
   nombre: string; estacion?: { id: string; nombre: string; color?: string } | null
 }
 interface ComandaOrden {
@@ -75,22 +82,24 @@ export default function ComandasPanel() {
     enabled: habilitado,
   })
 
-  // Auto-imprimir + alertar solo lo nuevo (no reimprime/re-alerta lo ya visto en un
-  // poll anterior). La primera carga del componente (al iniciar sesión) no dispara
-  // nada de esto — solo lo que llegue después, mientras la pantalla está activa.
-  // Cubre tanto un pedido recién enviado como uno adicional sobre una mesa que esta
-  // misma estación ya había marcado "Preparado" antes (reaparece en la lista con
-  // ítems nuevos) — en ambos casos suena la alerta en la pantalla de cada cajero,
-  // cada una solo para lo que le corresponde a su estación.
+  // Auto-imprimir + alertar + abrir el panel solo con lo nuevo (no repite lo ya
+  // visto en un poll anterior). La primera carga del componente (al iniciar
+  // sesión) no dispara nada de esto — solo lo que llegue después, mientras la
+  // pantalla está activa. Cubre tanto un pedido recién enviado como uno
+  // adicional sobre una mesa que esta misma estación ya había marcado
+  // "Preparado"/"Servido" antes (reaparece con ítems nuevos) — cada pantalla
+  // de cajero solo alerta de lo que le corresponde a su estación.
   useEffect(() => {
     if (primerCargaRef.current) {
       ordenes.forEach(o => o.items.forEach(i => impresosRef.current.add(i.id)))
       primerCargaRef.current = false
       return
     }
+    let huboNuevos = false
     for (const o of ordenes) {
       const nuevos = o.items.filter(i => !impresosRef.current.has(i.id))
       if (nuevos.length) {
+        huboNuevos = true
         const mesaNom = o.mesa.nombre ? `${o.mesa.numero} — ${o.mesa.nombre}` : `Mesa ${o.mesa.numero}`
         toast(`🔔 Pedido nuevo — ${mesaNom} (${nuevos.length} ítem${nuevos.length !== 1 ? 's' : ''})`, {
           duration: 6000,
@@ -100,13 +109,28 @@ export default function ComandasPanel() {
         nuevos.forEach(i => impresosRef.current.add(i.id))
       }
     }
+    if (huboNuevos) setOpen(true)
   }, [ordenes])
 
-  const { mutate: marcarMesa, isPending: marcando } = useMutation({
+  const { mutate: marcarMesa, isPending: marcandoMesa } = useMutation({
     mutationFn: (ordenId: string) => api.patch(`/berlin/comandas/mesas/${ordenId}/visto`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comandas-pendientes'] })
-      toast.success('Marcado como preparado')
+      toast.success('Mesa marcada como preparada')
+    },
+  })
+
+  const { mutate: marcarPreparadoItem, isPending: marcandoPreparado } = useMutation({
+    mutationFn: (itemId: string) => api.patch(`/berlin/comandas/items/${itemId}/visto`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comandas-pendientes'] }),
+  })
+
+  const { mutate: marcarServidoItem, isPending: marcandoServido } = useMutation({
+    mutationFn: ({ mesaId, itemId }: { mesaId: string; itemId: string }) =>
+      api.patch(`/berlin/mesas/${mesaId}/orden/items/${itemId}/servido`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comandas-pendientes'] })
+      qc.invalidateQueries({ queryKey: ['mesas'] })
     },
   })
 
@@ -167,22 +191,49 @@ export default function ComandasPanel() {
                           <Printer size={11} /> Imprimir
                         </button>
                         <button
-                          disabled={marcando}
+                          title="Marcar todos los ítems de esta mesa como preparados"
+                          disabled={marcandoMesa}
                           onClick={() => marcarMesa(o.orden_id)}
                           className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg
                                      bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40"
                         >
-                          <Check size={11} /> Preparado
+                          <Check size={11} /> Todo preparado
                         </button>
                       </div>
                     </div>
                     <div className="space-y-1">
                       {o.items.map(i => (
-                        <div key={i.id} className="flex items-start gap-2 text-xs text-gray-300 bg-brand-dark rounded-lg px-2.5 py-1.5">
+                        <div key={i.id} className="flex items-center gap-2 text-xs text-gray-300 bg-brand-dark rounded-lg px-2.5 py-1.5">
                           <span className="font-bold text-white flex-shrink-0">{i.cantidad}x</span>
                           <div className="flex-1 min-w-0">
                             <p className="truncate">{i.nombre}</p>
                             {i.notas && <p className="text-[10px] text-gray-500 truncate">{i.notas}</p>}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {!i.visto_at ? (
+                              <button
+                                disabled={marcandoPreparado}
+                                onClick={() => marcarPreparadoItem(i.id)}
+                                className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md
+                                           bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40"
+                              >
+                                <Check size={10} /> Preparado
+                              </button>
+                            ) : (
+                              <>
+                                <span className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md bg-teal-500/15 text-teal-300">
+                                  <Check size={10} /> Preparado
+                                </span>
+                                <button
+                                  disabled={marcandoServido}
+                                  onClick={() => marcarServidoItem({ mesaId: o.mesa.id, itemId: i.id })}
+                                  className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md
+                                             bg-[#D9A652]/15 text-[#D9A652] hover:bg-[#D9A652]/25 transition-colors disabled:opacity-40"
+                                >
+                                  <Utensils size={10} /> Servido
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       ))}

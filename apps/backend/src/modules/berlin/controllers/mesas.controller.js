@@ -589,8 +589,11 @@ const enviarPedido = async (req, res, next) => {
 }
 
 // ── GET /comandas/pendientes ─────────────────────────────────
-// Ítems ya enviados (enviado_at) y aún no atendidos (visto_at IS NULL)
-// de mesas con orden abierta, agrupados por mesa. admin_berlin/
+// Ítems ya enviados (enviado_at) y aún no servidos (servido_at IS NULL)
+// de mesas con orden abierta, agrupados por mesa. Un ítem sigue visible
+// aquí después de "Preparado" (visto_at) — recién desaparece cuando se
+// marca "Servido" en la mesa, para que el cajero vea el flujo completo
+// Pendiente → Preparado → Servido, no que el ítem se esfume. admin_berlin/
 // super_admin ven todas las estaciones; un cajero solo ve la suya
 // (br_empleados.estacion_id vinculado a su usuario_id).
 const comandasPendientes = async (req, res, next) => {
@@ -610,7 +613,7 @@ const comandasPendientes = async (req, res, next) => {
         id,
         mesa:mesa_id(id, numero, nombre),
         items:br_orden_mesa_items(
-          id, cantidad, notas, enviado_at,
+          id, cantidad, notas, enviado_at, visto_at, servido_at,
           producto:producto_id(nombre, categoria:categoria_id(id, estacion_id, estacion:estacion_id(id, nombre, color)))
         )
       `)
@@ -622,10 +625,11 @@ const comandasPendientes = async (req, res, next) => {
         orden_id: o.id,
         mesa:     o.mesa,
         items: (o.items || [])
-          .filter(i => i.enviado_at && !i.visto_at)
+          .filter(i => i.enviado_at && !i.servido_at)
           .filter(i => !estacionId || i.producto?.categoria?.estacion_id === estacionId)
           .map(i => ({
             id: i.id, cantidad: i.cantidad, notas: i.notas, enviado_at: i.enviado_at,
+            visto_at: i.visto_at, servido_at: i.servido_at,
             nombre: i.producto?.nombre ?? 'Producto',
             estacion: i.producto?.categoria?.estacion ?? null,
           })),
