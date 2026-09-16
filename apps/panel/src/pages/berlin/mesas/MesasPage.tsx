@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutGrid, X, Plus, Minus, Trash2, Search, ChevronLeft,
@@ -252,10 +252,12 @@ function MesaCard({
           {total > 0 && <p className="text-sm font-bold" style={{ color: mesero?.color ?? '#00C49A' }}>{fmt(total)}</p>}
           {estadoServido && (
             <p className={cn(
-              'text-[10px] font-semibold px-1.5 py-0.5 rounded-md inline-block',
-              estadoServido === 'servido' ? 'bg-green-500/15 text-green-400' : 'bg-[#EA580C]/15 text-[#EA580C]',
+              'text-xs font-bold px-2 py-1 rounded-lg inline-block',
+              estadoServido === 'servido'
+                ? 'bg-[#D9A652] text-brand-dark animate-pulse'
+                : 'bg-[#EA580C]/15 text-[#EA580C]',
             )}>
-              {estadoServido === 'servido' ? '✓ Todo servido' : '⏳ Falta servir'}
+              {estadoServido === 'servido' ? '💰 Listo para cobrar' : '⏳ Falta servir'}
             </p>
           )}
         </div>
@@ -605,6 +607,23 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const totalFinal = total + redond
   const items      = orden?.items ?? []
   const mesero     = mesa.orden_activa?.mesero
+
+  // Aviso "lista para cobrar" — cuando el último ítem enviado queda servido, avisa
+  // una sola vez (toast) y resalta el botón Cobrar mientras siga en ese estado. Si
+  // llega un pedido nuevo (vuelve a haber algo sin servir) el resaltado se apaga
+  // solo, y si se completa de nuevo, vuelve a avisar.
+  const enviadosOrden = items.filter(i => i.enviado_at)
+  const todoServidoOrden = enviadosOrden.length > 0 && enviadosOrden.every(i => i.servido_at)
+  const todoServidoAntesRef = useRef(false)
+  const [resaltarCobrar, setResaltarCobrar] = useState(false)
+  useEffect(() => {
+    if (todoServidoOrden && !todoServidoAntesRef.current) {
+      toast.success('✅ Todo servido — mesa lista para cobrar', { duration: 6000 })
+      setResaltarCobrar(true)
+    }
+    if (!todoServidoOrden) setResaltarCobrar(false)
+    todoServidoAntesRef.current = todoServidoOrden
+  }, [todoServidoOrden])
   // Cancelar orden: solo quien tomó la mesa o un admin — mismo criterio que el backend
   // (antes cualquier cajero podía cancelar la orden de cualquier mesa, hueco real).
   const nombrePropioCancel = user?.apellido ? `${user.nombre} ${user.apellido}` : user?.nombre ?? ''
@@ -867,9 +886,14 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               {/* Botón Cobrar — solo cajero/admin, no mesero */}
               {puedeCobar && (
                 <button onClick={() => setShowCobrar(true)}
-                  className="w-full py-3 rounded-xl bg-brand-teal hover:bg-[#00A882] text-brand-dark
-                             font-bold text-sm transition-colors min-h-[48px] active:scale-[0.97] select-none">
-                  Cobrar · {fmt(totalFinal)}
+                  className={cn(
+                    'w-full py-3 rounded-xl text-brand-dark font-bold text-sm transition-colors',
+                    'min-h-[48px] active:scale-[0.97] select-none',
+                    resaltarCobrar
+                      ? 'bg-[#D9A652] hover:bg-[#c7913f] ring-2 ring-[#D9A652] ring-offset-2 ring-offset-brand-navy animate-pulse'
+                      : 'bg-brand-teal hover:bg-[#00A882]',
+                  )}>
+                  {resaltarCobrar ? '💰 ' : ''}Cobrar · {fmt(totalFinal)}
                 </button>
               )}
             </div>

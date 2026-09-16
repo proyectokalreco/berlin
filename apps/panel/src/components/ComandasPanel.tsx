@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ChefHat, X, Check, Printer, Utensils } from 'lucide-react'
+import { ChefHat, X, Printer, Utensils } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuthStore } from '../store/authStore'
 
@@ -33,6 +33,14 @@ interface ComandaOrden {
   orden_id: string
   mesa: { id: string; numero: number; nombre?: string | null }
   items: ComandaItem[]
+}
+interface MesaEstado {
+  id: string; numero: number; nombre?: string | null; estado: string
+  orden_activa?: { items: { enviado_at?: string | null; servido_at?: string | null }[] } | null
+}
+function mesaTodoServida(m: MesaEstado) {
+  const enviados = (m.orden_activa?.items ?? []).filter(i => i.enviado_at)
+  return enviados.length > 0 && enviados.every(i => i.servido_at)
 }
 
 function imprimirComanda(mesa: ComandaOrden['mesa'], items: ComandaItem[]) {
@@ -72,6 +80,8 @@ export default function ComandasPanel() {
   const [open, setOpen] = useState(false)
   const impresosRef = useRef<Set<string>>(new Set())
   const primerCargaRef = useRef(true)
+  const servidasAlertadasRef = useRef<Set<string>>(new Set())
+  const primerCargaMesasRef = useRef(true)
 
   const habilitado = !!user && ROLES_COMANDAS.includes(user.rol)
 
@@ -115,6 +125,41 @@ export default function ComandasPanel() {
     }
     if (huboNuevos) setOpen(true)
   }, [ordenes])
+
+  // Aviso informativo (ambas estaciones) cuando una mesa queda TODA servida —
+  // cruza cocina + bebidas y barra, algo que ninguna de las 2 pantallas puede
+  // saber mirando solo sus propios ítems pendientes. Se limpia la marca de
+  // "ya avisado" apenas la mesa deja de estar toda servida (pedido nuevo o se
+  // liberó), para poder volver a avisar si se completa de nuevo.
+  const { data: mesasEstado = [] } = useQuery<MesaEstado[]>({
+    queryKey: ['mesas'],
+    queryFn:  () => api.get('/berlin/mesas').then(r => r.data),
+    refetchInterval: 4_000,
+    refetchIntervalInBackground: true,
+    enabled: habilitado,
+  })
+
+  useEffect(() => {
+    const idsAhora = new Set(mesasEstado.filter(mesaTodoServida).map(m => m.id))
+    for (const id of Array.from(servidasAlertadasRef.current)) {
+      if (!idsAhora.has(id)) servidasAlertadasRef.current.delete(id)
+    }
+    if (primerCargaMesasRef.current) {
+      idsAhora.forEach(id => servidasAlertadasRef.current.add(id))
+      primerCargaMesasRef.current = false
+      return
+    }
+    for (const m of mesasEstado) {
+      if (idsAhora.has(m.id) && !servidasAlertadasRef.current.has(m.id)) {
+        const mesaNom = m.nombre ? `${m.numero} — ${m.nombre}` : `Mesa ${m.numero}`
+        toast(`💰 ${mesaNom} — todo servido, lista para cobrar`, {
+          duration: 6000,
+          style: { background: '#2C2925', color: '#fff', border: '1px solid #D9A65255' },
+        })
+        servidasAlertadasRef.current.add(m.id)
+      }
+    }
+  }, [mesasEstado])
 
   const { mutate: marcarPreparadoItem, isPending: marcandoPreparado } = useMutation({
     mutationFn: (itemId: string) => api.patch(`/berlin/comandas/items/${itemId}/visto`),
@@ -190,29 +235,37 @@ export default function ComandasPanel() {
                     </div>
                     <div className="space-y-1">
                       {o.items.map(i => (
-                        <div key={i.id} className="flex items-center gap-2 text-xs text-gray-300 bg-brand-dark rounded-lg px-2.5 py-1.5">
-                          <span className="font-bold text-white flex-shrink-0">{i.cantidad}x</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="truncate">{i.nombre}</p>
-                            {i.notas && <p className="text-[10px] text-gray-500 truncate">{i.notas}</p>}
+                        <div key={i.id} className="text-xs text-gray-300 bg-brand-dark rounded-lg px-2.5 py-1.5 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-white flex-shrink-0">{i.cantidad}x</span>
+                            <div className="flex-1 min-w-0">
+                              <p>{i.nombre}</p>
+                              {i.notas && <p className="text-[10px] text-gray-500">{i.notas}</p>}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
+                          {/* Fila propia para las acciones — nunca se corta con nombres largos.
+                              Íconos y colores bien distintos: naranja=aún sin cocinar,
+                              azul="cocina/barra ya lo terminó" (NO significa entregado al
+                              cliente), dorado=Servido (el cajero ya lo llevó a la mesa). */}
+                          <div className="flex items-center gap-1.5">
                             {!i.visto_at ? (
                               <button
-                                title="Marcar como preparado apenas termine"
+                                title="Marcar cuando cocina/barra termine de prepararlo"
                                 disabled={marcandoPreparado}
                                 onClick={() => marcarPreparadoItem(i.id)}
                                 className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md
                                            bg-[#EA580C]/15 text-[#EA580C] hover:bg-[#EA580C]/25 transition-colors disabled:opacity-40"
                               >
-                                <Check size={10} /> Preparando
+                                <ChefHat size={10} /> Preparando
                               </button>
                             ) : (
                               <>
-                                <span className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md bg-teal-500/15 text-teal-300">
-                                  <Check size={10} /> Preparado
+                                <span title="Cocina/barra ya lo terminó — falta llevarlo a la mesa"
+                                  className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md bg-blue-500/15 text-blue-300">
+                                  <ChefHat size={10} /> Listo en cocina/barra
                                 </span>
                                 <button
+                                  title="Marcar cuando el cajero ya lo entregó en la mesa"
                                   disabled={marcandoServido}
                                   onClick={() => marcarServidoItem({ mesaId: o.mesa.id, itemId: i.id })}
                                   className="flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-md
