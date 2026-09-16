@@ -336,6 +336,13 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const [mixtoEfectivo,      setMixtoEfectivo]      = useState('')
   const [mixtoTransferencia, setMixtoTransferencia] = useState('')
   const [ventaLibreModal,  setVentaLibreModal]  = useState<{ producto: Producto; nombre: string; precio: string; cantidad: string } | null>(null)
+  const efectivoInputRef = useRef<HTMLInputElement>(null)
+
+  // Foco automático en el campo de efectivo al elegir ese método — igual que POS
+  // (antes era un <p> de solo lectura, sin cursor, aunque el numpad sí escribía el valor).
+  useEffect(() => {
+    if (showCobrar && metodoPago === 'efectivo') efectivoInputRef.current?.focus()
+  }, [showCobrar, metodoPago])
 
   // ── Teclado físico cuando el modal está abierto en modo efectivo ──
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -956,12 +963,23 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               {metodoPago === 'efectivo' && (
                 <div className="space-y-2">
                   <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-3 text-center">
-                    <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">Efectivo recibido</p>
-                    <p className="text-3xl font-bold text-white tabular-nums min-h-[2.2rem]">
-                      {efectivoRecibido
-                        ? fmt(parseInt(efectivoRecibido, 10))
-                        : <span className="text-gray-700">$ 0</span>}
-                    </p>
+                    <label htmlFor="efectivo-input-mesa" className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">
+                      Efectivo recibido
+                    </label>
+                    <div className="relative flex items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-600 mr-1">$</span>
+                      <input
+                        id="efectivo-input-mesa"
+                        ref={efectivoInputRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={efectivoRecibido ? new Intl.NumberFormat('es-CO').format(parseInt(efectivoRecibido, 10)) : ''}
+                        onChange={e => setEfectivoRecibido(e.target.value.replace(/\D/g, ''))}
+                        placeholder="0"
+                        className="bg-transparent text-3xl font-bold text-white tabular-nums text-center
+                                   placeholder:text-gray-700 focus:outline-none w-full max-w-[12rem]"
+                      />
+                    </div>
                   </div>
                   <NumPadMesas valor={efectivoRecibido} onChange={setEfectivoRecibido} total={totalFinal} />
                   {efectivoNum >= totalFinal && totalFinal > 0 && (

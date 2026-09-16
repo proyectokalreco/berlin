@@ -59,7 +59,7 @@ const MODULOS_POR_ROL: Record<string, string[]> = {
   admin:           ALL_MODULES.map(m => m.label),
   admin_berlin: ALL_MODULES.map(m => m.label),
   panadero:        ['Inventario', 'Recetas'],
-  cajero:          ['Caja', 'POS', 'Mesas', 'Facturación Diaria', 'Clientes', 'Cuentas por Cobrar'],
+  cajero:          ['Caja', 'POS', 'Mesas', 'Facturación Diaria', 'Clientes', 'Cuentas por Cobrar', 'Proveedores', 'Gastos', 'Cuentas por Pagar'],
   vendedor:        ['Caja', 'POS', 'Mesas', 'Clientes'],
   mesero:          ['Mesas', 'Inventario'],
   domiciliario:    ['POS'],
