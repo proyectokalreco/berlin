@@ -831,6 +831,59 @@ Gastos y Cuentas por Pagar (ya tenía Cuentas por Cobrar) — el backend no ten�
 Todo `tsc`+`build` limpios en cada commit. **✅ Las 5 fases + las 3 rondas de ajustes,
 desplegadas y confirmadas por el usuario en producción — "todo quedó bien".**
 
+### 28. Login username sin mayúsculas + desglose caja por cajero/módulo + campana + bloqueo Cobrar (2026-09-17)
+
+Cuatro pedidos del cliente el mismo día, todos investigados antes de tocar código (siguiendo
+el patrón habitual de este repo — leer el código real, no suponer).
+
+**1) Login por username sensible a mayúsculas (commit `d7b64df`).** `LUISAH` fallaba con
+"Credenciales inválidas" aunque la contraseña fuera correcta. Causa confirmada en
+`auth/routes.js`: el login normalizaba el correo con `.toLowerCase()` pero **no** el username
+— `.eq('username', identificador)` exacto. Fix: `.ilike('username', identificador)`
+(coincidencia exacta, insensible a mayúsculas, sin comodines) solo para esa rama. La
+contraseña sigue exacta vía `bcrypt.compare()`, sin cambios ahí — a propósito, el cliente pidió
+explícitamente que la contraseña respete mayúsculas/números/símbolos tal cual.
+
+**2) Desglose de ventas por cajero y por módulo (POS/Mesas) en Caja + Facturación (mismo
+commit).** Con la caja compartida entre varios cajeros, el cliente pidió poder ver quién vendió
+qué y desde dónde al cerrar. Investigación encontró 3 huecos reales:
+- `cerrarCaja()` ya tenía `desglose_vendedores` (por cajero) pero sin separar POS de Mesas, y
+  solo se veía en el ticket impreso, nunca en pantalla.
+- `cerrarTurnoHistorico()` (cierre manual/histórico) **no tenía desglose de vendedores en
+  absoluto**.
+- `ventasTurno()` (el que alimenta el Cierre Parcial en vivo) **tampoco lo tenía**.
+
+Fix: helper único `construirDesgloseVendedores(ventas)` en `caja.controller.js` — agrupa por
+`vendedor_id` y anida el total en `{pos, mesa}` usando `br_ventas.origen` (ya existía desde
+migración 101). Usado en los 3 endpoints. `CajaPage.tsx`: tabla en pantalla (card "Resultado
+del cierre" que queda visible tras cerrar, además del modal de Cierre Parcial en vivo) y en el
+ticket impreso de las 3 vistas. `ventas.controller.js listar()` agrega `origen` al select;
+`FacturacionPage.tsx` muestra badge POS/MESA + nombre del cajero por factura (lista, preview y
+export a Excel) — antes el módulo de origen ni se traía del backend.
+
+**3) Alerta de Comandas con sonido (commits `66d4bb7`→`e2dd1f0`).** Pedido: que la alerta de
+pedido nuevo también suene, no solo parpadee. Implementado con Web Audio API, sin archivo de
+audio (`ComandasPanel.tsx`). Primera versión: beep de 1-2 tonos simple. El cliente pidió
+"como campana, con el mayor volumen posible" — segunda versión: varios osciladores en relación
+**inarmónica** (parciales típicos de una campana real, no múltiplos exactos de la fundamental,
+eso es lo que da el timbre metálico) con ataque rápido + decaimiento exponencial lento, picos
+sumando ~0.99 de ganancia (máximo posible sin distorsionar el destino de audio). Pedido nuevo =
+doble campanada; "mesa lista para cobrar" = campanada única en otro tono, para distinguirlas de
+oído. ⚠️ Los navegadores exigen una interacción real (clic/toque) antes de dejar sonar audio —
+en un dispositivo dedicado esto se desbloquea solo con el primer toque de la sesión.
+
+**4) Bloquear "Cobrar" hasta que todo esté servido (commit `e2dd1f0`).** Pedido explícito:
+"que el botón de cobrar en mesas no se active hasta que no se haya servido el pedido... y esté
+todo listo". Antes el botón siempre estaba disponible con `puedeCobar` (solo chequeo de rol).
+Nuevo cálculo `listoParaCobrar = items.length > 0 && items.every(i => i.enviado_at &&
+i.servido_at)` — bloquea si hay algo sin enviar a comanda O sin marcar servido, con mensaje
+explicando cuál de las dos cosas falta. **Mismo candado repetido en el backend** (`cobrar()`
+en `mesas.controller.js`, 400 con mensaje claro) — coincide con [[feedback_bypass_dos_capas]],
+para que no se pueda saltar llamando la API directo.
+
+`node -c`/`tsc`+`build` limpios en todos los commits. **✅ Los 4 puntos desplegados y
+confirmados por el usuario en producción — "ya probé todo muy bien".**
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
