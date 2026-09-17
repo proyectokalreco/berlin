@@ -746,6 +746,91 @@ sufijo agua/leche en su nombre (caso real: "JUGO MARACUYÁ", sin variante) queda
 cualquiera de los dos botones de base en vez de bloquear el paso 2. `tsc`+`build` limpios, solo
 frontend, sin migración.
 
+### 27. Módulo Comandas — 7 pedidos en 5 fases + 3 rondas de ajustes en producción (2026-09-16)
+
+Tras el modal Sabor+Base (incidente 26), el cliente pidió 7 mejoras al módulo Comandas/Mesas.
+Investigado el código existente antes de tocar nada (`mesas.controller.js`, `ComandasPanel.tsx`,
+`MesasPage.tsx`) y presentado un plan por fases — mismo patrón que el módulo Comandas original
+(incidente 24), con confirmación de despliegue entre cada una.
+
+**Fase A (commit `e4ae4d1`, sin migración) — rename + fix real de seguridad.** Botón
+`"Enviar pedido al cajero"` → `"Enviar pedido comanda"`. **Bug real encontrado:**
+`cancelarOrden()` no tenía NINGÚN chequeo de dueño (ni frontend ni backend) — cualquier cajero
+autenticado podía cancelar la orden de **cualquier** mesa. El guardia de "mesa de otro" en
+`handleClickMesa` solo aplicaba a `rol === 'mesero'`, rol que no existe en Berlín (son
+`cajero`/`admin_berlin`/`super_admin`) — nunca corría. Fix en los dos lados: solo
+`br_meseros.usuario_id` del que tomó la mesa + admin como respaldo pueden cancelar (decisión
+explícita del cliente: **solo** cancelar queda restringido, ver/agregar ítems a mesa ajena
+sigue abierto, "porque creo que ya funciona así" — no era cierto, pero el alcance pedido fue
+ese). Coincide con [[feedback_bypass_dos_capas]].
+
+**Fase B (commit `6237a2d`, migración 102) — imagen por mesa.** `br_mesas.imagen_url`, sube
+archivo o pega URL reusando `ProductImageInput` (componente ya existente, mismo endpoint
+`/berlin/upload/imagen*` de productos). `MesaCard` la muestra de fondo con degradado oscuro
+para que el texto siga legible.
+
+**Fase C (commit `da8089c`) — imprimir manual.** Antes `ComandasPanel` solo auto-imprimía al
+detectar ítems nuevos, sin botón para reimprimir después. Botón "Imprimir" agregado junto a
+"Preparado" en cada mesa del desplegable.
+
+**Fase D (commit `3f1b74f`) — alerta de pedido nuevo.** Toast "🔔 Pedido nuevo — Mesa X" cuando
+llegan ítems nuevos a una mesa, incluida una que la estación ya había marcado lista antes.
+
+**Fase E (commit `9d56f66`, migración 103) — estado "Servido" manual.** Nueva columna
+`br_orden_mesa_items.servido_at`, **independiente** de `visto_at` (que significa "cocina/barra
+terminó de preparar", no "el cajero lo entregó al cliente"). Botón por ítem en el carrito de
+Mesas (`Servir`/`Servido`), badge en `MesaCard` calculado en vivo desde los ítems reales (sin
+columna nueva en la mesa).
+
+**Ronda de ajustes 1 (commit `85a8f94`) — tras la primera prueba.** El cliente reportó: (1) el
+badge de la mesa no salía — resultó ser Service Worker cacheado, confirmado en incógnito, no
+bug; (2) el desplegable de Comandas solo tenía Imprimir/Preparado, sin forma de marcar Servido
+ahí mismo — pedido explícito: **"esto debe ser más dinámico"**. Cambio real:
+`comandasPendientes()` dejó de ocultar el ítem al marcar `visto_at` (antes desaparecía de la
+lista apenas "preparado", sin dar chance de ver/accionar el segundo estado) — ahora solo
+desaparece al marcar `servido_at`. Botón Preparado y botón Servido por ítem, directo en el
+desplegable. El panel ya no solo parpadea el ícono: se abre solo (`setOpen(true)`) cuando llega
+un pedido nuevo.
+
+**Ronda de ajustes 2 (commit `89b05d5`) — tras la segunda prueba.** El cliente insistió:
+**"no le coloques el chulo verde por defecto, deja que lo haga manualmente el cajero"** — el
+botón "Todo preparado" (marcaba en bloque, en silencio) se **eliminó por completo**; cada ítem
+se marca uno por uno, nunca en bloque ni automático. Botón inicial por ítem "Preparado" →
+"Preparando" (más claro: representa que aún se está preparando, no que ya terminó). **Bug real
+encontrado:** la query de `comandas-pendientes` usa `refetchInterval: 4_000`, pero React Query
+**pausa ese polling cuando la pestaña/ventana pierde el foco** (`refetchIntervalInBackground`
+por defecto `false`) — en un dispositivo dedicado de cocina/barra que no siempre está en primer
+plano, un pedido nuevo no aparecía solo. Causa real del reporte "cuando adiciono otro producto
+no se muestra en el listado de la mesa" (confirmado con el cliente: no había presionado
+"Enviar pedido comanda" en la prueba anterior — pero el bug de polling en 2º plano era real
+igual, corregido a la vez).
+
+**Ronda de ajustes 3 (commit `50bc5c1`) — tras la tercera prueba.** El cliente señaló
+confusión real: la etiqueta estática "✓ Preparado" (cocina/barra terminó) se veía casi igual
+al botón "Servido" (cajero entregó), mismo verde/check — un cajero podía pensar que ya se
+sirvió cuando ni siquiera salió de cocina. Fix: "Listo en cocina/barra" con ícono `ChefHat`
+azul, distinto del botón dorado "Servido" con ícono `Utensils`; fila de acciones aparte del
+nombre para que nunca quede cortada con nombres de producto largos. **Pregunta de diseño del
+cliente:** *"cuando todo está preparado y servido... ¿qué debe hacer el sistema para indicarle
+al cajero que puede cobrar?"* — resuelto con 3 elementos (las 3 opciones que el cliente pidió
+juntas): badge de la mesa más notorio (`💰 Listo para cobrar`, dorado pulsando), toast + botón
+Cobrar resaltado/pulsando en el carrito la primera vez que la mesa completa queda servida, y
+alerta cruzada también en `ComandasPanel` (ambas estaciones) — necesaria porque ninguna
+pantalla de estación puede saber que la mesa quedó *toda* servida mirando solo sus propios
+ítems (una mesa puede tener productos de Cocina y de Barra a la vez); el panel ahora también
+sondea `/berlin/mesas` para detectarlo.
+
+**Ajustes finales (commit `929c65e`, sin migración).** Campo "Efectivo recibido" del modal de
+cobro en Mesas era un `<p>` de solo lectura sin cursor (el numpad sí escribía el valor, pero
+sin foco visible) — cambiado a `<input>` real con foco automático al elegir Efectivo, mismo
+patrón que ya tenía `POS.tsx` (`efectivoInputRef` + `useEffect`), que se le había quedado por
+fuera al clonar el flujo a Mesas. Rol `cajero` ganó acceso en el Dashboard a Proveedores,
+Gastos y Cuentas por Pagar (ya tenía Cuentas por Cobrar) — el backend no tenía ningún
+`authorize()` en esas rutas, el único candado era el tile del Dashboard (`MODULOS_POR_ROL`).
+
+Todo `tsc`+`build` limpios en cada commit. **✅ Las 5 fases + las 3 rondas de ajustes,
+desplegadas y confirmadas por el usuario en producción — "todo quedó bien".**
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.

@@ -41,8 +41,14 @@ interface TurnoCaja {
   notas_cierre?: string
   usuario_apertura?: { id: string; nombre: string; rol?: string }
   usuario_cierre?: { id: string; nombre: string }
-  desglose_vendedores?: { vendedor_id: string | null; nombre: string; total: number; num_ventas: number }[]
+  desglose_vendedores?: DesgloseVendedor[]
   desglose_estaciones?: { id: string; nombre: string; color: string; total: number; items: { nombre: string; cantidad: number; valor: number }[] }[]
+}
+
+interface DesgloseVendedor {
+  vendedor_id: string | null; nombre: string; total: number; num_ventas: number
+  pos:  { total: number; num_ventas: number }
+  mesa: { total: number; num_ventas: number }
 }
 
 // ── Imprimir reporte de cierre de caja ───────────────────────────
@@ -108,8 +114,12 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 
 ${(turno.desglose_vendedores && turno.desglose_vendedores.length > 1) ? `
 <div class="sep"></div>
-<p class="b sm" style="margin-bottom:3px">VENTAS POR VENDEDOR</p>
-${turno.desglose_vendedores.map(d => `<div class="row sm"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>`).join('')}
+<p class="b sm" style="margin-bottom:3px">VENTAS POR CAJERO — POS / MESAS</p>
+${turno.desglose_vendedores.map(d => `
+<div class="row b sm" style="margin-top:3px"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>
+${d.pos.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;POS (${d.pos.num_ventas})</span><span class="amt">${fmt(d.pos.total)}</span></div>` : ''}
+${d.mesa.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Mesas (${d.mesa.num_ventas})</span><span class="amt">${fmt(d.mesa.total)}</span></div>` : ''}
+`).join('')}
 ` : ''}
 
 ${(turno.desglose_estaciones && turno.desglose_estaciones.length > 0) ? `
@@ -170,6 +180,9 @@ export default function CajaPage() {
   // Conteo aleatorio — paso 2 del cierre
   const [cierreStep,    setCierreStep]    = useState<1|2>(1)
   const [conteoItems,   setConteoItems]   = useState<{id:string;nombre:string;imagen_url?:string;stock_actual:number;contado:string}[]>([])
+  // Resultado del último cierre (final o histórico) — se muestra en pantalla además
+  // de imprimirse, hasta que el cajero lo cierra o navega a otra pestaña.
+  const [ultimoCierre, setUltimoCierre] = useState<TurnoCaja | null>(null)
 
   // ── Turno activo ──
   const { data: turnoActivo, isLoading } = useQuery<TurnoCaja | null>({
@@ -196,6 +209,7 @@ export default function CajaPage() {
   const { data: ventasTurno } = useQuery<{
     total_ventas: number; num_ventas: number; efectivo: number;
     transferencias: number; credito: number; ticket_promedio: number
+    desglose_vendedores?: DesgloseVendedor[]
   }>({
     queryKey: ['ventas-turno-actual'],
     queryFn:  () => api.get('/berlin/caja/ventas-turno').then(r => r.data),
@@ -261,7 +275,7 @@ export default function CajaPage() {
       queryClient.invalidateQueries({ queryKey: ['caja-turno-pendiente'] })
       queryClient.invalidateQueries({ queryKey: ['turno-activo-mesas'] })
       queryClient.invalidateQueries({ queryKey: ['turno-negocio-activo'] })
-      if (res.data) imprimirCierre(res.data, user?.nombre ?? 'Admin')
+      if (res.data) { setUltimoCierre(res.data); imprimirCierre(res.data, user?.nombre ?? 'Admin') }
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -285,7 +299,7 @@ export default function CajaPage() {
       queryClient.invalidateQueries({ queryKey: ['caja-historial'] })
       queryClient.invalidateQueries({ queryKey: ['caja-turno-pendiente'] })
       queryClient.invalidateQueries({ queryKey: ['ventas-turno-actual'] })
-      if (res.data) imprimirCierre(res.data, user?.nombre ?? 'Admin')
+      if (res.data) { setUltimoCierre(res.data); imprimirCierre(res.data, user?.nombre ?? 'Admin') }
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -354,6 +368,15 @@ export default function CajaPage() {
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(t?.transferencias ?? 0)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(t?.credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${t?.num_ventas ?? 0}</span></div>
+${(t?.desglose_vendedores && t.desglose_vendedores.length > 1) ? `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">VENTAS POR CAJERO — POS / MESAS</p>
+${t.desglose_vendedores.map(d => `
+<div class="row b sm" style="margin-top:3px"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>
+${d.pos.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;POS (${d.pos.num_ventas})</span><span class="amt">${fmt(d.pos.total)}</span></div>` : ''}
+${d.mesa.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Mesas (${d.mesa.num_ventas})</span><span class="amt">${fmt(d.mesa.total)}</span></div>` : ''}
+`).join('')}
+` : ''}
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
@@ -408,6 +431,43 @@ ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.
           </span>
         </div>
       </div>
+
+      {/* ═══ RESULTADO DEL ÚLTIMO CIERRE — POS/Mesas por cajero ═══ */}
+      {ultimoCierre?.desglose_vendedores && ultimoCierre.desglose_vendedores.length > 1 && (
+        <div className="bg-brand-navy rounded-2xl border border-brand-teal/20 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-white flex items-center gap-2">
+              <FileBarChart2 size={16} className="text-brand-teal" />
+              Resultado del cierre — {ultimoCierre.fecha} · Ventas por cajero (POS/Mesas)
+            </p>
+            <button onClick={() => setUltimoCierre(null)} className="text-gray-500 hover:text-white">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {ultimoCierre.desglose_vendedores.map(d => (
+              <div key={d.vendedor_id ?? 'sin_asignar'} className="bg-brand-dark rounded-xl p-3 border border-white/5">
+                <div className="flex justify-between font-bold text-sm">
+                  <span className="text-white">{d.nombre} <span className="text-gray-500 font-normal">({d.num_ventas})</span></span>
+                  <span className="text-brand-teal font-mono">{fmt(d.total)}</span>
+                </div>
+                {d.pos.num_ventas > 0 && (
+                  <div className="flex justify-between text-xs pl-2 mt-1">
+                    <span className="text-gray-500">POS ({d.pos.num_ventas})</span>
+                    <span className="text-gray-300 font-mono">{fmt(d.pos.total)}</span>
+                  </div>
+                )}
+                {d.mesa.num_ventas > 0 && (
+                  <div className="flex justify-between text-xs pl-2">
+                    <span className="text-gray-500">Mesas ({d.mesa.num_ventas})</span>
+                    <span className="text-gray-300 font-mono">{fmt(d.mesa.total)}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══ TURNO ACTIVO ════════════════════════════════════════ */}
       {turnoActivo ? (
@@ -932,6 +992,32 @@ ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.
                 <span className="text-white font-mono">{fmt(efectivoEsperadoVivo)}</span>
               </div>
             </div>
+
+            {ventasTurno?.desglose_vendedores && ventasTurno.desglose_vendedores.length > 1 && (
+              <div className="bg-brand-dark rounded-xl p-4 space-y-2 border border-white/5 text-sm">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Por cajero — POS / Mesas</p>
+                {ventasTurno.desglose_vendedores.map(d => (
+                  <div key={d.vendedor_id ?? 'sin_asignar'} className="space-y-0.5">
+                    <div className="flex justify-between font-bold">
+                      <span className="text-white">{d.nombre} <span className="text-gray-500 font-normal">({d.num_ventas})</span></span>
+                      <span className="text-brand-teal font-mono">{fmt(d.total)}</span>
+                    </div>
+                    {d.pos.num_ventas > 0 && (
+                      <div className="flex justify-between text-xs pl-2">
+                        <span className="text-gray-500">POS ({d.pos.num_ventas})</span>
+                        <span className="text-gray-300 font-mono">{fmt(d.pos.total)}</span>
+                      </div>
+                    )}
+                    {d.mesa.num_ventas > 0 && (
+                      <div className="flex justify-between text-xs pl-2">
+                        <span className="text-gray-500">Mesas ({d.mesa.num_ventas})</span>
+                        <span className="text-gray-300 font-mono">{fmt(d.mesa.total)}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div>
               <label className="text-xs text-gray-400 font-medium block mb-1">

@@ -37,6 +37,7 @@ interface Venta {
   metodo_pago: string
   estado: string
   notas?: string
+  origen?: 'pos' | 'mesa'
   cliente?: { id: string; nombre: string } | null
   vendedor?: { id: string; nombre: string } | null
   items?: VentaItem[]
@@ -144,6 +145,19 @@ function MetodoBadge({ m }: { m: string }) {
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cls}`}>{lbl.toUpperCase()}</span>
 }
 
+// Módulo desde donde se originó la venta (br_ventas.origen, migración 101) — control
+// de qué cajero vendió desde dónde, sobre todo con caja compartida.
+function OrigenBadge({ origen }: { origen?: 'pos' | 'mesa' }) {
+  const esMesa = origen === 'mesa'
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+      esMesa ? 'bg-[#00C49A]/15 text-[#00C49A] border-[#00C49A]/30' : 'bg-[#EA580C]/15 text-[#EA580C] border-[#EA580C]/30'
+    }`}>
+      {esMesa ? 'MESA' : 'POS'}
+    </span>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────
 export default function FacturacionPage() {
   const queryClient = useQueryClient()
@@ -216,6 +230,7 @@ export default function FacturacionPage() {
         'Método pago': v.metodo_pago,
         Estado:        v.estado,
         Cajero:        v.vendedor?.nombre ?? '',
+        Módulo:        v.origen === 'mesa' ? 'Mesas' : 'POS',
         Cliente:       v.cliente?.nombre ?? '',
       }))
     )
@@ -487,7 +502,9 @@ export default function FacturacionPage() {
                         {new Date(v.fecha).toLocaleTimeString('es-CO', { timeZone:'America/Bogota', hour:'2-digit', minute:'2-digit' })}
                       </p>
                       <MetodoBadge m={v.metodo_pago}/>
-                      {v.cliente && <span className="text-[10px] text-gray-500">{v.cliente.nombre}</span>}
+                      <OrigenBadge origen={v.origen}/>
+                      {v.vendedor && <span className="text-[10px] text-gray-500">{v.vendedor.nombre}</span>}
+                      {v.cliente && <span className="text-[10px] text-gray-500">· {v.cliente.nombre}</span>}
                     </div>
                   </div>
                   <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${anulada ? 'line-through text-gray-500' : 'text-white'}`}>
@@ -566,6 +583,7 @@ export default function FacturacionPage() {
                   ['Número',        preview.numero_venta],
                   ['Fecha', new Date(preview.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota', day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' })],
                   ['Cajero',        preview.vendedor?.nombre ?? '—'],
+                  ['Módulo',        preview.origen === 'mesa' ? 'Mesas' : 'POS'],
                   ['Cliente',       preview.cliente?.nombre ?? 'Consumidor final'],
                   ['Método de pago',preview.metodo_pago],
                 ].map(([l, v]) => (

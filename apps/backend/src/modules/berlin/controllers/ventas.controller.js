@@ -10,7 +10,7 @@ const listar = async (req, res, next) => {
       .from('br_ventas')
       .select(`
         id, numero_venta, fecha, total, subtotal, descuento,
-        metodo_pago, estado, es_domicilio, notas,
+        metodo_pago, estado, es_domicilio, notas, origen,
         cliente:cliente_id(id, nombre, telefono),
         vendedor:vendedor_id(id, nombre),
         items:br_venta_items(cantidad, precio_unitario, subtotal, producto:producto_id(nombre))

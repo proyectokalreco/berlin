@@ -31,11 +31,15 @@ router.post('/login', [
   const { password } = req.body;
   const esEmail = identificador.includes('@');
 
-  const { data: user, error } = await supabase
+  // Username: coincidencia exacta pero insensible a mayúsculas (ilike sin comodines) —
+  // "LUISAH" debe entrar igual que "luisah". La contraseña sigue exacta (bcrypt.compare).
+  let userQuery = supabase
     .from('usuarios')
-    .select('id, email, username, password_hash, nombre, apellido, rol, negocio_id, activo, avatar_url')
-    .eq(esEmail ? 'email' : 'username', esEmail ? identificador.toLowerCase() : identificador)
-    .maybeSingle();
+    .select('id, email, username, password_hash, nombre, apellido, rol, negocio_id, activo, avatar_url');
+  userQuery = esEmail
+    ? userQuery.eq('email', identificador.toLowerCase())
+    : userQuery.ilike('username', identificador);
+  const { data: user, error } = await userQuery.maybeSingle();
 
   if (error || !user) {
     return res.status(401).json({ error: 'Credenciales inválidas' });

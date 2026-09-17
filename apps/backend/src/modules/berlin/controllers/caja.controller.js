@@ -60,6 +60,30 @@ const obtenerDesgloseEstaciones = async (desde, hasta) => {
     .sort((a, b) => b.total - a.total)
 }
 
+// Desglose de ventas por cajero, separado además por módulo (POS/Mesas) — control
+// de quién vendió qué y desde dónde, para una caja compartida entre varios cajeros.
+// Espera filas de br_ventas con vendedor_id, vendedor:vendedor_id(nombre), origen, total.
+const construirDesgloseVendedores = (ventas) => {
+  const map = new Map()
+  for (const v of ventas) {
+    const key    = v.vendedor_id || 'sin_asignar'
+    const nombre = v.vendedor?.nombre || 'Sin asignar'
+    const acc = map.get(key) || {
+      vendedor_id: v.vendedor_id, nombre, total: 0, num_ventas: 0,
+      pos:  { total: 0, num_ventas: 0 },
+      mesa: { total: 0, num_ventas: 0 },
+    }
+    const monto = parseFloat(v.total)
+    acc.total += monto
+    acc.num_ventas += 1
+    const bucket = v.origen === 'mesa' ? acc.mesa : acc.pos
+    bucket.total += monto
+    bucket.num_ventas += 1
+    map.set(key, acc)
+  }
+  return Array.from(map.values()).sort((a, b) => b.total - a.total)
+}
+
 const obtenerTurnoAbierto = async (select) => {
   const { data, error } = await supabase
     .from('br_turnos_caja')
@@ -225,7 +249,7 @@ const cerrarCaja = async (req, res, next) => {
     // las de quien cierra. vendedor_id de cada venta identifica quién la hizo.
     const { data: ventasData } = await supabase
       .from('br_ventas')
-      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia, vendedor_id, vendedor:vendedor_id(nombre)')
+      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia, vendedor_id, origen, vendedor:vendedor_id(nombre)')
       .eq('estado', 'completada')
       .gte('fecha', desde)
       .lte('fecha', hasta);
@@ -242,17 +266,9 @@ const cerrarCaja = async (req, res, next) => {
       + ventas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_transferencia) || 0), 0);
     const totalCredito         = ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0);
 
-    // Desglose por vendedor — para control de quién vendió qué al cerrar el día
-    const desgloseMap = new Map();
-    for (const v of ventas) {
-      const key = v.vendedor_id || 'sin_asignar';
-      const nombre = v.vendedor?.nombre || 'Sin asignar';
-      const acc = desgloseMap.get(key) || { vendedor_id: v.vendedor_id, nombre, total: 0, num_ventas: 0 };
-      acc.total += parseFloat(v.total);
-      acc.num_ventas += 1;
-      desgloseMap.set(key, acc);
-    }
-    const desglosePorVendedor = Array.from(desgloseMap.values()).sort((a, b) => b.total - a.total);
+    // Desglose por vendedor, separado por módulo (POS/Mesas) — control de quién vendió
+    // qué y desde dónde al cerrar el día.
+    const desglosePorVendedor = construirDesgloseVendedores(ventas);
 
     // Gastos del turno
     const { data: gastosData } = await supabase
@@ -348,7 +364,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
     // Caja compartida: ventas de TODOS los que vendieron ese día, no solo las de quien abrió
     const { data: ventasData } = await supabase
       .from('br_ventas')
-      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia')
+      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia, vendedor_id, origen, vendedor:vendedor_id(nombre)')
       .eq('estado', 'completada')
       .gte('fecha', desde)
       .lte('fecha', hasta);
@@ -407,8 +423,9 @@ const cerrarTurnoHistorico = async (req, res, next) => {
     });
 
     const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta);
+    const desglose_vendedores = construirDesgloseVendedores(ventas);
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_estaciones });
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_estaciones, desglose_vendedores });
   } catch (err) { next(err); }
 };
 
@@ -455,12 +472,12 @@ const ventasTurno = async (req, res, next) => {
   try {
     const turno = await obtenerTurnoAbierto('apertura_at');
     if (!turno) {
-      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, ticket_promedio: 0 });
+      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, ticket_promedio: 0, desglose_vendedores: [] });
     }
 
     const { data } = await supabase
       .from('br_ventas')
-      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia')
+      .select('total, metodo_pago, estado, monto_efectivo, monto_transferencia, vendedor_id, origen, vendedor:vendedor_id(nombre)')
       .eq('estado', 'completada')
       .gte('fecha', turno.apertura_at);
 
@@ -480,6 +497,7 @@ const ventasTurno = async (req, res, next) => {
       transferencias,
       credito:        ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
       ticket_promedio: ventas.length > 0 ? totalVentas / ventas.length : 0,
+      desglose_vendedores: construirDesgloseVendedores(ventas),
     });
   } catch (err) { next(err); }
 };
