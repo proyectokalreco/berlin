@@ -373,10 +373,22 @@ const cobrar = async (req, res, next) => {
 
     // Obtener orden activa con items
     const { data: orden } = await supabase.from('br_ordenes_mesa')
-      .select(`id, total, mesa_id, mesero_id, items:br_orden_mesa_items(producto_id, cantidad, precio_unitario, subtotal)`)
+      .select(`id, total, mesa_id, mesero_id, items:br_orden_mesa_items(producto_id, cantidad, precio_unitario, subtotal, enviado_at, servido_at)`)
       .eq('mesa_id', mesaId).eq('estado', 'abierta').maybeSingle()
     if (!orden) return res.status(404).json({ error: 'Sin orden activa' })
     if (!orden.items?.length) return res.status(400).json({ error: 'La orden no tiene ítems' })
+
+    // No se puede cobrar una mesa con productos sin enviar o sin servir — mismo
+    // candado del frontend, repetido acá para que no se pueda saltar por API directa.
+    const sinEnviar = orden.items.some(i => !i.enviado_at)
+    const sinServir = orden.items.some(i => !i.servido_at)
+    if (sinEnviar || sinServir) {
+      return res.status(400).json({
+        error: sinEnviar
+          ? 'No se puede cobrar: hay productos sin enviar a comanda.'
+          : 'No se puede cobrar: hay productos sin servir en la mesa.',
+      })
+    }
 
     const { data: mesa } = await supabase.from('br_mesas').select('numero, nombre').eq('id', mesaId).single()
 

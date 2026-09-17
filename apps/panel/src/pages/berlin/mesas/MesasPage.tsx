@@ -621,6 +621,10 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   // solo, y si se completa de nuevo, vuelve a avisar.
   const enviadosOrden = items.filter(i => i.enviado_at)
   const todoServidoOrden = enviadosOrden.length > 0 && enviadosOrden.every(i => i.servido_at)
+  // Cobrar solo si TODO lo que hay en el carrito ya se envió Y se sirvió — evita
+  // cobrar una cuenta con algo pendiente en cocina/barra o sin enviar todavía.
+  const listoParaCobrar = items.length > 0 && items.every(i => i.enviado_at && i.servido_at)
+  const faltaPorEnviar  = items.some(i => !i.enviado_at)
   const todoServidoAntesRef = useRef(false)
   const [resaltarCobrar, setResaltarCobrar] = useState(false)
   useEffect(() => {
@@ -890,18 +894,30 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                 {enviando ? 'Enviando…' : 'Enviar pedido comanda'}
               </button>
 
-              {/* Botón Cobrar — solo cajero/admin, no mesero */}
+              {/* Botón Cobrar — solo cajero/admin, no mesero. Bloqueado hasta que
+                  todo lo del carrito esté enviado Y servido. */}
               {puedeCobar && (
-                <button onClick={() => setShowCobrar(true)}
-                  className={cn(
-                    'w-full py-3 rounded-xl text-brand-dark font-bold text-sm transition-colors',
-                    'min-h-[48px] active:scale-[0.97] select-none',
-                    resaltarCobrar
-                      ? 'bg-[#D9A652] hover:bg-[#c7913f] ring-2 ring-[#D9A652] ring-offset-2 ring-offset-brand-navy animate-pulse'
-                      : 'bg-brand-teal hover:bg-[#00A882]',
-                  )}>
-                  {resaltarCobrar ? '💰 ' : ''}Cobrar · {fmt(totalFinal)}
-                </button>
+                <>
+                  <button onClick={() => setShowCobrar(true)}
+                    disabled={!listoParaCobrar}
+                    title={!listoParaCobrar ? (faltaPorEnviar ? 'Falta enviar el pedido a comanda' : 'Falta servir productos en la mesa') : undefined}
+                    className={cn(
+                      'w-full py-3 rounded-xl text-brand-dark font-bold text-sm transition-colors',
+                      'min-h-[48px] active:scale-[0.97] select-none',
+                      !listoParaCobrar
+                        ? 'bg-white/5 text-gray-600 cursor-not-allowed'
+                        : resaltarCobrar
+                          ? 'bg-[#D9A652] hover:bg-[#c7913f] ring-2 ring-[#D9A652] ring-offset-2 ring-offset-brand-navy animate-pulse'
+                          : 'bg-brand-teal hover:bg-[#00A882]',
+                    )}>
+                    {resaltarCobrar && listoParaCobrar ? '💰 ' : ''}Cobrar · {fmt(totalFinal)}
+                  </button>
+                  {!listoParaCobrar && items.length > 0 && (
+                    <p className="text-[10px] text-center text-[#EA580C] -mt-1">
+                      {faltaPorEnviar ? '⏳ Falta enviar el pedido a comanda' : '⏳ Falta servir productos en la mesa'}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}

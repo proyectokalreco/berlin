@@ -24,33 +24,45 @@ import { useAuthStore } from '../store/authStore'
 
 const ROLES_COMANDAS = ['cajero', 'admin_berlin', 'super_admin']
 
-// Beep con Web Audio API, sin archivo externo. Los navegadores exigen que el audio
-// se desbloquee con una interacción real del usuario (clic, tecla) antes de sonar —
-// en un dispositivo dedicado esto pasa solo con el primer toque de la pantalla, y
-// después suena solo en cada alerta mientras la pestaña siga abierta.
+// Sonido de campana con Web Audio API, sin archivo externo. Combina varios
+// osciladores en relación INarmónica (parciales típicos de una campana real,
+// no múltiplos exactos de la fundamental) — eso es lo que da el timbre
+// metálico "ding", a diferencia de un beep de un solo tono. Ataque rápido +
+// decaimiento exponencial lento. Ganancia al máximo posible sin distorsionar
+// (picos de cada parcial suman ~0.99). Los navegadores exigen que el audio se
+// desbloquee con una interacción real del usuario (clic/toque) antes de
+// sonar — en un dispositivo dedicado esto pasa solo con el primer toque de la
+// pantalla, y después suena solo en cada alerta mientras la pestaña siga abierta.
 let audioCtx: AudioContext | null = null
-function reproducirBeep(frecuencias: number[]) {
+function reproducirCampana(frecuenciaBase: number) {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     if (audioCtx.state === 'suspended') audioCtx.resume()
-    let inicio = audioCtx.currentTime
-    frecuencias.forEach(freq => {
+    const ahora = audioCtx.currentTime
+    const parciales = [
+      { ratio: 1,   pico: 0.50, decay: 1.4 },
+      { ratio: 2.4, pico: 0.27, decay: 1.1 },
+      { ratio: 3.9, pico: 0.14, decay: 0.8 },
+      { ratio: 5.4, pico: 0.08, decay: 0.6 },
+    ]
+    parciales.forEach(p => {
       const osc  = audioCtx!.createOscillator()
       const gain = audioCtx!.createGain()
       osc.type = 'sine'
-      osc.frequency.setValueAtTime(freq, inicio)
-      gain.gain.setValueAtTime(0.0001, inicio)
-      gain.gain.exponentialRampToValueAtTime(0.25, inicio + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.18)
+      osc.frequency.setValueAtTime(frecuenciaBase * p.ratio, ahora)
+      gain.gain.setValueAtTime(0.0001, ahora)
+      gain.gain.exponentialRampToValueAtTime(p.pico, ahora + 0.008)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ahora + p.decay)
       osc.connect(gain).connect(audioCtx!.destination)
-      osc.start(inicio)
-      osc.stop(inicio + 0.2)
-      inicio += 0.2
+      osc.start(ahora)
+      osc.stop(ahora + p.decay + 0.05)
     })
   } catch { /* sin audio disponible — la alerta visual sigue funcionando igual */ }
 }
-const sonidoPedidoNuevo   = () => reproducirBeep([880, 1046])   // pedido nuevo — 2 tonos ascendentes
-const sonidoListoCobrar   = () => reproducirBeep([1046, 784, 1046]) // mesa lista para cobrar — 3 tonos
+// Pedido nuevo — doble campanada (ding-ding), más difícil de pasar por alto.
+const sonidoPedidoNuevo = () => { reproducirCampana(1046); setTimeout(() => reproducirCampana(1046), 480) }
+// Mesa lista para cobrar — campanada única, tono distinto para diferenciarla.
+const sonidoListoCobrar = () => reproducirCampana(830)
 
 interface ComandaItem {
   id: string; cantidad: number; notas?: string | null
