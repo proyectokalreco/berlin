@@ -338,6 +338,66 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const [ventaLibreModal,  setVentaLibreModal]  = useState<{ producto: Producto; nombre: string; precio: string; cantidad: string } | null>(null)
   const efectivoInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Panel carrito redimensionable (horizontal, catálogo↔carrito) — mismo patrón que POS ──
+  const PANEL_MIN = 240
+  const PANEL_MAX = 520
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('berlin-mesas-panel-width')
+    const n = saved ? parseInt(saved, 10) : 280
+    return isNaN(n) ? 280 : Math.min(Math.max(n, PANEL_MIN), PANEL_MAX)
+  })
+  const isDragging  = useRef(false)
+  const dragStartX  = useRef(0)
+  const dragStartW  = useRef(0)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return
+      const delta = dragStartX.current - e.clientX
+      const next  = Math.min(Math.max(dragStartW.current + delta, PANEL_MIN), PANEL_MAX)
+      setPanelWidth(next)
+    }
+    const onUp = () => {
+      if (!isDragging.current) return
+      isDragging.current = false
+      document.body.style.cursor     = ''
+      document.body.style.userSelect = ''
+      setPanelWidth(w => { localStorage.setItem('berlin-mesas-panel-width', String(w)); return w })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  // ── Bloque de pago redimensionable (vertical, ítems↔pago) — mismo patrón ──
+  const PAY_MIN = 220
+  const PAY_MAX = 560
+  const [paymentHeight, setPaymentHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('berlin-mesas-payment-height')
+    const n = saved ? parseInt(saved, 10) : 300
+    return isNaN(n) ? 300 : Math.min(Math.max(n, PAY_MIN), PAY_MAX)
+  })
+  const isDraggingV = useRef(false)
+  const dragStartY  = useRef(0)
+  const dragStartH  = useRef(0)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDraggingV.current) return
+      const delta = dragStartY.current - e.clientY
+      const next  = Math.min(Math.max(dragStartH.current + delta, PAY_MIN), PAY_MAX)
+      setPaymentHeight(next)
+    }
+    const onUp = () => {
+      if (!isDraggingV.current) return
+      isDraggingV.current = false
+      document.body.style.cursor     = ''
+      document.body.style.userSelect = ''
+      setPaymentHeight(h => { localStorage.setItem('berlin-mesas-payment-height', String(h)); return h })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
   // Foco automático en el campo de efectivo al elegir ese método — igual que POS
   // (antes era un <p> de solo lectura, sin cursor, aunque el numpad sí escribía el valor).
   useEffect(() => {
@@ -775,8 +835,23 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
           </div>
         </div>
 
+        {/* ── Handle redimensionable (horizontal) ── */}
+        <div
+          onMouseDown={e => {
+            e.preventDefault()
+            isDragging.current  = true
+            dragStartX.current  = e.clientX
+            dragStartW.current  = panelWidth
+            document.body.style.cursor     = 'col-resize'
+            document.body.style.userSelect = 'none'
+          }}
+          className="w-1.5 flex-shrink-0 rounded-full bg-white/5 hover:bg-[#EA580C]/60 active:bg-[#EA580C] cursor-col-resize transition-colors"
+          title="Arrastra para ajustar el ancho del panel"
+        />
+
         {/* ── Panel derecho: carrito (idéntico al POS) ── */}
-        <div className="w-[280px] flex-shrink-0 flex flex-col bg-brand-navy border border-white/5 rounded-xl min-h-0">
+        <div className="flex-shrink-0 flex flex-col bg-brand-navy border border-white/5 rounded-xl min-h-0"
+          style={{ width: panelWidth }}>
           {/* Cabecera carrito */}
           <div className="px-3 py-2.5 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Orden</p>
@@ -859,9 +934,28 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
             </div>
           </div>
 
+          {/* Divisor vertical arrastrable — mismo patrón que POS */}
+          {items.length > 0 && (
+            <div
+              onMouseDown={e => {
+                e.preventDefault()
+                isDraggingV.current  = true
+                dragStartY.current   = e.clientY
+                dragStartH.current   = paymentHeight
+                document.body.style.cursor     = 'row-resize'
+                document.body.style.userSelect = 'none'
+              }}
+              className="h-2 flex-shrink-0 flex items-center justify-center bg-white/5 hover:bg-[#EA580C]/40 cursor-row-resize transition-colors"
+              title="Arrastra para redimensionar"
+            >
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+          )}
+
           {/* Totales + acciones (fijo abajo) */}
           {items.length > 0 && (
-            <div className="border-t border-white/5 p-3 space-y-2 flex-shrink-0">
+            <div className="border-t border-white/5 p-3 space-y-2 flex-shrink-0 overflow-y-auto"
+              style={{ height: paymentHeight }}>
               {/* Totales */}
               <div className="space-y-0.5">
                 <div className="flex justify-between text-xs text-gray-500">
