@@ -74,8 +74,6 @@ function roundToCOP50(n: number): number {
   return Math.round(n / 50) * 50
 }
 
-const DENOMINACIONES = [1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000]
-
 // ── Detección de emoji vs URL ─────────────────────────────────
 function isEmojiIcon(s?: string | null): boolean {
   if (!s) return false
@@ -395,29 +393,6 @@ function ProductCard({
         </p>
       )}
     </button>
-  )
-}
-
-// ── Teclado numérico táctil (compact) ────────────────────────
-// Solo denominaciones rápidas — sin grid de dígitos, el campo "Efectivo recibido"
-// ya es un <input> real (teclado físico o táctil del sistema operativo), el
-// teclado numérico en pantalla solo ocupaba espacio sin aportar nada nuevo.
-function NumPad({
-  onChange, total,
-}: {
-  onChange: (v: string) => void; total: number
-}) {
-  return (
-    <div className="grid grid-cols-4 gap-1">
-      {DENOMINACIONES.filter(d => d <= Math.max(total * 2, 20_000)).slice(0, 4).map(d => (
-        <button key={d} onClick={() => onChange(String(d))}
-          className="bg-brand-dark hover:bg-white/8 active:scale-[0.94] border border-white/5
-                     rounded-lg py-2 text-[11px] text-gray-400 hover:text-white font-semibold
-                     transition-all select-none">
-          {d >= 1_000 ? `$${d / 1_000}K` : `$${d}`}
-        </button>
-      ))}
-    </div>
   )
 }
 
@@ -1559,14 +1534,14 @@ export default function POS() {
 
           {/* ── Área según método ── */}
 
-          {/* EFECTIVO — numpad */}
+          {/* EFECTIVO */}
           {metodoPago === 'efectivo' && (<>
-            <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-2.5 text-center">
+            <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-1.5 text-center">
               <label htmlFor="efectivo-input" className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">
                 Efectivo recibido
               </label>
               <div className="relative flex items-center justify-center">
-                <span className="text-2xl font-bold text-gray-600 mr-1">$</span>
+                <span className="text-lg font-bold text-gray-600 mr-1">$</span>
                 <input
                   id="efectivo-input"
                   ref={efectivoInputRef}
@@ -1578,12 +1553,11 @@ export default function POS() {
                     setEfectivo(raw)
                   }}
                   placeholder="0"
-                  className="bg-transparent text-2xl font-bold text-white tabular-nums text-center
+                  className="bg-transparent text-lg font-bold text-white tabular-nums text-center
                              placeholder:text-gray-700 focus:outline-none w-full max-w-[10rem]"
                 />
               </div>
             </div>
-            <NumPad onChange={setEfectivo} total={total} />
             {efectivoNum >= total && total > 0 && (
               <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2
                               flex items-center justify-between">
