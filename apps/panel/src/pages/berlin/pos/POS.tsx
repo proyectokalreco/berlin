@@ -1536,12 +1536,12 @@ export default function POS() {
 
           {/* EFECTIVO */}
           {metodoPago === 'efectivo' && (<>
-            <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-1.5 text-center">
-              <label htmlFor="efectivo-input" className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">
-                Efectivo recibido
+            <div className="bg-[#403A32] border border-white/8 rounded-xl px-3 py-1 flex items-center gap-2">
+              <label htmlFor="efectivo-input" className="text-[9px] text-gray-500 uppercase tracking-wider flex-shrink-0">
+                Efectivo
               </label>
-              <div className="relative flex items-center justify-center">
-                <span className="text-lg font-bold text-gray-600 mr-1">$</span>
+              <div className="relative flex items-center justify-center flex-1">
+                <span className="text-base font-bold text-gray-600 mr-1">$</span>
                 <input
                   id="efectivo-input"
                   ref={efectivoInputRef}
@@ -1553,8 +1553,8 @@ export default function POS() {
                     setEfectivo(raw)
                   }}
                   placeholder="0"
-                  className="bg-transparent text-lg font-bold text-white tabular-nums text-center
-                             placeholder:text-gray-700 focus:outline-none w-full max-w-[10rem]"
+                  className="bg-transparent text-base font-bold text-white tabular-nums text-center
+                             placeholder:text-gray-700 focus:outline-none w-full"
                 />
               </div>
             </div>
