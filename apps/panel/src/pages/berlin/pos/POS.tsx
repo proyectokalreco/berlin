@@ -5,7 +5,7 @@ import type { Producto, Categoria } from '../../../types'
 import toast from 'react-hot-toast'
 import {
   Search, X, Minus, Plus, Trash2, Printer, CheckCircle,
-  ShoppingCart, Grid3X3, Delete, ChevronLeft, ChevronRight,
+  ShoppingCart, Grid3X3, ChevronLeft, ChevronRight,
   Keyboard, Lock, Banknote, Zap, Smartphone, CreditCard, Users,
   Phone, Wifi, WifiOff, RefreshCw, Layers, Droplet, Milk, GlassWater,
 } from 'lucide-react'
@@ -140,10 +140,10 @@ function MiniIcon({ producto, catNombre }: { producto: Producto; catNombre?: str
   const isImg  = !!imgUrl && !isEmojiIcon(imgUrl)
   const emoji  = isEmojiIcon(imgUrl) ? imgUrl! : getAutoEmoji(producto.nombre, catNombre)
   if (isImg) return (
-    <img src={imgUrl!} alt="" className="w-11 h-11 rounded-lg object-cover bg-slate-100 flex-shrink-0" />
+    <img src={imgUrl!} alt="" className="w-11 h-11 rounded-lg object-cover bg-brand-dark flex-shrink-0" />
   )
   return (
-    <div className="w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center text-2xl flex-shrink-0">
+    <div className="w-11 h-11 rounded-lg bg-[#403A32] flex items-center justify-center text-2xl flex-shrink-0">
       {emoji}
     </div>
   )
@@ -399,52 +399,24 @@ function ProductCard({
 }
 
 // ── Teclado numérico táctil (compact) ────────────────────────
+// Solo denominaciones rápidas — sin grid de dígitos, el campo "Efectivo recibido"
+// ya es un <input> real (teclado físico o táctil del sistema operativo), el
+// teclado numérico en pantalla solo ocupaba espacio sin aportar nada nuevo.
 function NumPad({
-  valor, onChange, total,
+  onChange, total,
 }: {
-  valor: string; onChange: (v: string) => void; total: number
+  onChange: (v: string) => void; total: number
 }) {
-  const press = (key: string) => {
-    if (key === 'DEL') onChange(valor.slice(0, -1))
-    else if (key === 'CLR') onChange('')
-    else {
-      if (valor === '' && key === '0') return
-      onChange(valor + key)
-    }
-  }
-
-  const teclas = ['7','8','9','4','5','6','1','2','3','CLR','0','DEL']
-
   return (
-    <div className="space-y-1.5">
-      {/* Denominaciones rápidas */}
-      <div className="grid grid-cols-4 gap-1">
-        {DENOMINACIONES.filter(d => d <= Math.max(total * 2, 20_000)).slice(0, 4).map(d => (
-          <button key={d} onClick={() => onChange(String(d))}
-            className="bg-slate-50 hover:bg-slate-100 active:scale-[0.94] border border-slate-200
-                       rounded-lg py-2 text-[11px] text-slate-500 hover:text-slate-900 font-semibold
-                       transition-all select-none">
-            {d >= 1_000 ? `$${d / 1_000}K` : `$${d}`}
-          </button>
-        ))}
-      </div>
-      {/* Grid 3×4 — botones más compactos */}
-      <div className="grid grid-cols-3 gap-1">
-        {teclas.map(k => (
-          <button key={k} onClick={() => press(k)}
-            className={cn(
-              'h-10 rounded-xl font-bold text-base transition-all select-none active:scale-[0.91] border',
-              k === 'DEL'
-                ? 'bg-red-50 border-red-200 text-red-500 hover:bg-red-100'
-                : k === 'CLR'
-                ? 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200 text-sm'
-                : 'bg-slate-50 border-slate-200 text-slate-900 hover:bg-slate-100',
-            )}
-          >
-            {k === 'DEL' ? <Delete size={14} className="mx-auto" /> : k}
-          </button>
-        ))}
-      </div>
+    <div className="grid grid-cols-4 gap-1">
+      {DENOMINACIONES.filter(d => d <= Math.max(total * 2, 20_000)).slice(0, 4).map(d => (
+        <button key={d} onClick={() => onChange(String(d))}
+          className="bg-brand-dark hover:bg-white/8 active:scale-[0.94] border border-white/5
+                     rounded-lg py-2 text-[11px] text-gray-400 hover:text-white font-semibold
+                     transition-all select-none">
+          {d >= 1_000 ? `$${d / 1_000}K` : `$${d}`}
+        </button>
+      ))}
     </div>
   )
 }
@@ -485,19 +457,19 @@ function CrearClienteRapidoPOS({
   }
 
   return (
-    <div className="bg-slate-50 border border-brand-teal/30 rounded-xl p-3 mt-1 space-y-2">
+    <div className="bg-brand-dark border border-brand-teal/30 rounded-xl p-3 mt-1 space-y-2">
       <p className="text-[10px] text-brand-teal font-semibold">Nuevo cliente</p>
       <input value={nombre} onChange={e => setNombre(e.target.value)}
         placeholder="Nombre *"
-        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900
+        className="w-full bg-brand-navy border border-white/10 rounded-lg px-3 py-2 text-sm text-white
                    focus:outline-none focus:border-brand-teal"/>
       <input value={telefono} onChange={e => setTelefono(e.target.value)}
         placeholder="Teléfono (opcional)"
-        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900
+        className="w-full bg-brand-navy border border-white/10 rounded-lg px-3 py-2 text-sm text-white
                    focus:outline-none focus:border-brand-teal"/>
       <div className="flex gap-2">
         <button onClick={() => setOpen(false)}
-          className="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-xs">
+          className="flex-1 py-1.5 rounded-lg border border-white/10 text-gray-400 text-xs">
           Cancelar
         </button>
         <button disabled={!nombre.trim() || isPending} onClick={() => crear()}
@@ -1418,24 +1390,17 @@ export default function POS() {
       ═══════════════════════════════════════ */}
       <div
         className={cn(
-          'flex-shrink-0 flex flex-col bg-white border-l border-slate-200',
+          'flex-shrink-0 flex flex-col bg-brand-navy border-l border-white/5',
           isMobile ? (posView === 'carrito' ? 'flex-1 w-full' : 'hidden') : '',
         )}
         style={!isMobile ? { width: panelWidth } : undefined}
       >
 
-        {/* ── Cabecera — mismo patrón que el negocio Demo: tarjeta blanca, pastilla de cantidad ── */}
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex-shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <ShoppingCart size={16} className="text-[#EA580C] flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="text-[9px] text-slate-400 uppercase tracking-widest leading-none">Venta #{numeroVentaActiva}</p>
-            </div>
-            {totalItems > 0 && (
-              <span className="text-xs font-semibold text-[#EA580C] bg-[#EA580C]/10 border border-[#EA580C]/20 rounded-full px-2 py-0.5 flex-shrink-0">
-                {totalItems} producto{totalItems !== 1 ? 's' : ''}
-              </span>
-            )}
+        {/* ── Cabecera ── */}
+        <div className="px-4 py-3 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest leading-none">Venta</p>
+            <p className="text-white font-bold text-xl leading-tight">#{numeroVentaActiva}</p>
           </div>
 
           {/* Ventas pendientes — visible solo cuando hay cola */}
@@ -1444,10 +1409,10 @@ export default function POS() {
               onClick={syncNow}
               title="Sincronizar ventas pendientes"
               className={cn(
-                'flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors select-none flex-shrink-0',
+                'flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors select-none',
                 netStatus === 'syncing'
-                  ? 'text-blue-600 border-blue-200 bg-blue-50 cursor-default'
-                  : 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 cursor-pointer',
+                  ? 'text-blue-400 border-blue-500/20 bg-blue-500/10 cursor-default'
+                  : 'text-amber-400 border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer',
               )}
             >
               {netStatus === 'syncing'
@@ -1458,9 +1423,9 @@ export default function POS() {
           )}
           {cart.length > 0 && (
             <button onClick={clearCart}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-500
-                         hover:bg-red-50 px-2 py-1.5 rounded-xl transition-colors
-                         active:scale-[0.95] select-none flex-shrink-0">
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400
+                         bg-white/5 hover:bg-red-500/10 px-3 py-2 rounded-xl transition-colors
+                         active:scale-[0.95] select-none border border-white/5 hover:border-red-500/20">
               <X size={13} /> Limpiar
             </button>
           )}
@@ -1469,48 +1434,49 @@ export default function POS() {
         {/* ── Lista de ítems ── */}
         <div className="flex-1 min-h-[100px] overflow-y-auto px-3 py-2">
           {cart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-300">
-              <ShoppingCart size={44} className="opacity-40" />
-              <p className="text-xs text-center text-slate-400">
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-700">
+              <ShoppingCart size={44} className="opacity-15" />
+              <p className="text-xs text-center text-gray-600">
                 Toca un producto para agregarlo
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y divide-white/5">
               {cart.map(item => {
                 const catNom = catNameMap.get(item.producto.categoria_id ?? '') ?? ''
                 return (
-                  <div key={item.itemKey} className="rounded-xl bg-slate-50 border border-slate-100 p-2 flex items-center gap-2.5">
+                  <div key={item.itemKey} className="flex items-center gap-2.5 py-2.5">
                     <MiniIcon producto={item.producto} catNombre={catNom} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-900 leading-snug line-clamp-2">
+                      <p className="text-xs font-semibold text-white leading-snug line-clamp-2">
                         {nombreEfectivo(item)}
                       </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
+                      <p className="text-[10px] text-gray-500 mt-0.5">
                         {fmt(precioEfectivo(item))} c/u
                       </p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button onClick={() => changeQty(item.itemKey, -1)}
-                        className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 active:scale-[0.90]
-                                   flex items-center justify-center text-slate-700 transition-all select-none">
+                        className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/12 active:scale-[0.90]
+                                   flex items-center justify-center text-gray-300 transition-all select-none">
                         <Minus size={11} />
                       </button>
-                      <span className="w-6 text-center text-slate-900 font-bold text-sm tabular-nums">
+                      <span className="w-6 text-center text-white font-bold text-sm tabular-nums">
                         {item.cantidad}
                       </span>
                       <button onClick={() => changeQty(item.itemKey, 1)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-white
-                                   bg-[#EA580C] hover:bg-[#C2410C] active:scale-[0.90] transition-all select-none">
+                        className="w-7 h-7 rounded-lg bg-white/5 hover:bg-[#EA580C]/20 active:scale-[0.90]
+                                   flex items-center justify-center text-gray-300 hover:text-[#EA580C]
+                                   transition-all select-none">
                         <Plus size={11} />
                       </button>
                     </div>
                     <div className="text-right flex-shrink-0 min-w-[52px]">
-                      <p className="text-sm font-bold text-slate-900 tabular-nums">
+                      <p className="text-sm font-bold text-white tabular-nums">
                         {fmt(precioEfectivo(item) * item.cantidad)}
                       </p>
                       <button onClick={() => removeItem(item.itemKey)}
-                        className="text-slate-300 hover:text-red-500 transition-colors mt-0.5">
+                        className="text-gray-600 hover:text-red-400 transition-colors mt-0.5">
                         <Trash2 size={11} />
                       </button>
                     </div>
@@ -1531,28 +1497,28 @@ export default function POS() {
             document.body.style.cursor     = 'row-resize'
             document.body.style.userSelect = 'none'
           }}
-          className="h-2 flex-shrink-0 flex items-center justify-center bg-slate-100 hover:bg-[#EA580C]/20 cursor-row-resize transition-colors"
+          className="h-2 flex-shrink-0 flex items-center justify-center bg-white/5 hover:bg-[#EA580C]/40 cursor-row-resize transition-colors"
           title="Arrastra para redimensionar"
         >
-          <div className="w-10 h-1 rounded-full bg-slate-300" />
+          <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>
 
         {/* ── Pago — siempre visible debajo del carrito (igual patrón que Esquina del Crédito) ── */}
-        <div className="border-t border-slate-100 bg-white p-3 space-y-2.5 flex-shrink-0 overflow-y-auto"
+        <div className="border-t border-white/5 bg-[#1C1A18] p-3 space-y-2.5 flex-shrink-0 overflow-y-auto"
              style={{ height: paymentHeight }}>
 
           {/* Cliente — siempre visible, igual patrón que Esquina */}
           <button
             onClick={() => { if (metodoPago !== 'credito') cambiarMetodo('credito') }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200
-                       text-left hover:border-slate-300 transition-colors">
-            <Users size={14} className="text-slate-400 flex-shrink-0" />
-            <span className={cn('text-xs truncate flex-1', clienteCredito ? 'text-slate-900' : 'text-slate-400')}>
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-dark border border-white/10
+                       text-left hover:border-white/20 transition-colors">
+            <Users size={14} className="text-gray-500 flex-shrink-0" />
+            <span className={cn('text-xs truncate flex-1', clienteCredito ? 'text-white' : 'text-gray-500')}>
               {clienteCredito?.nombre || 'Sin cliente (opcional)'}
             </span>
             {clienteCredito && (
               <span onClick={e => { e.stopPropagation(); setClienteCredito(null) }}
-                className="text-slate-400 hover:text-red-500 p-0.5">
+                className="text-gray-500 hover:text-red-400 p-0.5">
                 <X size={12} />
               </span>
             )}
@@ -1565,7 +1531,7 @@ export default function POS() {
               'w-full py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5',
               metodoPago === 'exacto'
                 ? 'bg-[#EA580C] text-white border border-[#EA580C]'
-                : 'bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100',
+                : 'bg-brand-dark border border-white/5 text-gray-500 hover:text-white hover:bg-white/5',
             )}>
             <Zap size={14} /> Pago Completo
           </button>
@@ -1583,7 +1549,7 @@ export default function POS() {
                   'flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg border text-[11px] font-semibold transition-all select-none',
                   metodoPago === m
                     ? 'bg-[#EA580C]/15 border-[#EA580C]/50 text-[#EA580C]'
-                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                    : 'bg-brand-dark border-white/5 text-gray-500 hover:text-white hover:bg-white/5'
                 )}>
                 <Icon size={13} />
                 {label}
@@ -1595,12 +1561,12 @@ export default function POS() {
 
           {/* EFECTIVO — numpad */}
           {metodoPago === 'efectivo' && (<>
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-center">
-              <label htmlFor="efectivo-input" className="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5 block">
+            <div className="bg-[#403A32] border border-white/8 rounded-xl px-4 py-2.5 text-center">
+              <label htmlFor="efectivo-input" className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">
                 Efectivo recibido
               </label>
               <div className="relative flex items-center justify-center">
-                <span className="text-2xl font-bold text-slate-400 mr-1">$</span>
+                <span className="text-2xl font-bold text-gray-600 mr-1">$</span>
                 <input
                   id="efectivo-input"
                   ref={efectivoInputRef}
@@ -1612,51 +1578,51 @@ export default function POS() {
                     setEfectivo(raw)
                   }}
                   placeholder="0"
-                  className="bg-transparent text-2xl font-bold text-slate-900 tabular-nums text-center
-                             placeholder:text-slate-300 focus:outline-none w-full max-w-[10rem]"
+                  className="bg-transparent text-2xl font-bold text-white tabular-nums text-center
+                             placeholder:text-gray-700 focus:outline-none w-full max-w-[10rem]"
                 />
               </div>
             </div>
-            <NumPad valor={efectivo} onChange={setEfectivo} total={total} />
+            <NumPad onChange={setEfectivo} total={total} />
             {efectivoNum >= total && total > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-2
+              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2
                               flex items-center justify-between">
-                <p className="text-xs text-slate-500">Cambio</p>
-                <p className="text-xl font-bold text-green-600 tabular-nums">{fmt(cambio)}</p>
+                <p className="text-xs text-gray-400">Cambio</p>
+                <p className="text-xl font-bold text-green-400 tabular-nums">{fmt(cambio)}</p>
               </div>
             )}
           </>)}
 
           {/* EXACTO — total sin vuelto */}
           {metodoPago === 'exacto' && (
-            <div className="bg-slate-50 border border-[#EA580C]/20 rounded-xl p-3 text-center space-y-1">
+            <div className="bg-[#403A32] border border-[#EA580C]/20 rounded-xl p-3 text-center space-y-1">
               <Zap size={20} className="text-[#EA580C] mx-auto" />
-              <p className="text-xs text-slate-500">Total exacto a cobrar</p>
-              <p className="text-2xl font-bold text-slate-900 tabular-nums">{fmt(total)}</p>
-              <p className="text-xs text-green-600 font-medium">Sin vuelto · Cobro rápido</p>
+              <p className="text-xs text-gray-400">Total exacto a cobrar</p>
+              <p className="text-2xl font-bold text-white tabular-nums">{fmt(total)}</p>
+              <p className="text-xs text-green-400 font-medium">Sin vuelto · Cobro rápido</p>
             </div>
           )}
 
           {/* TRANSFERENCIA */}
           {metodoPago === 'transferencia' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center space-y-1">
-              <Smartphone size={20} className="text-blue-500 mx-auto" />
-              <p className="text-slate-900 font-bold text-xl tabular-nums">{fmt(total)}</p>
-              <p className="text-xs text-slate-500">El cliente realizó el pago electrónico</p>
-              <p className="text-xs text-blue-600 font-medium">Verifica el recibo antes de confirmar</p>
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center space-y-1">
+              <Smartphone size={20} className="text-blue-400 mx-auto" />
+              <p className="text-white font-bold text-xl tabular-nums">{fmt(total)}</p>
+              <p className="text-xs text-gray-400">El cliente realizó el pago electrónico</p>
+              <p className="text-xs text-blue-400 font-medium">Verifica el recibo antes de confirmar</p>
             </div>
           )}
 
           {/* MIXTO — divide el pago entre efectivo y transferencia */}
           {metodoPago === 'mixto' && (
-            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Dividir pago</p>
+            <div className="space-y-2 rounded-xl border border-white/8 bg-[#403A32] p-2.5">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Dividir pago</p>
               {[
                 { label: 'Efectivo',      val: mixtoEfectivo,      set: setMixtoEfectivo      },
                 { label: 'Pago Electrónico', val: mixtoTransferencia, set: setMixtoTransferencia },
               ].map(({ label, val, set }) => (
                 <div key={label}>
-                  <label className="text-[10px] text-slate-400 mb-0.5 block">{label}</label>
+                  <label className="text-[10px] text-gray-500 mb-0.5 block">{label}</label>
                   <input
                     type="text" inputMode="numeric"
                     value={val}
@@ -1666,13 +1632,13 @@ export default function POS() {
                       set(new Intl.NumberFormat('es-CO').format(parseInt(raw, 10)))
                     }}
                     placeholder="0"
-                    className="w-full bg-white text-slate-900 border border-slate-200 rounded-lg px-3 py-1.5
+                    className="w-full bg-brand-dark text-white border border-white/10 rounded-lg px-3 py-1.5
                                text-sm focus:outline-none focus:border-[#EA580C]/50"
                   />
                 </div>
               ))}
               <div className={cn('flex justify-between text-[11px] font-semibold px-0.5',
-                mixtoValido ? 'text-green-600' : 'text-red-500')}>
+                mixtoValido ? 'text-green-400' : 'text-red-400')}>
                 <span>Suma: {fmt(mixtoSuma)}</span>
                 <span>Total: {fmt(total)}</span>
               </div>
@@ -1683,49 +1649,49 @@ export default function POS() {
           {metodoPago === 'credito' && (
             <div className="space-y-2">
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                 <input
                   value={buscandoCliente}
                   onChange={e => setBuscandoCliente(e.target.value)}
                   placeholder="Buscar cliente…"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5
-                             text-sm text-slate-900 placeholder:text-slate-400
-                             focus:outline-none focus:border-pink-400"
+                  className="w-full bg-brand-dark border border-white/10 rounded-xl pl-9 pr-3 py-2.5
+                             text-sm text-white placeholder:text-gray-600
+                             focus:outline-none focus:border-pink-500/50"
                 />
               </div>
               {clienteCredito ? (
-                <div className="bg-pink-50 border border-pink-200 rounded-xl p-3 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center
-                                  text-pink-500 font-bold text-sm flex-shrink-0">
+                <div className="bg-pink-500/10 border border-pink-500/30 rounded-xl p-3 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center
+                                  text-pink-400 font-bold text-sm flex-shrink-0">
                     {clienteCredito.nombre[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{clienteCredito.nombre}</p>
-                    <p className="text-xs text-pink-500">Cliente seleccionado</p>
+                    <p className="text-sm font-semibold text-white truncate">{clienteCredito.nombre}</p>
+                    <p className="text-xs text-pink-400">Cliente seleccionado</p>
                   </div>
                   <button onClick={() => setClienteCredito(null)}
-                    className="text-slate-400 hover:text-red-500 transition-colors p-1">
+                    className="text-gray-500 hover:text-red-400 transition-colors p-1">
                     <X size={14} />
                   </button>
                 </div>
               ) : (
                 <>
                   {clientesLista.length > 0 ? (
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm
-                                    max-h-[140px] overflow-y-auto divide-y divide-slate-100">
+                    <div className="bg-brand-dark rounded-xl border border-white/5
+                                    max-h-[140px] overflow-y-auto divide-y divide-white/5">
                       {clientesLista.map(c => (
                         <button key={c.id}
                           onClick={() => { setClienteCredito(c); setBuscandoCliente('') }}
-                          className="w-full flex items-center gap-2.5 p-2.5 hover:bg-slate-50
+                          className="w-full flex items-center gap-2.5 p-2.5 hover:bg-white/5
                                      text-left transition-colors">
-                          <div className="w-7 h-7 rounded-full bg-pink-100 flex items-center justify-center
-                                          text-pink-500 font-bold text-xs flex-shrink-0">
+                          <div className="w-7 h-7 rounded-full bg-pink-500/15 flex items-center justify-center
+                                          text-pink-400 font-bold text-xs flex-shrink-0">
                             {c.nombre[0].toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm text-slate-900 font-medium truncate">{c.nombre}</p>
+                            <p className="text-sm text-white font-medium truncate">{c.nombre}</p>
                             {c.telefono && (
-                              <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                              <p className="text-[10px] text-gray-500 flex items-center gap-1">
                                 <Phone size={9} />{c.telefono}
                               </p>
                             )}
@@ -1746,24 +1712,24 @@ export default function POS() {
 
           {/* Totales */}
           <div className="space-y-1 pt-1">
-            <div className="flex justify-between text-xs text-slate-400">
+            <div className="flex justify-between text-xs text-gray-500">
               <span>Sub Total</span>
-              <span className="tabular-nums text-slate-600">{fmt(subTotal)}</span>
+              <span className="tabular-nums text-gray-300">{fmt(subTotal)}</span>
             </div>
             {redondeo !== 0 && (
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Redondeo COP</span>
+                <span className="text-gray-500">Redondeo COP</span>
                 <span className={cn(
                   'tabular-nums font-medium',
-                  redondeo > 0 ? 'text-orange-500' : 'text-green-600',
+                  redondeo > 0 ? 'text-orange-400' : 'text-green-400',
                 )}>
                   {redondeo > 0 ? '+' : ''}{fmt(redondeo)}
                 </span>
               </div>
             )}
-            <div className="flex justify-between items-center pt-1.5 border-t border-slate-100">
-              <span className="text-slate-900 font-bold">TOTAL</span>
-              <span className="text-slate-900 font-bold text-2xl tabular-nums">{fmt(total)}</span>
+            <div className="flex justify-between items-center pt-1.5 border-t border-white/5">
+              <span className="text-white font-bold">TOTAL</span>
+              <span className="text-white font-bold text-2xl tabular-nums">{fmt(total)}</span>
             </div>
           </div>
 
@@ -1776,7 +1742,7 @@ export default function POS() {
               cart.length > 0 && canCobrar && !isPending
                 ? 'bg-[#EA580C] hover:bg-[#C2410C] text-white active:scale-[0.97]' +
                   ' shadow-[0_4px_20px_rgba(234,88,12,0.4)]'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed',
+                : 'bg-white/5 text-gray-600 cursor-not-allowed',
             )}
           >
             {isPending ? (
