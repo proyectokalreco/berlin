@@ -884,6 +884,48 @@ para que no se pueda saltar llamando la API directo.
 `node -c`/`tsc`+`build` limpios en todos los commits. **✅ Los 4 puntos desplegados y
 confirmados por el usuario en producción — "ya probé todo muy bien".**
 
+### 29. Carrito de POS — rediseño a tarjeta blanca estilo Demo, luego revertido a oscuro + achicado (2026-09-18, commits `f6d6a21`→`1a75a56`)
+
+Pedido: que el carrito de POS "tenga el mismo diseño del negocio Demo" (screenshots de
+referencia). Investigado `kalreco/.../credito/demo/pos/POS.tsx` (clon de Esquina del
+Crédito) antes de tocar nada: usa una tarjeta **blanca** (`bg-white`, texto oscuro,
+miniaturas redondeadas, pastilla "N productos") dentro de un panel general oscuro —
+estructura ya casi idéntica a la de Berlín (mismo patrón "igual que Esquina del Crédito"
+documentado en el propio código), solo cambiaban los colores.
+
+**Decisión confirmada con el cliente antes de tocar código:** mismo diseño/estructura que
+Demo, pero manteniendo el naranja de marca de Berlín (`#EA580C`) como acento en vez del
+verde/violeta de Demo — igual criterio que cada negocio de Kalreco conserva su propio color
+sobre el mismo patrón visual.
+
+**Commit `f6d6a21`** — recoloreado completo del panel derecho de `POS.tsx` (contenedor,
+cabecera + pastilla de cantidad, lista de ítems, divisor arrastrable, bloque de pago
+completo, los 5 métodos de pago, buscador/tarjeta de cliente, totales, botón Cobrar) y los 3
+componentes que solo usa el carrito (`MiniIcon`, `NumPad`, `CrearClienteRapidoPOS`) — de
+oscuro (`bg-brand-navy`/`#1C1A18`) a blanco/slate, sin tocar catálogo ni modales.
+
+**Reversión — el cliente probó y pidió volver atrás (commits `568aeaf`→`1a75a56`):**
+1. `568aeaf`: "quita el fondo blanco, que tenga el mismo color de fondo de toda la
+   aplicación, tal como estaba antes" — `git checkout` del `POS.tsx` al commit anterior al
+   rediseño (revierte 100% los colores) + de paso quita el grid de dígitos del `NumPad`
+   (7-8-9.../CLR-0-DEL): el campo "Efectivo recibido" ya es un `<input>` real (teclado
+   físico o táctil del sistema), el keypad en pantalla solo ocupaba espacio. Quedan las 4
+   denominaciones rápidas ($1K/$2K/$5K/$10K).
+2. `88933f0`: tampoco hacían falta las denominaciones rápidas — `NumPad` y `DENOMINACIONES`
+   eliminados por completo (sin otro uso en el archivo). Campo Efectivo reduce
+   `py-2.5`/`text-2xl` → `py-1.5`/`text-lg`.
+3. `e76996c`: el botón Cobrar quedaba fuera de pantalla en ventanas/laptops más bajas — se
+   reduce el alto de **todo** el bloque de pago (cliente, Pago Completo, grid de 4 métodos,
+   caja Cambio, Totales) y el propio botón Cobrar (`py-4`→`py-2.5`).
+4. `1a75a56`: la caja de "Efectivo recibido" pasa de layout vertical (label arriba, monto
+   abajo) a una sola fila (label a la izquierda, monto a la derecha) — mismo dato, menos alto.
+
+Resultado final: **mismo tema oscuro de siempre**, pero con el bloque de pago notablemente
+más compacto que antes del rediseño — el Cobrar ya no se corta ni en ventanas bajas.
+`tsc`+`build` limpios en cada commit. **✅ Desplegado y confirmado por el usuario en
+producción** (captura: carrito con 4 productos, Efectivo $50.000, Cambio $20.000, botón
+Cobrar totalmente visible).
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
