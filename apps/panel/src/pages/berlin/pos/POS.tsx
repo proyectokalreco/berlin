@@ -1479,13 +1479,13 @@ export default function POS() {
         </div>
 
         {/* ── Pago — siempre visible debajo del carrito (igual patrón que Esquina del Crédito) ── */}
-        <div className="border-t border-white/5 bg-[#1C1A18] p-3 space-y-2.5 flex-shrink-0 overflow-y-auto"
+        <div className="border-t border-white/5 bg-[#1C1A18] p-2 space-y-1.5 flex-shrink-0 overflow-y-auto"
              style={{ height: paymentHeight }}>
 
           {/* Cliente — siempre visible, igual patrón que Esquina */}
           <button
             onClick={() => { if (metodoPago !== 'credito') cambiarMetodo('credito') }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-dark border border-white/10
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-dark border border-white/10
                        text-left hover:border-white/20 transition-colors">
             <Users size={14} className="text-gray-500 flex-shrink-0" />
             <span className={cn('text-xs truncate flex-1', clienteCredito ? 'text-white' : 'text-gray-500')}>
@@ -1503,7 +1503,7 @@ export default function POS() {
           <button
             onClick={() => cambiarMetodo('exacto')}
             className={cn(
-              'w-full py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5',
+              'w-full py-1.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5',
               metodoPago === 'exacto'
                 ? 'bg-[#EA580C] text-white border border-[#EA580C]'
                 : 'bg-brand-dark border border-white/5 text-gray-500 hover:text-white hover:bg-white/5',
@@ -1521,7 +1521,7 @@ export default function POS() {
             ] as { m: typeof metodoPago; label: string; icon: React.ElementType }[]).map(({ m, label, icon: Icon }) => (
               <button key={m} onClick={() => cambiarMetodo(m)}
                 className={cn(
-                  'flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg border text-[11px] font-semibold transition-all select-none',
+                  'flex items-center justify-center gap-1.5 py-1 px-1 rounded-lg border text-[11px] font-semibold transition-all select-none',
                   metodoPago === m
                     ? 'bg-[#EA580C]/15 border-[#EA580C]/50 text-[#EA580C]'
                     : 'bg-brand-dark border-white/5 text-gray-500 hover:text-white hover:bg-white/5'
@@ -1559,10 +1559,10 @@ export default function POS() {
               </div>
             </div>
             {efectivoNum >= total && total > 0 && (
-              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2
+              <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-2.5 py-1
                               flex items-center justify-between">
                 <p className="text-xs text-gray-400">Cambio</p>
-                <p className="text-xl font-bold text-green-400 tabular-nums">{fmt(cambio)}</p>
+                <p className="text-base font-bold text-green-400 tabular-nums">{fmt(cambio)}</p>
               </div>
             )}
           </>)}
@@ -1685,7 +1685,7 @@ export default function POS() {
           )}
 
           {/* Totales */}
-          <div className="space-y-1 pt-1">
+          <div className="space-y-0.5">
             <div className="flex justify-between text-xs text-gray-500">
               <span>Sub Total</span>
               <span className="tabular-nums text-gray-300">{fmt(subTotal)}</span>
@@ -1701,9 +1701,9 @@ export default function POS() {
                 </span>
               </div>
             )}
-            <div className="flex justify-between items-center pt-1.5 border-t border-white/5">
-              <span className="text-white font-bold">TOTAL</span>
-              <span className="text-white font-bold text-2xl tabular-nums">{fmt(total)}</span>
+            <div className="flex justify-between items-center pt-1 border-t border-white/5">
+              <span className="text-white font-bold text-sm">TOTAL</span>
+              <span className="text-white font-bold text-xl tabular-nums">{fmt(total)}</span>
             </div>
           </div>
 
@@ -1712,7 +1712,7 @@ export default function POS() {
             disabled={cart.length === 0 || !canCobrar || isPending}
             onClick={() => cobrar()}
             className={cn(
-              'w-full rounded-xl py-4 text-lg font-bold transition-all duration-150 select-none',
+              'w-full rounded-xl py-2.5 text-base font-bold transition-all duration-150 select-none',
               cart.length > 0 && canCobrar && !isPending
                 ? 'bg-[#EA580C] hover:bg-[#C2410C] text-white active:scale-[0.97]' +
                   ' shadow-[0_4px_20px_rgba(234,88,12,0.4)]'
