@@ -21,6 +21,7 @@ const mermasCtrl          = require('./controllers/mermas.controller');
 const encargosCtrl        = require('./controllers/encargos.controller');
 const separesCtrl         = require('./controllers/separes.controller');
 const mesasCtrl           = require('./controllers/mesas.controller');
+const mesasSyncCtrl       = require('./controllers/mesas-sync.controller');
 const meserosCtrl         = require('./controllers/meseros.controller');
 const configuracionCtrl   = require('./controllers/configuracion.controller');
 const notificacionesCtrl  = require('./controllers/notificaciones.controller');
@@ -202,6 +203,8 @@ router.get   ('/mesas',                               mesasCtrl.listar);
 router.post  ('/mesas',                               mesasCtrl.crear);
 router.put   ('/mesas/:id',                           mesasCtrl.actualizar);
 router.delete('/mesas/:id',                           mesasCtrl.eliminar);
+// Operaciones hechas sin conexión (tomar/agregar/quitar/enviar), sincronizadas en lote
+router.post  ('/mesas/sync',                          mesasSyncCtrl.sync);
 router.post  ('/mesas/:id/abrir',                     mesasCtrl.abrirMesa);
 router.post  ('/mesas/:id/tomar',                     mesasCtrl.tomarMesa);
 router.get   ('/mesas/:id/orden',                     mesasCtrl.obtenerOrden);

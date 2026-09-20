@@ -51,6 +51,51 @@ const cerrarOrdenCobrada = async (ordenId, mesaId) => {
     .contains('datos', { mesa_id: mesaId })
 }
 
+// Registro br_meseros del usuario logueado (lo busca por usuario_id, luego por nombre para
+// vincular registros existentes, y si no existe lo crea). Lo usan tomarMesa y la sincronización
+// de operaciones hechas sin conexión.
+const obtenerOCrearMesero = async (user) => {
+  const { id: userId, nombre, apellido } = user
+  const nombreCompleto = apellido ? `${nombre} ${apellido}` : nombre
+
+  let { data: mesero } = await supabase.from('br_meseros')
+    .select('id, nombre, color')
+    .eq('usuario_id', userId)
+    .maybeSingle()
+  if (mesero) return mesero
+
+  // Intenta encontrar por nombre completo (para vincular registros existentes)
+  const { data: byNombre } = await supabase.from('br_meseros')
+    .select('id, nombre, color')
+    .eq('nombre', nombreCompleto)
+    .maybeSingle()
+  if (byNombre) {
+    // Vincular usuario_id al registro existente
+    await supabase.from('br_meseros').update({ usuario_id: userId }).eq('id', byNombre.id)
+    return byNombre
+  }
+
+  // Crear nuevo registro mesero para este usuario
+  const COLORS = ['#00C49A','#E91E8C','#F59E0B','#3B82F6','#A855F7','#F97316','#10B981','#EF4444']
+  const color  = COLORS[Math.floor(Math.random() * COLORS.length)]
+  const { data: nuevo, error: errM } = await supabase.from('br_meseros')
+    .insert({ nombre: nombreCompleto, color, pin: '0000', activo: true, usuario_id: userId })
+    .select('id, nombre, color').single()
+  if (errM) throw errM
+  return nuevo
+}
+
+// Un equipo que tomó una mesa sin conexión usó su propio id de orden. Si al sincronizar la mesa
+// ya estaba abierta por otro equipo, la cuenta se fusionó en la existente (br_ops_log guarda
+// la equivalencia): cualquier referencia posterior al id viejo (operaciones, cobro) se resuelve
+// aquí. Si no hay equivalencia, el id es el real.
+const resolverOrdenId = async (ordenId) => {
+  if (!ordenId) return ordenId
+  const { data } = await supabase.from('br_ops_log')
+    .select('orden_real_id').eq('tipo', 'tomar').eq('orden_id', ordenId).maybeSingle()
+  return data?.orden_real_id || ordenId
+}
+
 // ── GET /mesas ────────────────────────────────────────────────
 const listar = async (req, res, next) => {
   try {
@@ -137,7 +182,7 @@ const abrirMesa = async (req, res, next) => {
 const tomarMesa = async (req, res, next) => {
   try {
     const mesaId   = req.params.id
-    const { id: userId, nombre, apellido, rol } = req.user
+    const { rol } = req.user
     const ROLES_SIN_CAJA = ['admin_berlin', 'admin', 'super_admin']
 
     // 1. Verificar que haya caja abierta en el negocio (admin/superadmin exentos).
@@ -169,36 +214,7 @@ const tomarMesa = async (req, res, next) => {
     }
 
     // 3. Buscar o crear registro br_meseros para este usuario
-    // br_meseros NO tiene negocio_id — búsqueda solo por usuario_id o nombre
-    const nombreCompleto = apellido ? `${nombre} ${apellido}` : nombre
-
-    let { data: mesero } = await supabase.from('br_meseros')
-      .select('id, nombre, color')
-      .eq('usuario_id', userId)
-      .maybeSingle()
-
-    if (!mesero) {
-      // Intenta encontrar por nombre completo (para vincular registros existentes)
-      const { data: byNombre } = await supabase.from('br_meseros')
-        .select('id, nombre, color')
-        .eq('nombre', nombreCompleto)
-        .maybeSingle()
-
-      if (byNombre) {
-        // Vincular usuario_id al registro existente
-        await supabase.from('br_meseros').update({ usuario_id: userId }).eq('id', byNombre.id)
-        mesero = byNombre
-      } else {
-        // Crear nuevo registro mesero para este usuario
-        const COLORS = ['#00C49A','#E91E8C','#F59E0B','#3B82F6','#A855F7','#F97316','#10B981','#EF4444']
-        const color  = COLORS[Math.floor(Math.random() * COLORS.length)]
-        const { data: nuevo, error: errM } = await supabase.from('br_meseros')
-          .insert({ nombre: nombreCompleto, color, pin: '0000', activo: true, usuario_id: userId })
-          .select('id, nombre, color').single()
-        if (errM) throw errM
-        mesero = nuevo
-      }
-    }
+    const mesero = await obtenerOCrearMesero(req.user)
 
     // 4. Crear orden
     const { data: orden, error: errOrden } = await supabase.from('br_ordenes_mesa')
@@ -406,7 +422,7 @@ const cobrar = async (req, res, next) => {
     // entre que el cobro se guardó y se sincronizó.
     let qOrden = supabase.from('br_ordenes_mesa')
       .select(`id, total, mesa_id, mesero_id, items:br_orden_mesa_items(id, producto_id, cantidad, precio_unitario, subtotal, notas, enviado_at, visto_at, servido_at, venta_id)`)
-    qOrden = orden_id ? qOrden.eq('id', orden_id) : qOrden.eq('mesa_id', mesaId)
+    qOrden = orden_id ? qOrden.eq('id', await resolverOrdenId(orden_id)) : qOrden.eq('mesa_id', mesaId)
     const { data: orden } = await qOrden.eq('estado', 'abierta').maybeSingle()
     if (!orden) return res.status(404).json({ error: 'Sin orden activa' })
     mesaId = orden.mesa_id   // la mesa vigente del pedido (puede no ser la del URL si se trasladó)
@@ -914,4 +930,6 @@ module.exports = {
   listar, crear, actualizar, eliminar, abrirMesa, tomarMesa, obtenerOrden,
   agregarItem, actualizarItem, eliminarItem, cobrar, trasladar, cancelarOrden, enviarPedido,
   comandasPendientes, marcarVistoItem, marcarVistoMesa, marcarServidoItem,
+  // helpers compartidos con mesas-sync.controller.js
+  recalcularTotalOrden, cerrarOrdenCobrada, obtenerOCrearMesero, resolverOrdenId,
 }

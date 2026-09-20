@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { sincronizarColaPos } from './pos/useOfflineQueue'
 import { sincronizarCobrosMesas } from './mesas/useOfflineMesasCobro'
+import { sincronizarOpsMesas } from './mesas/useOutboxMesas'
 import { SYNC_INTERVALO_MS, pedirAlmacenamientoPersistente } from '../../lib/offline'
 import { EVT_CONEXION, hayInternet, iniciarSondeoConexion } from '../../lib/conexion'
 
-// Sincroniza en segundo plano las colas de ventas (POS) y cobros de mesa guardados sin conexión,
+// Sincroniza en segundo plano las colas de ventas (POS), operaciones de mesas y cobros de mesa guardados sin conexión,
 // desde CUALQUIER pantalla del panel (el cajero puede estar en Caja o Mesas cuando vuelve internet).
 // Hook puro (solo useEffect): es seguro dentro del shell/layout.
 //
@@ -24,7 +25,8 @@ export function useSincronizacionColas(): void {
     const intentar = () => {
       if (!hayInternet()) return
       void sincronizarColaPos()
-      void sincronizarCobrosMesas()
+      // Operaciones de mesas primero (los cobros de mesa esperan a las de su cuenta)
+      void sincronizarOpsMesas().then(() => sincronizarCobrosMesas())
     }
     const alVolver = () => { if (document.visibilityState === 'visible') intentar() }
 

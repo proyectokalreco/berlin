@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import {
   SYNC_TIMEOUT_MS, isTransientError, isAuthError, mensajeError, leerLocal, guardarLocal,
 } from '../../../lib/offline'
+import { sincronizarOpsMesas, hayOpsPendientes } from './useOutboxMesas'
 
 export type SyncStatus = 'idle' | 'syncing'
 
@@ -88,7 +89,14 @@ export function parchearCobro(key: string, patch: Partial<QueuedCobro>): void {
 // con su motivo y sigue con los demás.
 export async function sincronizarCobrosMesas(): Promise<void> {
   if (sincronizando) return
-  const pendientes = cargarColaCobros().filter(c => !c.error && !enVuelo.has(c.idempotency_key))
+  if (!cargarColaCobros().some(c => !c.error && !enVuelo.has(c.idempotency_key))) return
+
+  // Primero las operaciones de las cuentas (tomar, agregar…): un cobro guardado sin conexión se
+  // refiere a productos que quizá solo existen en este equipo hasta que se sincronicen.
+  await sincronizarOpsMesas()
+  // Y un cobro espera a que no le quede nada pendiente a SU cuenta
+  const pendientes = cargarColaCobros().filter(c => !c.error && !enVuelo.has(c.idempotency_key)
+    && !hayOpsPendientes(c.orden_id ?? null, c.orden_id ? null : c.mesa_id))
   if (!pendientes.length) return
 
   sincronizando = true

@@ -7,6 +7,9 @@ import {
   GlassWater, Droplet, Milk,
 } from 'lucide-react'
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
+import { useOpsMesas, useOutboxMesas, encolarOp, nuevaOp, opsDeMesa, hayOpsPendientes, sincronizarOpsMesas } from './useOutboxMesas'
+import { ordenConOps, mesaConOps } from './overlayMesas'
+import { hayInternet } from '../../../lib/conexion'
 import type { QueuedCobro } from './useOfflineMesasCobro'
 import { api } from '../../../lib/api'
 import { COBRO_TIMEOUT_MS, isTransientError, isAuthError, fallbackSiNoRed } from '../../../lib/offline'
@@ -176,15 +179,15 @@ ${datos.efectivo_recibido && datos.metodo_pago === 'efectivo' ? `
 }
 
 // ── Tipos ─────────────────────────────────────────────────────
-interface Mesero  { id: string; nombre: string; color: string; usuario_id?: string | null }
-interface OrdenItem {
+export interface Mesero  { id: string; nombre: string; color: string; usuario_id?: string | null }
+export interface OrdenItem {
   id: string; cantidad: number; precio_unitario: number; subtotal: number; notas?: string
   enviado_at?: string | null; servido_at?: string | null
   venta_id?: string | null; pagado_at?: string | null   // venta_id != null → ya cobrado (cobro parcial)
   producto?: { id:string; nombre:string; imagen_url?:string; precio_venta:number; unidad_venta:string }
 }
-interface Orden { id:string; total:number; estado:string; created_at:string; mesero?:Mesero; items:OrdenItem[] }
-interface Mesa  { id:string; numero:number; nombre?:string; capacidad:number; estado:'libre'|'ocupada'|'reservada'; imagen_url?:string|null; orden_activa?:Orden|null }
+export interface Orden { id:string; total:number; estado:string; created_at:string; mesero?:Mesero; items:OrdenItem[] }
+export interface Mesa  { id:string; numero:number; nombre?:string; capacidad:number; estado:'libre'|'ocupada'|'reservada'; imagen_url?:string|null; orden_activa?:Orden|null }
 
 // ── Card de mesa ──────────────────────────────────────────────
 function MesaCard({
@@ -418,11 +421,40 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  const { data: orden, isLoading: loadOrden } = useQuery<Orden>({
+  // La cuenta que se ve = lo que dice el servidor + las operaciones de este equipo aún sin
+  // sincronizar (useOutboxMesas): así tomar la mesa, agregar productos o enviar el pedido se
+  // reflejan al instante, con o sin internet.
+  const opsTodas = useOpsMesas()
+  const { data: ordenSrv, isLoading: loadOrdenSrv } = useQuery<Orden | null>({
     queryKey: ['mesa-orden', mesa.id],
-    queryFn:  () => api.get(`/berlin/mesas/${mesa.id}/orden`).then(r => r.data),
+    // 404 = la mesa no tiene cuenta abierta en el servidor (todavía: puede existir solo en este equipo)
+    queryFn:  () => api.get(`/berlin/mesas/${mesa.id}/orden`).then(r => r.data as Orden)
+      .catch((e: { response?: { status?: number } }) => { if (e?.response?.status === 404) return null; throw e }),
     refetchInterval: 4_000,
   })
+  const opsMesa = useMemo(() => opsTodas.filter(o => o.mesa_id === mesa.id), [opsTodas, mesa.id])
+  const orden = useMemo(
+    // Sin dato propio de la cuenta aún (p. ej. abierta sin conexión) se parte del tablero
+    () => ordenConOps(ordenSrv !== undefined ? ordenSrv : (mesa.orden_activa ?? null), opsMesa),
+    [ordenSrv, mesa.orden_activa, opsMesa],
+  )
+  const loadOrden = loadOrdenSrv && !orden
+
+  // Cuenta al instante de tocar (incluye lo que se acaba de agregar y aún no se pinta), para
+  // que dos toques seguidos no se pisen.
+  const ordenFresca = (): Orden | null => {
+    const srv = qc.getQueryData<Orden | null>(['mesa-orden', mesa.id])
+    return ordenConOps(srv !== undefined ? srv : (mesa.orden_activa ?? null), opsDeMesa(mesa.id))
+  }
+  const baseOp = (o: Orden) => ({ mesa_id: mesa.id, mesa_numero: mesa.numero, orden_id: o.id })
+  // Acciones que necesitan al servidor esperan a que se sincronice lo pendiente de esta mesa
+  const hayPendientesSinSync = (): boolean => {
+    if (hayOpsPendientes(orden?.id ?? null, mesa.id)) {
+      toast.error('Esta mesa tiene cambios sin sincronizar. Espera un momento (o a que vuelva la conexión) e inténtalo de nuevo.')
+      return true
+    }
+    return false
+  }
 
   const { data: productos = [] } = useQuery<Producto[]>({
     queryKey: ['productos-mesa'],
@@ -447,12 +479,38 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     [clientesTodos, buscandoCli],
   )
 
-  const { mutate: agregarProd } = useMutation({
-    mutationFn: (payload: { producto_id: string; cantidad: number; precio_unitario?: number; nombre_libre?: string; notas?: string }) =>
-      api.post(`/berlin/mesas/${mesa.id}/orden/items`, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] }),
-    onError: () => toast.error('Error al agregar producto'),
-  })
+  const agregarProd = (payload: { producto_id: string; cantidad: number; precio_unitario?: number; nombre_libre?: string; notas?: string }) => {
+    const o = ordenFresca()
+    if (!o) { toast.error('Esta mesa no tiene una cuenta abierta'); return }
+    const prod = productos.find(x => x.id === payload.producto_id)
+    if (!prod) { toast.error('Producto no disponible'); return }
+    const qty    = Number(payload.cantidad) || 1
+    // El precio es el que ve el cliente en pantalla (Venta Libre trae el suyo)
+    const precio = payload.precio_unitario ? Number(payload.precio_unitario) : Number(prod.precio_venta)
+    // Igual que el servidor: la Venta Libre lleva su nombre en la nota, con prefijo
+    const notasFinal = payload.nombre_libre
+      ? `[${payload.nombre_libre.trim()}]${payload.notas ? ' ' + payload.notas.trim() : ''}`
+      : (payload.notas?.trim() || null)
+
+    // Un producto = una línea con cantidad: si ya hay una igual (mismo precio y nota) que aún no
+    // se envió a las estaciones, se le suma; una línea ya enviada nunca se toca.
+    const igual = o.items.find(i => i.producto?.id === payload.producto_id
+      && Number(i.precio_unitario) === precio && (i.notas ?? null) === notasFinal
+      && !i.enviado_at && !i.venta_id)
+    if (igual) {
+      encolarOp(nuevaOp('cantidad', baseOp(o), {
+        item_id: igual.id, delta: qty, cantidad_final: Number(igual.cantidad) + qty,
+      }))
+    } else {
+      encolarOp(nuevaOp('agregar', baseOp(o), {
+        item_id: crypto.randomUUID(), producto_id: prod.id, cantidad: qty, precio_unitario: precio, notas: notasFinal,
+        producto: {
+          id: prod.id, nombre: prod.nombre, imagen_url: prod.imagen_url,
+          precio_venta: Number(prod.precio_venta), unidad_venta: prod.unidad_venta,
+        },
+      }))
+    }
+  }
 
   // ── Jugos/Limonadas/Aromáticas — mismo modal Sabor(+Base) que POS.tsx.
   // Detección de categoría por nombre normalizado, no por ID fijo. La base (Agua/Leche) se
@@ -560,34 +618,31 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     setVentaLibreModal(null)
   }
 
-  const { mutate: actualizarCantidad } = useMutation({
-    mutationFn: ({ itemId, cantidad }: { itemId: string; cantidad: number }) =>
-      api.patch(`/berlin/mesas/${mesa.id}/orden/items/${itemId}`, { cantidad }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] }),
-    onError: () => toast.error('Error al actualizar cantidad'),
-  })
+  const quitarItem = (itemId: string) => {
+    const o = ordenFresca()
+    const it = o?.items.find(i => i.id === itemId)
+    if (!o || !it) return
+    if (it.venta_id) { toast.error('Este producto ya fue cobrado — no se puede quitar.'); return }
+    encolarOp(nuevaOp('quitar', baseOp(o), { item_id: itemId }))
+    // Si con esto se acaba lo pendiente de una cuenta ya cobrada en parte, el servidor la cierra al
+    // sincronizar y la mesa queda libre (la pantalla vuelve al tablero sola).
+  }
 
-  const { mutate: quitarItem } = useMutation({
-    mutationFn: (itemId: string) => api.delete(`/berlin/mesas/${mesa.id}/orden/items/${itemId}`),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] })
-      // Cobro parcial previo + se quitó lo último pendiente → el backend cerró la mesa
-      if (res.data?.orden_cerrada) {
-        toast.success('Mesa saldada — todo lo demás ya estaba cobrado')
-        qc.invalidateQueries({ queryKey: ['mesas'] })
-        onVolver()
-      }
-    },
-    onError: (err: unknown) => {
-      const msg = (err as {response?:{data?:{error?:string}}})?.response?.data?.error
-      toast.error(msg || 'Error al quitar el producto')
-    },
-  })
+  const actualizarCantidad = ({ itemId, cantidad }: { itemId: string; cantidad: number }) => {
+    const o = ordenFresca()
+    const it = o?.items.find(i => i.id === itemId)
+    if (!o || !it) return
+    if (it.venta_id) { toast.error('Este producto ya fue cobrado — no se puede modificar.'); return }
+    if (cantidad < 1) { quitarItem(itemId); return }
+    const delta = cantidad - Number(it.cantidad)
+    if (!delta) return
+    encolarOp(nuevaOp('cantidad', baseOp(o), { item_id: itemId, delta, cantidad_final: cantidad }))
+  }
 
   // Estado "Servido" manual (Fase E) — lo marca quien atiende la mesa al entregar el
   // producto al cliente, independiente de "Preparado" (que es cocina/barra terminando
   // de cocinarlo/servirlo en Comandas). Invalida también ['mesas'] para el badge del tablero.
-  const { mutate: marcarServido } = useMutation({
+  const { mutate: marcarServidoSrv } = useMutation({
     mutationFn: (itemId: string) => api.patch(`/berlin/mesas/${mesa.id}/orden/items/${itemId}/servido`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] })
@@ -595,18 +650,22 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     },
     onError: () => toast.error('Error al marcar servido'),
   })
+  const marcarServido = (itemId: string) => { if (!hayPendientesSinSync()) marcarServidoSrv(itemId) }
 
-  const { mutate: enviarPedido, isPending: enviando } = useMutation({
-    mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/enviar-pedido`),
-    onSuccess: () => {
-      toast.success('✅ Pedido enviado al cajero')
-      onVolver()
-    },
-    onError: (err: unknown) => {
-      const msg = (err as {response?:{data?:{error?:string}}})?.response?.data?.error
-      toast.error(msg || 'Error al enviar pedido')
-    },
-  })
+  const enviando = false
+  const enviarPedido = () => {
+    const o = ordenFresca()
+    const nuevos = (o?.items ?? []).filter(i => !i.enviado_at && !i.venta_id)
+    if (!o || !nuevos.length) {
+      toast.error('No hay productos nuevos para enviar — ya se mandaron todos a las estaciones.')
+      return
+    }
+    encolarOp(nuevaOp('enviar', baseOp(o), { item_ids: nuevos.map(i => i.id) }))
+    toast.success(hayInternet()
+      ? '✅ Pedido enviado al cajero'
+      : '📶 Pedido guardado — llegará a cocina cuando vuelva la conexión', { duration: 6000 })
+    onVolver()
+  }
 
   // Foto de TODO lo que se cobra, tomada al pulsar "Cobrar": la respuesta llega después y
   // el polling de la orden (cada 4 s) puede haber cambiado los datos vivos entretanto.
@@ -695,6 +754,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
         total:           s.total,
       })
       try {
+        // La cuenta (o sus productos) puede existir solo en este equipo todavía: primero se
+        // sincroniza; si no se logra, el cobro se queda guardado y sale después, en orden.
+        if (hayOpsPendientes(s.ordenId ?? null, mesa.id)) {
+          await sincronizarOpsMesas()
+          if (hayOpsPendientes(s.ordenId ?? null, mesa.id)) throw Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' })
+        }
         return await api.post(`/berlin/mesas/${mesa.id}/cobrar`, payloadDe(s), { timeout: COBRO_TIMEOUT_MS })
       } catch (err) {
         // Fallo pasajero o sesión vencida: el cobro se queda en la cola. Un rechazo real del
@@ -793,7 +858,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     setCobrarKey(crypto.randomUUID())
   }
 
-  const { mutate: cancelar } = useMutation({
+  const { mutate: cancelarSrv } = useMutation({
     mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/cancelar-orden`),
     onSuccess: () => { toast('Orden cancelada'); qc.invalidateQueries({ queryKey: ['mesas'] }); onVolver() },
     onError: (err: unknown) => {
@@ -801,10 +866,11 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
       toast.error(msg || 'Error al cancelar la orden')
     },
   })
+  const cancelar = () => { if (!hayPendientesSinSync()) cancelarSrv() }
 
   // Cambiar el pedido a otra mesa libre — el backend solo cambia la mesa de la orden; ítems,
   // estados (enviado/servido/cobrado), mesero y total viajan intactos. Requiere conexión.
-  const { mutate: trasladar, isPending: trasladando } = useMutation({
+  const { mutate: trasladarSrv, isPending: trasladando } = useMutation({
     mutationFn: async (destino: Mesa) => {
       const r = await api.post(`/berlin/mesas/${mesa.id}/trasladar`, { destino_id: destino.id })
       return { ordenId: r.data.orden_id as string, destino }
@@ -821,6 +887,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
       qc.invalidateQueries({ queryKey: ['mesas'] })
     },
   })
+  const trasladar = (destino: Mesa) => { if (!hayPendientesSinSync()) trasladarSrv(destino) }
 
   // Cobro parcial: `items` = solo lo PENDIENTE de cobro; lo ya cobrado (venta_id) va aparte.
   // Cobros guardados de ESTE pedido: por orden_id (sobreviven a un traslado de mesa) y, los
@@ -2316,10 +2383,22 @@ export default function MesasPage() {
           retry: reintentarCobro, discard: descartarCobro, tagOrden: etiquetarCobrosConOrden,
         } = useOfflineMesasCobro(handleCobroSync)
 
+  // ── Cola de operaciones de Mesas (tomar, agregar, quitar, enviar…) — funcionan sin conexión ──
+  // Tras sincronizar se refresca cuenta y tablero ANTES de sacarlas de la cola (sin parpadeo).
+  const refrescarTrasSync = useCallback(() => Promise.all([
+    qc.refetchQueries({ queryKey: ['mesa-orden'] }),
+    qc.refetchQueries({ queryKey: ['mesas'] }),
+  ]), [qc])
+  const { ops: opsMesas, pendientes: opsPendientes, fallidas: opsFallidas, sincronizando: opsSincronizando,
+          syncNow: syncOpsNow, retry: reintentarOp, discard: descartarOp } = useOutboxMesas(refrescarTrasSync)
+
+  // El tablero = lo que dice el servidor + las operaciones de este equipo aún sin sincronizar
+  const superponerOps = useCallback((data: Mesa[]) => data.map(m => mesaConOps(m, opsMesas)), [opsMesas])
   const { data: mesas = [], isLoading } = useQuery<Mesa[]>({
     queryKey: ['mesas'],
     queryFn:  () => api.get('/berlin/mesas').then(r => r.data),
     refetchInterval: 5_000,
+    select: superponerOps,
   })
 
   // Caja activa del usuario logueado (para cobro en cajero/admin)
@@ -2340,21 +2419,20 @@ export default function MesasPage() {
     staleTime: 0,
   })
 
-  // Mutación directa: tomar mesa sin PIN
-  const { mutate: tomarMesa, isPending: tomando } = useMutation({
-    mutationFn: (mesaId: string) => api.post(`/berlin/mesas/${mesaId}/tomar`),
-    onSuccess: (_, mesaId) => {
-      toast.success('✅ Mesa asignada')
-      qc.invalidateQueries({ queryKey: ['mesas'] })
-      // Entrar directo a la orden
-      const mesa = mesas.find(m => m.id === mesaId)
-      if (mesa) setVistaOrden(mesa)
-    },
-    onError: (err: unknown) => {
-      const msg = (err as {response?:{data?:{error?:string}}})?.response?.data?.error
-      toast.error(msg || 'Error al tomar mesa')
-    },
-  })
+  // Tomar mesa (sin PIN): se guarda como operación local y la mesa queda ocupada al instante; el
+  // servidor la registra al sincronizar. Si otro equipo ya la tenía abierta, las cuentas se
+  // fusionan y se avisa (nunca se pierde un pedido).
+  const tomando = false
+  const tomarMesa = (mesaId: string) => {
+    const m = mesas.find(x => x.id === mesaId)
+    if (!m) return
+    const nombre = user?.apellido ? `${user.nombre} ${user.apellido}` : user?.nombre ?? ''
+    encolarOp(nuevaOp('tomar',
+      { mesa_id: m.id, mesa_numero: m.numero, orden_id: crypto.randomUUID() },
+      { mesero: { id: `local-${user?.id ?? ''}`, nombre, color: '#00C49A', usuario_id: user?.id ?? null } }))
+    toast.success(hayInternet() ? '✅ Mesa asignada' : '📶 Mesa asignada sin conexión — se registrará al reconectar')
+    setVistaOrden(m)   // entrar directo a la orden
+  }
 
   const libres   = mesas.filter(m => m.estado === 'libre')
   const ocupadas = mesas.filter(m => m.estado === 'ocupada')
@@ -2416,6 +2494,63 @@ export default function MesasPage() {
 
   return (
     <div className="space-y-4">
+
+      {/* Cambios de mesas guardados en este equipo, pendientes de sincronizar */}
+      {opsPendientes > 0 && (
+        <div className={cn(
+          'flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-xs font-medium border',
+          opsSincronizando
+            ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+            : 'bg-amber-500/10 border-amber-500/30 text-amber-300',
+        )}>
+          <div className="flex items-center gap-2">
+            <RefreshCw size={13} className={opsSincronizando ? 'animate-spin' : ''} />
+            <span>
+              {opsSincronizando
+                ? `Sincronizando ${opsPendientes} cambio${opsPendientes > 1 ? 's' : ''} de mesas…`
+                : `${opsPendientes} cambio${opsPendientes > 1 ? 's' : ''} de mesas pendiente${opsPendientes > 1 ? 's' : ''} de sincronizar · se guardan en este equipo`}
+            </span>
+          </div>
+          {!opsSincronizando && (
+            <button onClick={syncOpsNow}
+              className="underline underline-offset-2 hover:text-amber-200 transition-colors">
+              Sincronizar ahora
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Cambios que el servidor rechazó al sincronizar — NUNCA se descartan solos */}
+      {opsFallidas.map(o => (
+        <div key={o.op_id}
+          className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl text-xs border bg-red-500/10 border-red-500/40 text-red-200">
+          <div className="space-y-0.5">
+            <p className="font-bold">
+              ⚠️ Cambio NO registrado — Mesa {o.mesa_numero} · {
+                o.tipo === 'agregar'  ? `agregar ${o.producto?.nombre ?? 'producto'}`
+                : o.tipo === 'cantidad' ? 'cambiar una cantidad'
+                : o.tipo === 'quitar'   ? 'quitar un producto'
+                : o.tipo === 'enviar'   ? 'enviar el pedido a cocina'
+                : 'abrir la mesa'}
+            </p>
+            <p>{o.error}</p>
+            <p className="text-red-300/80">
+              Revisa la mesa. Puedes reintentar, o descartar este cambio (deja de verse en pantalla).
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 flex-shrink-0">
+            <button onClick={() => reintentarOp(o.op_id)}
+              className="px-3 py-1 rounded-lg border border-red-300/40 hover:bg-red-500/20 font-semibold">
+              Reintentar
+            </button>
+            <button
+              onClick={() => { if (confirm('¿Descartar este cambio? No se aplicará en la mesa.')) descartarOp(o.op_id) }}
+              className="px-3 py-1 rounded-lg border border-red-300/20 text-red-300/80 hover:bg-red-500/10">
+              Descartar
+            </button>
+          </div>
+        </div>
+      ))}
 
       {/* Banner cobros pendientes de sincronizar */}
       {cobrosPendientes > 0 && (
