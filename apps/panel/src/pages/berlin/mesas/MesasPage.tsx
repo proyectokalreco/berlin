@@ -312,6 +312,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
   const [cobrarKey, setCobrarKey] = useState(() => crypto.randomUUID())
   // Dividir cuenta: seleccion[itemId] = unidades elegidas para cobrar ahora
   const [showTrasladar, setShowTrasladar] = useState(false)
+  // Celular: catálogo y pedido no caben lado a lado (el carrito solo mide 240-520 px). Se muestra
+  // uno a la vez con pestañas, igual que el POS.
+  const [esMovil, setEsMovil] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  const [vistaMovil, setVistaMovil] = useState<'catalogo' | 'pedido'>('catalogo')
+  useEffect(() => {
+    const revisar = () => setEsMovil(window.innerWidth < 768)
+    window.addEventListener('resize', revisar)
+    return () => window.removeEventListener('resize', revisar)
+  }, [])
   const [modoDividir, setModoDividir] = useState(false)
   const [seleccion,   setSeleccion]   = useState<Record<string, number>>({})
   const [busqueda,    setBusqueda]    = useState('')
@@ -998,15 +1007,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
 
   return (
     <>
-    <div className="flex flex-col h-[calc(100vh-120px)] min-h-0 overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-120px)] min-h-0 overflow-hidden">
       {/* Header mesa */}
-      <div className="flex items-center gap-3 mb-3 flex-shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 mb-3 flex-shrink-0">
         <button onClick={onVolver}
           className="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-navy border border-white/10 text-gray-400 hover:text-white">
           <ChevronLeft size={18}/>
         </button>
-        <div className="flex-1">
-          <p className="text-white font-bold">Mesa {mesa.numero}{mesa.nombre ? ` — ${mesa.nombre}` : ''}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold truncate">Mesa {mesa.numero}{mesa.nombre ? ` — ${mesa.nombre}` : ''}</p>
           {mesero && (
             <p className="text-xs flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ background: mesero.color }}/>
@@ -1017,20 +1026,40 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
         {orden && (
           <button onClick={() => setShowTrasladar(true)}
             className="flex items-center gap-1.5 text-xs text-brand-teal hover:text-white px-3 py-1.5 rounded-lg border border-brand-teal/30 hover:bg-brand-teal/10 transition-colors">
-            <RefreshCw size={12}/> Cambiar de mesa
+            <RefreshCw size={12}/> <span className="hidden sm:inline">Cambiar de mesa</span><span className="sm:hidden">Mover</span>
           </button>
         )}
         {puedeCancelar && itemsPagados.length === 0 && colaCobros.length === 0 && (
           <button onClick={() => { if(confirm('¿Cancelar la orden y liberar la mesa?')) cancelar() }}
             className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10">
-            Cancelar orden
+            <span className="hidden sm:inline">Cancelar orden</span><span className="sm:hidden">Cancelar</span>
           </button>
         )}
       </div>
 
+      {/* Celular: pestañas Catálogo / Pedido */}
+      {esMovil && (
+        <div className="flex border-b border-white/10 bg-brand-navy rounded-t-xl flex-shrink-0 mb-2">
+          {([['catalogo', 'Catálogo'], ['pedido', 'Pedido']] as const).map(([k, etiqueta]) => (
+            <button key={k} onClick={() => setVistaMovil(k)}
+              className={cn(
+                'flex-1 py-3 text-sm font-semibold transition-colors relative',
+                vistaMovil === k ? 'text-[#EA580C] border-b-2 border-[#EA580C]' : 'text-gray-500 hover:text-white',
+              )}>
+              {etiqueta}
+              {k === 'pedido' && items.length > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 rounded-full bg-[#EA580C] text-white text-[10px] font-bold">
+                  {items.length} · {fmt(totalPendiente)}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex gap-3 flex-1 min-h-0">
         {/* ── Panel izquierdo: catálogo ── */}
-        <div className="flex flex-col flex-1 min-w-0 gap-2">
+        <div className={cn('flex flex-col flex-1 min-w-0 gap-2', esMovil && vistaMovil === 'pedido' && 'hidden')}>
           {/* Búsqueda */}
           <div className="relative flex-shrink-0">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"/>
@@ -1104,8 +1133,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
           </div>
         </div>
 
-        {/* ── Handle redimensionable (horizontal) ── */}
-        <div
+        {/* ── Handle redimensionable (horizontal) — solo con mouse ── */}
+        {!esMovil && <div
           onMouseDown={e => {
             e.preventDefault()
             isDragging.current  = true
@@ -1116,11 +1145,14 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
           }}
           className="w-1.5 flex-shrink-0 rounded-full bg-white/5 hover:bg-[#EA580C]/60 active:bg-[#EA580C] cursor-col-resize transition-colors"
           title="Arrastra para ajustar el ancho del panel"
-        />
+        />}
 
         {/* ── Panel derecho: carrito (idéntico al POS) ── */}
-        <div className="flex-shrink-0 flex flex-col bg-brand-navy border border-white/5 rounded-xl min-h-0"
-          style={{ width: panelWidth }}>
+        <div className={cn(
+            'flex flex-col bg-brand-navy border border-white/5 rounded-xl min-h-0',
+            esMovil ? (vistaMovil === 'pedido' ? 'flex-1 w-full min-w-0' : 'hidden') : 'flex-shrink-0',
+          )}
+          style={esMovil ? undefined : { width: panelWidth }}>
           {/* Cabecera carrito */}
           <div className="px-3 py-2.5 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Orden</p>

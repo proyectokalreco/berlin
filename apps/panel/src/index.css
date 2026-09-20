@@ -93,3 +93,63 @@ html, body {
     min-height: 44px;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   CELULARES Y TABLETS
+   ────────────────────────────────────────────────────────────── */
+
+/* Notch / barra de estado / barra de gestos (iPhone, Android con gestos) cuando la app se abre
+   instalada en pantalla completa: el contenido no queda debajo. Con viewport-fit=cover. */
+#root {
+  padding-top:    env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left:   env(safe-area-inset-left);
+  padding-right:  env(safe-area-inset-right);
+}
+
+/* La altura de pantalla del navegador móvil CAMBIA al mostrarse/ocultarse la barra de direcciones:
+   100vh es la altura más grande (con la barra oculta) y deja botones fuera de la vista. 100dvh
+   es la altura visible real. */
+@supports (height: 100dvh) {
+  .min-h-screen { min-height: 100dvh; }
+  .h-screen     { height: 100dvh; }
+}
+
+/* iOS Safari hace zoom automático al tocar un campo con letra menor a 16px y no lo deshace:
+   deja la pantalla ampliada y desalineada. En pantallas táctiles los campos van a 16px. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Ventanas emergentes en pantallas chicas (celular, o celular acostado): pegadas arriba y con
+   scroll propio. Si la ventana es más alta que la pantalla, centrarla dejaría su parte superior
+   —con el título y el botón de cerrar— fuera de la vista y sin forma de llegar. */
+@media (max-width: 640px), (max-height: 560px) {
+  .fixed.inset-0.flex.items-center {
+    align-items: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Tablas anchas (Inventario, Proveedores, Reportes, Movimientos…): en celular se desplazan de lado
+   dentro de su tarjeta en vez de ensanchar toda la página. */
+@media (max-width: 767px) {
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Los hijos de una rejilla pueden encogerse: el texto largo se parte en vez de salirse */
+  .grid > * { min-width: 0; }
+}
+
+/* Rejillas de 4 columnas fijas (formularios y totales): en celular vertical, 2 columnas. */
+@media (max-width: 480px) {
+  .grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

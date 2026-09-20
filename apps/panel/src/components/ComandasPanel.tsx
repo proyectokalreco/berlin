@@ -260,7 +260,7 @@ export default function ComandasPanel() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-50 w-96 max-w-[92vw] bg-[#2C2925] rounded-2xl border border-white/10
+          <div className="absolute right-0 top-10 z-50 w-96 max-w-[92vw] max-sm:fixed max-sm:inset-x-2 max-sm:right-2 max-sm:top-[72px] max-sm:w-auto max-sm:max-w-none bg-[#2C2925] rounded-2xl border border-white/10
                           shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
               <p className="text-sm font-bold text-white flex items-center gap-1.5">
