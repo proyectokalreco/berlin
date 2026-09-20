@@ -18,46 +18,68 @@ const esAdminRol  = (rol) => ROLES_ADMIN.includes(rol);
 // medianoche, perdiendo las de la tarde/noche anterior.
 const TURNO_LIMITE_HORAS_OLVIDADO = 20 // más que esto sin cerrar = probable turno olvidado
 
-// ── Desglose por estación (Comandas Fase 4) — solo ventas de mesa (origen='mesa')
-// en el rango dado, agrupadas por Cocina/Bebidas/etc, con detalle de qué producto
-// salió, cuántas unidades y por cuánto valor. Reporte operativo, no toca el dinero
-// del arqueo (ese sigue calculándose igual, sin filtrar por origen).
+// ── Desglose por ÁREA / estación (Cocina, Bebidas y Barra…) — ventas de POS **y** Mesas en el
+// rango dado, agrupadas por el área de la categoría de cada producto, con el detalle de qué
+// producto salió, cuántas unidades y por cuánto valor, y con el responsable del área (el cajero
+// cuya estación asignada en Empleados es esa). Antes solo contaba Mesas (Comandas Fase 4); el
+// cliente pidió (2026-09-20) ver TODO lo vendido por área para saber de qué responde cada cajero.
+// Reporte operativo: no toca el dinero del arqueo (ese se calcula aparte, sin filtrar por área).
 const obtenerDesgloseEstaciones = async (desde, hasta) => {
-  const { data: ventas } = await supabase
-    .from('br_ventas')
-    .select(`
-      id,
-      items:br_venta_items(
-        cantidad, subtotal,
-        producto:producto_id(nombre, categoria:categoria_id(estacion_id, estacion:estacion_id(id, nombre, color)))
-      )
-    `)
-    .eq('estado', 'completada')
-    .eq('origen', 'mesa')
-    .gte('fecha', desde)
-    .lte('fecha', hasta)
+  const [{ data: ventas }, { data: cajeros }] = await Promise.all([
+    supabase
+      .from('br_ventas')
+      .select(`
+        id, origen,
+        items:br_venta_items(
+          cantidad, subtotal,
+          producto:producto_id(nombre, categoria:categoria_id(estacion_id, estacion:estacion_id(id, nombre, color)))
+        )
+      `)
+      .eq('estado', 'completada')
+      .gte('fecha', desde)
+      .lte('fecha', hasta),
+    supabase
+      .from('br_empleados')
+      .select('nombre, estacion_id')
+      .eq('activo', true)
+      .not('estacion_id', 'is', null),
+  ])
+
+  // estación → nombres de los cajeros a cargo
+  const responsables = new Map()
+  for (const c of cajeros || []) {
+    if (!responsables.has(c.estacion_id)) responsables.set(c.estacion_id, [])
+    responsables.get(c.estacion_id).push(c.nombre)
+  }
 
   const estaciones = new Map()
   for (const v of ventas || []) {
+    const modulo = v.origen === 'mesa' ? 'mesa' : 'pos'
     for (const it of v.items || []) {
       const est = it.producto?.categoria?.estacion
       const key = est?.id ?? 'sin_estacion'
       if (!estaciones.has(key)) {
-        estaciones.set(key, { id: key, nombre: est?.nombre ?? 'Sin estación', color: est?.color ?? '#6B7280', total: 0, items: new Map() })
+        estaciones.set(key, {
+          id: key, nombre: est?.nombre ?? 'Sin estación', color: est?.color ?? '#6B7280',
+          responsables: est?.id ? (responsables.get(est.id) || []) : [],
+          total: 0, pos: 0, mesa: 0, items: new Map(),
+        })
       }
       const bucket = estaciones.get(key)
-      bucket.total += Number(it.subtotal)
+      const valor = Number(it.subtotal)
+      bucket.total += valor
+      bucket[modulo] += valor
       const nombreProd = it.producto?.nombre ?? 'Producto'
       const acc = bucket.items.get(nombreProd) || { nombre: nombreProd, cantidad: 0, valor: 0 }
       acc.cantidad += Number(it.cantidad)
-      acc.valor += Number(it.subtotal)
+      acc.valor += valor
       bucket.items.set(nombreProd, acc)
     }
   }
 
   return Array.from(estaciones.values())
-    .map(e => ({ ...e, items: Array.from(e.items.values()).sort((a, b) => b.valor - a.valor) }))
-    .sort((a, b) => b.total - a.total)
+    .map(e => ({ ...e, items: Array.from(e.items.values()).sort((x, y) => y.valor - x.valor) }))
+    .sort((x, y) => y.total - x.total)
 }
 
 // Desglose de ventas por cajero, separado además por módulo (POS/Mesas) — control
@@ -502,6 +524,71 @@ const ventasTurno = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET /berlin/caja/turnos/:id/desglose
+// Reconstruye el detalle (ventas por cajero + despacho por área) de CUALQUIER turno, para
+// reimprimir cierres históricos con el mismo formato que el cierre en vivo. El detalle no se
+// guarda al cerrar: se recalcula desde las ventas del turno.
+//
+// Los turnos se cerraron con dos reglas distintas y se prueban las dos:
+//   'turno' → ventas desde la apertura hasta el cierre (cerrarCaja, el cierre normal)
+//   'dia'   → ventas del día calendario del turno (cerrarTurnoHistorico, cierre manual de un turno viejo)
+// Se usa la regla cuyo total Y número de ventas coinciden con lo que quedó guardado al cerrar ese
+// turno. Si ninguna coincide (p. ej. se anuló una venta después) se devuelve la regla 'turno' con
+// exacto=false y las diferencias, para que el reporte lo avise en vez de mostrar un dato dudoso.
+const ventasDeRango = async (desde, hasta) => {
+  const { data } = await supabase
+    .from('br_ventas')
+    .select('total, vendedor_id, origen, vendedor:vendedor_id(nombre)')
+    .eq('estado', 'completada')
+    .gte('fecha', desde)
+    .lte('fecha', hasta);
+  return data || [];
+};
+
+const desgloseTurno = async (req, res, next) => {
+  try {
+    const isAdmin = ['super_admin', 'admin', 'admin_berlin'].includes(req.user.rol);
+    const { data: turno, error } = await supabase
+      .from('br_turnos_caja').select('*').eq('id', req.params.id).maybeSingle();
+    if (error) throw error;
+    if (!turno) return res.status(404).json({ error: 'Turno no encontrado' });
+    // Mismo criterio que el historial: un no-admin solo ve los turnos que él abrió
+    if (!isAdmin && turno.usuario_apertura_id !== req.user.id) {
+      return res.status(403).json({ error: 'No tienes permiso para ver este turno' });
+    }
+
+    const cerrado = turno.estado === 'cerrado';
+    const candidatos = [
+      { regla: 'turno', desde: turno.apertura_at, hasta: turno.cierre_at || new Date().toISOString() },
+      { regla: 'dia',   ...rangoDiaColombia(turno.fecha) },
+    ];
+
+    let elegido = null;
+    let primero = null;
+    for (const c of candidatos) {
+      const ventas = await ventasDeRango(c.desde, c.hasta);
+      const total  = ventas.reduce((s, v) => s + parseFloat(v.total), 0);
+      const r = { ...c, ventas, total };
+      if (!primero) primero = r;
+      const coincide = !cerrado
+        || (Math.abs(total - Number(turno.total_ventas)) < 0.5 && ventas.length === Number(turno.num_ventas));
+      if (coincide) { elegido = r; break; }
+    }
+    const usado = elegido || primero;
+
+    res.json({
+      exacto:               !!elegido,
+      regla:                usado.regla,
+      total_guardado:       Number(turno.total_ventas),
+      total_reconstruido:   usado.total,
+      num_guardado:         Number(turno.num_ventas),
+      num_reconstruido:     usado.ventas.length,
+      desglose_vendedores:  construirDesgloseVendedores(usado.ventas),
+      desglose_estaciones:  await obtenerDesgloseEstaciones(usado.desde, usado.hasta),
+    });
+  } catch (err) { next(err); }
+};
+
 // ── GET /api/panaderia/caja/desglose-estaciones
 // Vista en vivo (turno abierto, desde apertura_at hasta ahora) — usada por el
 // cierre parcial en el panel. El cierre real recalcula esto mismo con el rango
@@ -518,5 +605,5 @@ const desgloseEstacionesTurno = async (req, res, next) => {
 
 module.exports = {
   turnoActivo, turnoPendiente, turnoNegocioActivo, obtenerCajaHoy, abrirCaja,
-  cerrarCaja, cerrarTurnoHistorico, historial, ventasTurno, desgloseEstacionesTurno,
+  cerrarCaja, cerrarTurnoHistorico, historial, ventasTurno, desgloseEstacionesTurno, desgloseTurno,
 };

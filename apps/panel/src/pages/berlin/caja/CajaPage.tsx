@@ -43,13 +43,77 @@ interface TurnoCaja {
   usuario_apertura?: { id: string; nombre: string; rol?: string }
   usuario_cierre?: { id: string; nombre: string }
   desglose_vendedores?: DesgloseVendedor[]
-  desglose_estaciones?: { id: string; nombre: string; color: string; total: number; items: { nombre: string; cantidad: number; valor: number }[] }[]
+  desglose_estaciones?: DesgloseArea[]
+  // Reimpresión de un cierre histórico cuyo detalle no cuadra con lo guardado al cerrarlo (ver reimprimirCierreHistorico)
+  nota_reconstruccion?: string
+}
+
+// Ventas de un área (Cocina, Bebidas y Barra…): POS + Mesas, con el cajero responsable del área
+interface DesgloseArea {
+  id: string; nombre: string; color: string; total: number
+  pos?: number; mesa?: number
+  responsables?: string[]
+  items: { nombre: string; cantidad: number; valor: number }[]
 }
 
 interface DesgloseVendedor {
   vendedor_id: string | null; nombre: string; total: number; num_ventas: number
   pos:  { total: number; num_ventas: number }
   mesa: { total: number; num_ventas: number }
+}
+
+// ── Secciones del detalle del cierre — las usan el cierre final, el parcial y la reimpresión, para
+// que los tres salgan idénticos. ────────────────────────────────────────────────────────────────
+// Ventas por cajero (POS / Mesas). Se muestra siempre que haya ventas (antes solo con 2+ cajeros).
+function htmlVentasPorCajero(lista?: DesgloseVendedor[]): string {
+  if (!lista || lista.length === 0) return ''
+  return `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">VENTAS POR CAJERO — POS / MESAS</p>
+${lista.map(d => `
+<div class="row b sm" style="margin-top:3px"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>
+${d.pos.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;POS (${d.pos.num_ventas})</span><span class="amt">${fmt(d.pos.total)}</span></div>` : ''}
+${d.mesa.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Mesas (${d.mesa.num_ventas})</span><span class="amt">${fmt(d.mesa.total)}</span></div>` : ''}
+`).join('')}
+`
+}
+
+// Despacho por área con su responsable: TODO lo vendido (POS y Mesas), producto por producto.
+// `totalVentas` = total del turno: la diferencia con la suma de las áreas es el redondeo a $50 /
+// descuentos, que se muestra en su propia línea para que todo cuadre con el total.
+function htmlDespachoPorArea(lista: DesgloseArea[] | undefined, totalVentas: number): string {
+  if (!lista || lista.length === 0) return ''
+  const ajuste = totalVentas - lista.reduce((s, e) => s + e.total, 0)
+  return `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS Y POS</p>
+${lista.map(e => `
+<div class="row b sm" style="margin-top:3px"><span>${e.nombre}${e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span><span class="amt">${fmt(e.total)}</span></div>
+${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}
+`).join('')}
+${Math.abs(ajuste) >= 1 ? `<div class="row sm" style="margin-top:3px"><span>Redondeo y ajustes</span><span class="amt">${ajuste >= 0 ? '' : '-'}${fmt(Math.abs(ajuste))}</span></div>` : ''}
+`
+}
+
+// Reimpresión de un cierre del Historial: pide al servidor el detalle (ventas por cajero y despacho
+// por área) del turno, que no se guarda al cerrar, y lo imprime con el mismo formato del cierre.
+async function reimprimirCierreHistorico(t: TurnoCaja) {
+  const cajero = t.usuario_cierre?.nombre ?? ''
+  try {
+    const { data } = await api.get(`/berlin/caja/turnos/${t.id}/desglose`)
+    const nota = data.exacto
+      ? undefined
+      : `Detalle reconstruido: NO coincide con lo cerrado (guardado ${fmt(data.total_guardado)} / calculado ${fmt(data.total_reconstruido)}). Puede haber ventas anuladas o cambiadas después del cierre.`
+    imprimirCierre({
+      ...t,
+      desglose_vendedores: data.desglose_vendedores,
+      desglose_estaciones: data.desglose_estaciones,
+      nota_reconstruccion: nota,
+    }, cajero)
+  } catch {
+    toast.error('No se pudo calcular el detalle del turno; se imprime el cierre sin detalle')
+    imprimirCierre(t, cajero)
+  }
 }
 
 // ── Imprimir reporte de cierre de caja ───────────────────────────
@@ -113,24 +177,8 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(turno.total_credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${turno.num_ventas}</span></div>
 
-${(turno.desglose_vendedores && turno.desglose_vendedores.length > 1) ? `
-<div class="sep"></div>
-<p class="b sm" style="margin-bottom:3px">VENTAS POR CAJERO — POS / MESAS</p>
-${turno.desglose_vendedores.map(d => `
-<div class="row b sm" style="margin-top:3px"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>
-${d.pos.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;POS (${d.pos.num_ventas})</span><span class="amt">${fmt(d.pos.total)}</span></div>` : ''}
-${d.mesa.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Mesas (${d.mesa.num_ventas})</span><span class="amt">${fmt(d.mesa.total)}</span></div>` : ''}
-`).join('')}
-` : ''}
-
-${(turno.desglose_estaciones && turno.desglose_estaciones.length > 0) ? `
-<div class="sep"></div>
-<p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS</p>
-${turno.desglose_estaciones.map(e => `
-<div class="row b sm" style="margin-top:3px"><span>${e.nombre}</span><span class="amt">${fmt(e.total)}</span></div>
-${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}
-`).join('')}
-` : ''}
+${htmlVentasPorCajero(turno.desglose_vendedores)}
+${htmlDespachoPorArea(turno.desglose_estaciones, turno.total_ventas)}
 
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO DE CAJA</p>
@@ -147,6 +195,7 @@ ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.
 
 ${turno.notas_apertura ? `<div class="sep"></div><p class="b sm">Nota apertura:</p><p class="sm" style="white-space:pre-wrap">${turno.notas_apertura}</p>` : ''}
 ${turno.notas_cierre ? `<p class="b sm" style="margin-top:4px">Nota cierre:</p><p class="sm" style="white-space:pre-wrap">${turno.notas_cierre}</p>` : ''}
+${turno.nota_reconstruccion ? `<div class="sep"></div><p class="b sm">${turno.nota_reconstruccion}</p>` : ''}
 
 <div class="sep"></div>
 <div class="c sm">
@@ -369,15 +418,7 @@ export default function CajaPage() {
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(t?.transferencias ?? 0)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(t?.credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${t?.num_ventas ?? 0}</span></div>
-${(t?.desglose_vendedores && t.desglose_vendedores.length > 1) ? `
-<div class="sep"></div>
-<p class="b sm" style="margin-bottom:3px">VENTAS POR CAJERO — POS / MESAS</p>
-${t.desglose_vendedores.map(d => `
-<div class="row b sm" style="margin-top:3px"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>
-${d.pos.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;POS (${d.pos.num_ventas})</span><span class="amt">${fmt(d.pos.total)}</span></div>` : ''}
-${d.mesa.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Mesas (${d.mesa.num_ventas})</span><span class="amt">${fmt(d.mesa.total)}</span></div>` : ''}
-`).join('')}
-` : ''}
+${htmlVentasPorCajero(t?.desglose_vendedores)}
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
@@ -385,14 +426,7 @@ ${d.mesa.num_ventas > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Mesas (${d.mesa
 <div class="row b"><span>Efectivo esperado:</span><span class="amt">${fmt(efectivoEsperadoVivo)}</span></div>
 ${contado > 0 ? `<div class="row"><span>Efectivo contado:</span><span class="amt">${fmt(contado)}</span></div>` : ''}
 ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;border-top:2px solid #000"><span>Diferencia:</span><span class="amt">${dif >= 0 ? '+' : ''}${fmt(dif)}</span></div>` : ''}
-${estacionesTurno.length > 0 ? `
-<div class="sep"></div>
-<p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS</p>
-${estacionesTurno.map(e => `
-<div class="row b sm" style="margin-top:3px"><span>${e.nombre}</span><span class="amt">${fmt(e.total)}</span></div>
-${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}
-`).join('')}
-` : ''}
+${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
 <div class="sep"></div>
 <div class="c sm"><p>*** LA CAJA SIGUE ABIERTA ***</p><p>Sistema Kalreco v1.0</p></div>
 </body></html>`
@@ -434,7 +468,7 @@ ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.
       </div>
 
       {/* ═══ RESULTADO DEL ÚLTIMO CIERRE — POS/Mesas por cajero ═══ */}
-      {ultimoCierre?.desglose_vendedores && ultimoCierre.desglose_vendedores.length > 1 && (
+      {ultimoCierre?.desglose_vendedores && ultimoCierre.desglose_vendedores.length > 0 && (
         <div className="bg-brand-navy rounded-2xl border border-brand-teal/20 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold text-white flex items-center gap-2">
@@ -726,7 +760,7 @@ ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.
                     <td className="px-3 py-3 text-center">
                       {t.estado === 'cerrado' ? (
                         <button
-                          onClick={() => imprimirCierre(t, t.usuario_cierre?.nombre ?? '')}
+                          onClick={() => { void reimprimirCierreHistorico(t) }}
                           className="text-gray-500 hover:text-brand-teal transition-colors p-1"
                           title="Imprimir reporte"
                         >
@@ -994,7 +1028,7 @@ ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.
               </div>
             </div>
 
-            {ventasTurno?.desglose_vendedores && ventasTurno.desglose_vendedores.length > 1 && (
+            {ventasTurno?.desglose_vendedores && ventasTurno.desglose_vendedores.length > 0 && (
               <div className="bg-brand-dark rounded-xl p-4 space-y-2 border border-white/5 text-sm">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Por cajero — POS / Mesas</p>
                 {ventasTurno.desglose_vendedores.map(d => (

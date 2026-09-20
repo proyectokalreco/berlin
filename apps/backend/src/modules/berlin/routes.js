@@ -100,6 +100,7 @@ router.post ('/caja/cierre',       cajaCtrl.cerrarCaja);
 router.get  ('/caja/historial',    cajaCtrl.historial);
 router.get  ('/caja/ventas-turno', cajaCtrl.ventasTurno);
 router.get  ('/caja/desglose-estaciones', cajaCtrl.desgloseEstacionesTurno);
+router.get  ('/caja/turnos/:id/desglose', cajaCtrl.desgloseTurno);
 router.post ('/caja/:id/cerrar',   cajaCtrl.cerrarTurnoHistorico);
 
 // ── DOMICILIOS
