@@ -1061,6 +1061,85 @@ probó el traslado en producción y reporta "todo bien" (captura de la ventana c
 ⏳ **Sin confirmar explícitamente por el usuario:** cobro guardado sin conexión + traslado (incluso
 hecho desde otro dispositivo) y el aviso en el panel de Comandas de cocina/barra.
 
+### 32. Comida — "¿completo o modificar?" en POS y Mesas + categorías "Sin control de stock" (2026-09-20, commit `c7346b6`, migración 111)
+
+Pedido del cliente: un cliente pide una hamburguesa y quiere quitarle componentes (piña, lechuga…) y/o
+agregarle varias salsas, **al mismo precio**. Las salsas y toppings viven en las categorías `SALSAS` (10)
+y `TOPPINGS` (6) — **dos categorías separadas**, no una "Salsas y Toppings". Pidió: (1) que esos productos
+se puedan incluir con stock 0 y sin costo sin afectar la contabilidad; (2) que al vender un producto de
+la categoría COMIDA, antes de ponerlo en el carrito (POS **y** Mesas), se pregunte si va completo o se
+modifica.
+
+**Hallazgos del código antes de diseñar (no suponer):**
+- El formulario de producto exigía `precio_venta > 0` (`MateriasPrimas.tsx`, `valid`) — por eso las 16
+  salsas/toppings estaban a **$1** (mismo truco que "Venta Libre"). El CHECK de BD sí permite `>= 0`.
+- `categoria.sin_stock_control` **existía en la BD pero no había NINGUNA pantalla para activarlo**. POS/
+  Mesas ya lo respetan (`agotado`/`sinStock` falso) y `cobrar()`/`ventas.crear` con esa bandera llaman
+  `deducirInsumosReceta` en vez de descontar el stock del producto (sin receta = no-op).
+- `br_orden_mesa_items.notas` ya existía; `agregarItem` la acepta y **no junta** líneas con notas
+  distintas; `ComandasPanel` ya imprime `notas` en la comanda. POS **no** tenía notas y
+  `br_venta_items` no tenía la columna.
+- ⚠️ Descartado a propósito: modelar salsas/toppings como **líneas $0 aparte**. Si su categoría no
+  tiene estación no aparecen en ninguna comanda (`comandasPendientes` filtra por `estacion_id`) y el
+  candado "Cobrar" exige `enviado_at && servido_at` en TODAS las líneas → el cajero tendría que
+  marcar cada salsa como servida. Y Kalreco ya revirtió una categoría "sin contabilidad" en Esquina
+  (2026-08-24) por riesgo contable: aquí basta precio $0, sin banderas que excluyan ventas.
+
+*Decisiones del cliente (`AskUserQuestion`, todas la opción recomendada):* la modificación se guarda
+como **nota de la línea de comida** (no líneas aparte) · la pregunta sale en **todos** los productos de
+COMIDA (incluido DESECHABLE, donde sobra pero es inofensiva) · en POS la cocina se entera por la
+**nota en el ticket y la factura** (sin tiquete de cocina aparte) · la ventana lleva **nota libre**
+opcional.
+
+**Implementación:**
+- **Migración 111 (repo kalreco):** `br_venta_items.notas TEXT` (aditiva, nullable, rollback en el
+  archivo). ⚠️ **Aplicar ANTES de desplegar el backend** — `ventas.crear` y `mesas.cobrar` ya la
+  escriben; sin la columna cada venta de POS/Mesas fallaría.
+- **`lib/comida.ts`:** detección por **nombre** de categoría (`normalizar(...).includes('comida' |
+  'topping' | 'salsa')`, mismo criterio tolerante que Jugos/Limonadas) y `armarNotaModificacion` →
+  `"SIN: PIÑA, LECHUGA · SALSAS: BBQ, MAYONESA · <nota libre>"`.
+- **`components/ModalModificarComida.tsx` (compartido POS + Mesas):** paso 1 = dos botones grandes
+  (Completo con `autoFocus`, Modificar); paso 2 = toppings (todos "con"; se toca el que NO lleva →
+  tachado en rojo), salsas (se tocan las que se agregan), nota libre (120 caracteres), "Agregar
+  modificada" deshabilitado hasta que haya algún cambio. Solo produce TEXTO.
+- **POS (`POS.tsx`):** `addItem` intercepta productos de COMIDA (`idsComida`) → `agregarNormal` o
+  `agregarConNotas`; `CartItem.notas`; `itemKey = "<producto_id>|<notas>"` (la misma modificación
+  suma, una distinta abre línea aparte); `notas` viaja en el payload de `ventas` y en el de la cola
+  offline (`useOfflineQueue.ts`); se muestra en el carrito y en el ticket (`** nota`).
+- **Mesas (`MesasPage.tsx`):** `handleClickProducto` intercepta igual y manda `notas` a
+  `agregarProd` (el backend ya la guardaba/agrupaba); notas visibles en el carrito, en la ventana de
+  Dividir cuenta y en el ticket (`imprimirTicketMesa`, incluidos los cobros parciales y los
+  comprobantes provisionales offline).
+- **Backend:** `ventas.crear` guarda `notas` (recortada a 300); `ventas.listar`/`obtener` la devuelven;
+  `mesas.cobrar` la copia de la orden a `br_venta_items` (también en la fila pagada de un cobro
+  parcial); `productos.crearCategoria`/`actualizarCategoria` aceptan `sin_stock_control`.
+- **Facturación:** la vista previa y la reimpresión muestran la nota.
+- **Categorías "Sin control de stock":** casilla nueva en Inventario → Categorías (crear y editar) —
+  nunca se marca Agotado, no descuenta stock al vender y **permite precio $0** (el formulario de
+  producto acepta `>= 0` cuando su categoría tiene la bandera).
+- **Seguridad:** las notas las escribe el cajero y se meten en el HTML de la ventana de impresión →
+  se **escapan** (`&`, `<`, `>`) en POS, Mesas y Facturación.
+
+**Datos en producción (SQL corrido por el usuario, `UPDATE 16`):**
+```sql
+UPDATE br_productos SET precio_venta = 0
+WHERE categoria_id IN (SELECT id FROM br_categorias WHERE nombre IN ('SALSAS','TOPPINGS'));
+```
+Falta marcar **"Sin control de stock"** en SALSAS y TOPPINGS desde Inventario → Categorías (es el paso
+que las deja no-Agotado y sin descuento de stock).
+
+**Límites conocidos:** las salsas/toppings **siguen siendo productos sellables** por separado (ahora a
+$0); la ventana los usa solo como lista de opciones. La pregunta sale en todo producto de COMIDA. Los
+toppings/salsas se toman de los productos de esas categorías al cargar la pantalla (si se crea uno
+nuevo, hay que recargar).
+
+`node -c`, `tsc --noEmit` y `npm run build` limpios. **✅ Desplegado:** migración 111 aplicada
+(`ALTER TABLE`), backend + panel reconstruidos, `UPDATE 16` corrido. El usuario abrió en producción la
+ventana en Mesas (capturas: "Completo/Modificar", toppings tachados —lechuga, tomate—, salsas marcadas
+—berenjena, pimentón— y nota libre "Bien Cocida"). ⏳ **Sin confirmar todavía por el usuario:** que la
+línea quede con la nota en el carrito, la comanda impresa en cocina/barra, el ticket y la factura, la
+venta por POS, y el paso de marcar SALSAS/TOPPINGS como "Sin control de stock".
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
