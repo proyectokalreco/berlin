@@ -13,6 +13,8 @@ import toast from 'react-hot-toast'
 import type { Producto, Categoria } from '../../../types'
 import { cn } from '../../../lib/utils'
 import { coincide, normalizar } from '../../../lib/buscar'
+import { esCategoriaComida, esCategoriaToppings, esCategoriaSalsas } from '../../../lib/comida'
+import ModalModificarComida from '../../../components/ModalModificarComida'
 import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import { useAuthStore } from '../../../store/authStore'
 import ProductImageInput from '../../../components/ProductImageInput'
@@ -59,7 +61,7 @@ function imprimirTicketMesa(datos: {
   mesa_numero:       number
   mesa_nombre?:      string | null
   mesero?:           string
-  items:             { nombre: string; cantidad: number; precio_unitario: number; subtotal: number }[]
+  items:             { nombre: string; cantidad: number; precio_unitario: number; subtotal: number; notas?: string | null }[]
   subtotal:          number
   redondeo:          number
   total:             number
@@ -78,8 +80,11 @@ function imprimirTicketMesa(datos: {
     ? `${datos.mesa_numero} — ${datos.mesa_nombre}`
     : `${datos.mesa_numero}`
   const origin = window.location.origin
+  // Las notas las escribe el cajero: se escapan antes de meterlas en el HTML del ticket
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const itemsHtml = datos.items.map(i => `
-<p class="item-nm">${i.nombre}</p>
+<p class="item-nm">${i.nombre}</p>${i.notas ? `
+<p class="item-sub" style="padding-left:8px;font-weight:700">** ${esc(i.notas)}</p>` : ''}
 <div class="row">
   <span class="item-sub">&nbsp;&nbsp;${i.cantidad} x ${fmt(i.precio_unitario)}</span>
   <span class="amt">${fmt(i.subtotal)}</span>
@@ -439,7 +444,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
   )
 
   const { mutate: agregarProd } = useMutation({
-    mutationFn: (payload: { producto_id: string; cantidad: number; precio_unitario?: number; nombre_libre?: string }) =>
+    mutationFn: (payload: { producto_id: string; cantidad: number; precio_unitario?: number; nombre_libre?: string; notas?: string }) =>
       api.post(`/berlin/mesas/${mesa.id}/orden/items`, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] }),
     onError: () => toast.error('Error al agregar producto'),
@@ -516,8 +521,26 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
       setVentaLibreModal({ producto: p, nombre: p.nombre, precio: '', cantidad: '1' })
       return
     }
+    // Comida: preguntar antes si va completo o modificado
+    if (idsComida.has(p.categoria_id ?? '')) { setModalComida(p); return }
     agregarProd({ producto_id: p.id, cantidad: 1 })
   }
+
+  // ── Comida — "¿completo o modificar?" (mismo modal que POS) ──
+  // Toppings y salsas son solo las OPCIONES: la modificación viaja como nota del ítem
+  // (el backend ya la guarda, la agrupa por nota y la comanda ya la imprime).
+  const idsComida = useMemo(() => new Set(
+    categorias.filter(c => esCategoriaComida(c.nombre)).map(c => c.id)
+  ), [categorias])
+  const nombresToppings = useMemo(() => {
+    const ids = new Set(categorias.filter(c => esCategoriaToppings(c.nombre)).map(c => c.id))
+    return productos.filter(p => ids.has(p.categoria_id ?? '')).map(p => p.nombre).sort((a, b) => a.localeCompare(b))
+  }, [categorias, productos])
+  const nombresSalsas = useMemo(() => {
+    const ids = new Set(categorias.filter(c => esCategoriaSalsas(c.nombre)).map(c => c.id))
+    return productos.filter(p => ids.has(p.categoria_id ?? '')).map(p => p.nombre).sort((a, b) => a.localeCompare(b))
+  }, [categorias, productos])
+  const [modalComida, setModalComida] = useState<Producto | null>(null)
 
   const confirmarVentaLibre = () => {
     if (!ventaLibreModal) return
@@ -588,7 +611,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
     ordenId?:   string                                    // pedido que se cobra (sobrevive a un traslado de mesa)
     parcial:    boolean                                   // true = dividir cuenta (se manda items[])
     items?:     { item_id: string; cantidad: number }[]
-    ticketItems: { nombre: string; cantidad: number; precio_unitario: number; subtotal: number }[]
+    ticketItems: { nombre: string; cantidad: number; precio_unitario: number; subtotal: number; notas?: string | null }[]
     subtotal:   number
     redondeo:   number
     total:      number
@@ -608,12 +631,14 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
           cantidad:        x.cant,
           precio_unitario: x.item.precio_unitario,
           subtotal:        x.cant === Number(x.item.cantidad) ? x.item.subtotal : x.item.precio_unitario * x.cant,
+          notas:           x.item.notas,
         }))
       : items.map(i => ({
           nombre:          i.producto?.nombre ?? 'Producto',
           cantidad:        i.cantidad,
           precio_unitario: i.precio_unitario,
           subtotal:        i.subtotal,
+          notas:           i.notas,
         }))
     // Con cobros guardados sin conexión en la cola, "cobrar todo" NO puede mandarse sin
     // items (el servidor cobraría también las unidades reservadas por la cola): se manda
@@ -1055,6 +1080,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
                       {fmt(item.precio_unitario)} c/u
                       {item._reservado ? <span className="text-amber-400"> · {item._reservado} en cola de cobro</span> : null}
                     </p>
+                    {item.notas && (
+                      <p className="text-[10px] font-semibold text-[#D9A652] mt-0.5 leading-snug break-words">✎ {item.notas}</p>
+                    )}
                   </div>
                   {/* +/- cantidad */}
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -1348,6 +1376,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
                       {fmt(item.precio_unitario)} c/u · {cantN} pendiente{cantN !== 1 ? 's' : ''}
                       {item._reservado ? <span className="text-amber-400"> · {item._reservado} en cola de cobro</span> : null}
                     </p>
+                    {item.notas && (
+                      <p className="text-xs font-semibold text-[#D9A652] mt-0.5 break-words">✎ {item.notas}</p>
+                    )}
                     {!puedeSel && (
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[11px] font-semibold text-[#EA580C]">
@@ -1686,7 +1717,19 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
         </div>
       )}
 
-      {/* ── Modal Venta Libre ─────────────────────────────────── */}
+      {/* ── Modal Comida: ¿completo o modificar? ─────────────────── */}
+    {modalComida && (
+      <ModalModificarComida
+        nombreProducto={modalComida.nombre}
+        toppings={nombresToppings}
+        salsas={nombresSalsas}
+        onCerrar={() => setModalComida(null)}
+        onCompleto={() => { agregarProd({ producto_id: modalComida.id, cantidad: 1 }); setModalComida(null) }}
+        onModificado={nota => { agregarProd({ producto_id: modalComida.id, cantidad: 1, notas: nota }); setModalComida(null) }}
+      />
+    )}
+
+    {/* ── Modal Venta Libre ─────────────────────────────────── */}
       {ventaLibreModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
              style={{ background: 'rgba(0,0,0,0.7)' }}>

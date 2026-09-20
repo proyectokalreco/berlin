@@ -1169,6 +1169,10 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
   const [editNom, setEditNom] = useState('')
   const [editEmoji, setEditEmoji] = useState('')
   const [editEstacionId, setEditEstacionId] = useState('')
+  // "Sin control de stock": nunca se marca Agotado, no descuenta stock al vender y permite
+  // precio $0 (salsas, toppings, complementos sin costo).
+  const [sinStock, setSinStock] = useState(false)
+  const [editSinStock, setEditSinStock] = useState(false)
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null)
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null)
   const [agregarProdId, setAgregarProdId] = useState('')
@@ -1238,11 +1242,12 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
   const { mutate: crear, isPending: creando } = useMutation({
     mutationFn: () => api.post('/berlin/categorias', {
       nombre: nombre.trim(), emoji: emoji.trim() || null, estacion_id: estacionId || null,
+      sin_stock_control: sinStock,
     }),
     onSuccess: () => {
       toast.success(`Categoría "${nombre}" creada ✅`)
       invalidate()
-      setNombre(''); setEmoji(''); setEstacionId('')
+      setNombre(''); setEmoji(''); setEstacionId(''); setSinStock(false)
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -1255,11 +1260,13 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
     setEditNom(cat.nombre)
     setEditEmoji(cat.emoji ?? '')
     setEditEstacionId(cat.estacion_id ?? '')
+    setEditSinStock(!!cat.sin_stock_control)
   }
 
   const { mutate: actualizar, isPending: actualizando } = useMutation({
     mutationFn: () => api.put(`/berlin/categorias/${editId}`, {
       nombre: editNom.trim(), emoji: editEmoji.trim() || null, estacion_id: editEstacionId || null,
+      sin_stock_control: editSinStock,
     }),
     onSuccess: () => {
       toast.success('Categoría actualizada')
@@ -1338,6 +1345,14 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                 {estaciones.map(es => <option key={es.id} value={es.id}>{es.nombre}</option>)}
               </select>
             )}
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={sinStock} onChange={e => setSinStock(e.target.checked)}
+                className="mt-0.5 accent-[#D9A652]" />
+              <span className="text-xs text-gray-400 leading-snug">
+                <b className="text-gray-300">Sin control de stock</b> — nunca se marca Agotado, no descuenta
+                stock al vender y permite precio $0 (salsas, toppings, complementos sin costo).
+              </span>
+            </label>
           </div>
 
           {/* Lista de categorías */}
@@ -1405,6 +1420,14 @@ function ModalGestionCategorias({ onClose }: { onClose: () => void }) {
                             {estaciones.map(es => <option key={es.id} value={es.id}>{es.nombre}</option>)}
                           </select>
                         )}
+                        <label className="flex items-start gap-2 cursor-pointer select-none">
+                          <input type="checkbox" checked={editSinStock} onChange={e => setEditSinStock(e.target.checked)}
+                            className="mt-0.5 accent-[#D9A652]" />
+                          <span className="text-[11px] text-gray-400 leading-snug">
+                            <b className="text-gray-300">Sin control de stock</b> — nunca Agotado, no descuenta stock,
+                            permite precio $0.
+                          </span>
+                        </label>
                         <div className="flex gap-2">
                           <button onClick={() => setEditId(null)}
                             className="flex-1 py-1.5 text-xs rounded-lg border border-white/10 text-gray-400 hover:text-white transition-colors">
@@ -1679,7 +1702,10 @@ function ModalProducto({
     },
   })
 
-  const valid = form.nombre.trim() && parseFloat(form.precio_venta) > 0
+  // Categorías "Sin control de stock" (salsas, toppings…) admiten precio $0; el resto exige > 0.
+  const permiteCero = !!categorias.find(c => c.id === form.categoria_id)?.sin_stock_control
+  const precioNum   = parseFloat(form.precio_venta) || 0
+  const valid = form.nombre.trim() && (permiteCero ? precioNum >= 0 : precioNum > 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

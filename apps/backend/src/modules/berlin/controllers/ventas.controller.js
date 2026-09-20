@@ -13,7 +13,7 @@ const listar = async (req, res, next) => {
         metodo_pago, estado, es_domicilio, notas, origen,
         cliente:cliente_id(id, nombre, telefono),
         vendedor:vendedor_id(id, nombre),
-        items:br_venta_items(cantidad, precio_unitario, subtotal, producto:producto_id(nombre))
+        items:br_venta_items(cantidad, precio_unitario, subtotal, notas, producto:producto_id(nombre))
       `, { count: 'exact' })
       .order('fecha', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
@@ -53,7 +53,7 @@ const obtener = async (req, res, next) => {
         cliente:cliente_id(*),
         vendedor:vendedor_id(id, nombre),
         items:br_venta_items(
-          id, cantidad, precio_unitario, subtotal,
+          id, cantidad, precio_unitario, subtotal, notas,
           producto:producto_id(id, nombre, unidad_venta, imagen_url)
         )
       `)
@@ -175,6 +175,8 @@ const crear = async (req, res, next) => {
       precio_unitario: parseFloat(i.precio_unitario),
       descuento:       parseFloat(i.descuento || 0),
       subtotal:        parseFloat(i.cantidad) * parseFloat(i.precio_unitario) - parseFloat(i.descuento || 0),
+      // Modificación del producto ("SIN: piña · SALSAS: BBQ") — texto informativo, sin costo
+      notas:           i.notas ? String(i.notas).trim().slice(0, 300) || null : null,
     }));
 
     const { error: itemsErr } = await supabase.from('br_venta_items').insert(itemsToInsert);

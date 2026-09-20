@@ -67,11 +67,11 @@ const listarCategorias = async (req, res, next) => {
 
 const crearCategoria = async (req, res, next) => {
   try {
-    const { nombre, emoji, color, orden, estacion_id } = req.body;
+    const { nombre, emoji, color, orden, estacion_id, sin_stock_control } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
     const { data, error } = await supabase
       .from('br_categorias')
-      .insert({ nombre: nombre.trim(), emoji: emoji || null, color: color || null, orden: orden || 0, estacion_id: estacion_id || null, activo: true })
+      .insert({ nombre: nombre.trim(), emoji: emoji || null, color: color || null, orden: orden || 0, estacion_id: estacion_id || null, sin_stock_control: sin_stock_control === true, activo: true })
       .select()
       .single();
     if (error) throw error;
@@ -81,8 +81,9 @@ const crearCategoria = async (req, res, next) => {
 
 const actualizarCategoria = async (req, res, next) => {
   try {
-    const { nombre, emoji, color, orden, estacion_id } = req.body;
+    const { nombre, emoji, color, orden, estacion_id, sin_stock_control } = req.body;
     const updates = {};
+    if (sin_stock_control !== undefined) updates.sin_stock_control = sin_stock_control === true;
     if (nombre !== undefined) updates.nombre = nombre.trim();
     if (emoji   !== undefined) updates.emoji  = emoji || null;
     if (color   !== undefined) updates.color  = color || null;

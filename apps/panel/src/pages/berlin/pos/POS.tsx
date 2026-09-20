@@ -15,6 +15,8 @@ import { useProductosConSnapshot } from './useProductosConSnapshot'
 import { cn } from '../../../lib/utils'
 import { coincide, normalizar } from '../../../lib/buscar'
 import { fmtDinero, soloDigitos } from '../../../lib/dinero'
+import { esCategoriaComida, esCategoriaToppings, esCategoriaSalsas } from '../../../lib/comida'
+import ModalModificarComida from '../../../components/ModalModificarComida'
 import { useAuthStore } from '../../../store/authStore'
 import { useNavigate } from 'react-router-dom'
 
@@ -25,7 +27,11 @@ interface CartItem {
   itemKey:      string   // producto.id para normales; uuid para venta libre
   precioLibre?: number   // precio personalizado (solo venta libre)
   nombreLibre?: string   // descripción personalizada (solo venta libre)
+  notas?:       string   // modificación de comida ("SIN: PIÑA · SALSAS: BBQ") — texto, sin costo
 }
+
+// Las notas las escribe el cajero: se escapan antes de meterlas en el HTML del ticket
+const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 // Una venta en pausa — el carrito completo de un cliente que se dejó a un lado
 // para atender a otro sin perder nada. Mismo patrón que Esquina del Crédito.
@@ -176,7 +182,8 @@ function imprimirTicket(venta: {
 
   // Filas de ítems — el precio tiene flex-shrink:0 para no recortarse
   const itemsHtml = venta.items.map(i => `
-<p class="item-nm">${nombreEfectivo(i)}</p>
+<p class="item-nm">${nombreEfectivo(i)}</p>${i.notas ? `
+<p class="item-sub" style="padding-left:8px;font-weight:700">** ${escHtml(i.notas)}</p>` : ''}
 <div class="row">
   <span class="item-sub">&nbsp;&nbsp;${i.cantidad} x ${fmt(precioEfectivo(i))}</span>
   <span class="amt">${fmt(precioEfectivo(i) * i.cantidad)}</span>
@@ -708,6 +715,22 @@ export default function POS() {
     [categorias],
   )
 
+  // ── Comida — "¿completo o modificar?" antes de agregar al carrito ──
+  // Categorías por nombre (como Jugos/Limonadas). Toppings y salsas son solo las OPCIONES del
+  // modal: la modificación viaja como texto en la nota del ítem, sin líneas ni costo.
+  const idsComida = useMemo(() => new Set(
+    categorias.filter(c => esCategoriaComida(c.nombre)).map(c => c.id)
+  ), [categorias])
+  const nombresToppings = useMemo(() => {
+    const ids = new Set(categorias.filter(c => esCategoriaToppings(c.nombre)).map(c => c.id))
+    return productos.filter(p => ids.has(p.categoria_id ?? '')).map(p => p.nombre).sort((a, b) => a.localeCompare(b))
+  }, [categorias, productos])
+  const nombresSalsas = useMemo(() => {
+    const ids = new Set(categorias.filter(c => esCategoriaSalsas(c.nombre)).map(c => c.id))
+    return productos.filter(p => ids.has(p.categoria_id ?? '')).map(p => p.nombre).sort((a, b) => a.localeCompare(b))
+  }, [categorias, productos])
+  const [modalComida, setModalComida] = useState<Producto | null>(null)
+
   // ── Jugos/Limonadas — modal de Sabor + Base en vez de grilla suelta ──
   // Detección de categoría por nombre (acento/case-insensitive vía normalizar) — no
   // depende de IDs fijos, así que sigue funcionando si el cliente crea/renombra categorías.
@@ -786,6 +809,12 @@ export default function POS() {
       setVentaLibreModal({ producto: p, nombre: p.nombre, precio: '', cantidad: '1' })
       return
     }
+    // Comida: preguntar antes si va completo o modificado
+    if (idsComida.has(p.categoria_id ?? '')) { setModalComida(p); return }
+    agregarNormal(p)
+  }
+
+  const agregarNormal = (p: Producto) => {
     setCart(prev => {
       const idx = prev.findIndex(i => i.itemKey === p.id)
       if (idx !== -1) {
@@ -793,6 +822,19 @@ export default function POS() {
         return upd
       }
       return [...prev, { producto: p, cantidad: 1, itemKey: p.id }]
+    })
+  }
+
+  // Comida modificada: una línea propia por modificación distinta (misma modificación → suma)
+  const agregarConNotas = (p: Producto, notas: string) => {
+    const itemKey = `${p.id}|${notas}`
+    setCart(prev => {
+      const idx = prev.findIndex(i => i.itemKey === itemKey)
+      if (idx !== -1) {
+        const upd = [...prev]; upd[idx] = { ...upd[idx], cantidad: upd[idx].cantidad + 1 }
+        return upd
+      }
+      return [...prev, { producto: p, cantidad: 1, itemKey, notas }]
     })
   }
 
@@ -904,6 +946,7 @@ export default function POS() {
           producto_id:     i.producto.id,
           cantidad:        i.cantidad,
           precio_unitario: precioEfectivo(i),
+          notas:           i.notas,
         })),
         metodo_pago:      metodoReal,
         cliente_id:       metodoPago === 'credito' ? clienteCredito?.id : undefined,
@@ -963,6 +1006,7 @@ export default function POS() {
               producto_id: i.producto.id,
               cantidad: i.cantidad,
               precio_unitario: precioEfectivo(i),
+              notas: i.notas,
             })),
             metodo_pago: metodoReal,
             cliente_id: metodoPago === 'credito' ? clienteCredito?.id : undefined,
@@ -1429,6 +1473,11 @@ export default function POS() {
                       <p className="text-[10px] text-gray-500 mt-0.5">
                         {fmt(precioEfectivo(item))} c/u
                       </p>
+                      {item.notas && (
+                        <p className="text-[10px] font-semibold text-[#D9A652] mt-0.5 leading-snug break-words">
+                          ✎ {item.notas}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button onClick={() => changeQty(item.itemKey, -1)}
@@ -1809,6 +1858,18 @@ export default function POS() {
           </div>
         </div>
       </div>
+    )}
+
+    {/* ── Modal Comida: ¿completo o modificar? ───────────────────── */}
+    {modalComida && (
+      <ModalModificarComida
+        nombreProducto={modalComida.nombre}
+        toppings={nombresToppings}
+        salsas={nombresSalsas}
+        onCerrar={() => setModalComida(null)}
+        onCompleto={() => { agregarNormal(modalComida); setModalComida(null) }}
+        onModificado={nota => { agregarConNotas(modalComida, nota); setModalComida(null) }}
+      />
     )}
 
     {/* ── Modal Venta Libre ──────────────────────────────────────── */}

@@ -582,6 +582,7 @@ const cobrar = async (req, res, next) => {
       precio_unitario: s.item.precio_unitario,
       descuento:       0,
       subtotal:        s.subtotal,
+      notas:           s.item.notas ?? null,   // modificación del producto, para el ticket/factura
     }))
     await supabase.from('br_venta_items').insert(ventaItems)
 

@@ -25,6 +25,7 @@ interface VentaItem {
   precio_unitario: number
   subtotal?: number
   descuento?: number
+  notas?: string | null   // modificación de comida ("SIN: PIÑA · SALSAS: BBQ")
 }
 
 interface Venta {
@@ -53,7 +54,10 @@ function imprimirFactura(venta: Venta, anulada = false) {
   const itemsHtml = (venta.items || []).map(i => {
     const nombre   = i.producto?.nombre ?? i.producto_nombre ?? 'Producto'
     const sub      = i.subtotal ?? (i.cantidad * i.precio_unitario - (i.descuento || 0))
-    return `<p class="item-nm">${nombre}</p>
+    // La nota la escribió el cajero: se escapa antes de meterla en el HTML
+    const nota = i.notas ? String(i.notas).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''
+    return `<p class="item-nm">${nombre}</p>${nota ? `
+<p class="item-sub" style="padding-left:8px;font-weight:700">** ${nota}</p>` : ''}
 <div class="row"><span class="item-sub">&nbsp;&nbsp;${i.cantidad} x ${fmt(i.precio_unitario)}</span><span class="amt">${fmt(sub)}</span></div>`
   }).join('')
 
@@ -291,6 +295,7 @@ export default function FacturacionPage() {
           precio_unitario: i.precio_unitario,
           subtotal:        i.subtotal,
           descuento:       i.descuento,
+          notas:           i.notas,
         })),
       })
     } catch {
@@ -605,11 +610,14 @@ export default function FacturacionPage() {
                       const nombre  = item.producto?.nombre ?? item.producto_nombre ?? 'Producto'
                       const sub     = item.subtotal ?? (item.cantidad * item.precio_unitario)
                       return (
-                        <div key={idx} className="px-4 py-2.5 grid grid-cols-4 gap-2 text-xs items-center">
-                          <span className="text-white col-span-1 truncate" title={nombre}>{nombre}</span>
-                          <span className="text-gray-400 text-center">{item.cantidad}</span>
-                          <span className="text-gray-400 text-right tabular-nums">{fmt(item.precio_unitario)}</span>
-                          <span className="text-white font-bold text-right tabular-nums">{fmt(sub)}</span>
+                        <div key={idx} className="px-4 py-2.5">
+                          <div className="grid grid-cols-4 gap-2 text-xs items-center">
+                            <span className="text-white col-span-1 truncate" title={nombre}>{nombre}</span>
+                            <span className="text-gray-400 text-center">{item.cantidad}</span>
+                            <span className="text-gray-400 text-right tabular-nums">{fmt(item.precio_unitario)}</span>
+                            <span className="text-white font-bold text-right tabular-nums">{fmt(sub)}</span>
+                          </div>
+                          {item.notas && <p className="text-[11px] font-semibold text-[#D9A652] mt-0.5 break-words">✎ {item.notas}</p>}
                         </div>
                       )
                     })}

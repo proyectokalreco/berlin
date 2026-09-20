@@ -6,7 +6,7 @@ export type NetworkStatus = 'online' | 'offline' | 'syncing'
 export interface QueuedSale {
   idempotency_key: string
   payload: {
-    items: { producto_id: string; cantidad: number; precio_unitario: number }[]
+    items: { producto_id: string; cantidad: number; precio_unitario: number; notas?: string }[]
     metodo_pago: string
     cliente_id?: string
     redondeo?: number
