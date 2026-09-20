@@ -9,6 +9,7 @@ import {
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
 import type { QueuedCobro } from './useOfflineMesasCobro'
 import { api } from '../../../lib/api'
+import { COBRO_TIMEOUT_MS, isTransientError, isAuthError } from '../../../lib/offline'
 import toast from 'react-hot-toast'
 import type { Producto, Categoria } from '../../../types'
 import { cn } from '../../../lib/utils'
@@ -291,9 +292,12 @@ const ROLES_ADMIN_MESA  = ['admin_berlin', 'admin', 'super_admin']
 // Ítem con unidades ya reservadas por cobros guardados sin conexión (cantidad/subtotal = lo que aún se puede cobrar)
 type ItemLocal = OrdenItem & { _reservado?: number }
 
-function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLibres, onTrasladada }: {
+function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, onMarkInFlight, onPatchCobro, colaTodos, mesasLibres, onTrasladada }: {
   mesa: Mesa; cajaId?: string; onVolver: () => void
   onEnqueueCobro: (cobro: QueuedCobro) => void
+  onDequeueCobro: (key: string) => void
+  onMarkInFlight: (key: string, activa: boolean) => void
+  onPatchCobro:   (key: string, patch: Partial<QueuedCobro>) => void
   colaTodos: QueuedCobro[]    // TODA la cola de cobros guardados sin conexión (o rechazados al sincronizar)
   mesasLibres: Mesa[]         // destinos posibles para "Cambiar de mesa"
   onTrasladada: (destino: Mesa, ordenId: string, origenId: string) => void
@@ -674,9 +678,41 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
     items:           s.items,
   })
 
+  // Escritura previa (write-ahead): el cobro se guarda en la cola local ANTES de enviarlo y solo
+  // sale de la cola cuando el servidor confirma Y la pantalla ya refrescó la orden. Un corte de
+  // internet o un cierre brusco a mitad del envío no lo pierde: al reabrir se reenvía solo (la
+  // idempotency_key evita cobrar dos veces si el servidor sí lo había procesado).
   const { mutate: cobrarMutate, isPending: cobrando } = useMutation({
-    mutationFn: (s: CobroSnap) => api.post(`/berlin/mesas/${mesa.id}/cobrar`, payloadDe(s)),
+    mutationFn: async (s: CobroSnap) => {
+      onMarkInFlight(s.key, true)
+      onEnqueueCobro({
+        idempotency_key: s.key,
+        mesa_id:         mesa.id,
+        mesa_numero:     mesa.numero,
+        orden_id:        s.ordenId,
+        payload:         payloadDe(s),
+        queued_at:       Date.now(),
+        total:           s.total,
+      })
+      try {
+        return await api.post(`/berlin/mesas/${mesa.id}/cobrar`, payloadDe(s), { timeout: COBRO_TIMEOUT_MS })
+      } catch (err) {
+        // Fallo pasajero o sesión vencida: el cobro se queda en la cola. Un rechazo real del
+        // servidor se ve al instante en pantalla: se saca de la cola para que el cajero corrija.
+        if (!isTransientError(err) && !isAuthError(err)) onDequeueCobro(s.key)
+        onMarkInFlight(s.key, false)
+        throw err
+      }
+      // En éxito sigue "en vuelo" hasta sacarlo de la cola (onSuccess), para que la sincronización
+      // en segundo plano no lo reenvíe mientras la pantalla refresca la orden.
+    },
     onSuccess: (res, s) => {
+      // Sacar de la cola SOLO tras refrescar la orden: mientras esté en la cola sus unidades se
+      // restan de "pendiente" en pantalla; si se saca antes, reaparecerían como cobrables.
+      void Promise.all([
+        qc.refetchQueries({ queryKey: ['mesa-orden'] }),
+        qc.refetchQueries({ queryKey: ['mesas'] }),
+      ]).finally(() => { onDequeueCobro(s.key); onMarkInFlight(s.key, false) })
       const liberada = res.data.mesa_liberada === true
       const sinInfo  = res.data.mesa_liberada === undefined   // respuesta repetida (idempotencia)
       const pendiente = Number(res.data.total_pendiente ?? 0)
@@ -708,26 +744,18 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLi
       reiniciarTrasCobro()
     },
     onError: (err: unknown, s: CobroSnap) => {
-      const e = err as { code?: string; message?: string; response?: { data?: { error?: string } } }
-      const isNetErr = !e.response && (
-        e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED' ||
-        e.message === 'Network Error' || !!e.message?.includes('timeout')
-      )
-      if (isNetErr) {
-        // Sin conexión: el cobro (completo o parcial) queda en la cola local con su propia
-        // key, se imprime un comprobante PROVISIONAL (la factura la numera el servidor al
-        // sincronizar) y sus unidades quedan reservadas en pantalla hasta que se registre.
+      const e = err as { response?: { data?: { error?: string } } }
+      if (isAuthError(err)) {
+        toast('🔒 Sesión vencida — el cobro quedó guardado; se enviará al iniciar sesión de nuevo', { icon: '⏳', duration: 8000 })
+        if (s.items) reiniciarTrasCobro(); else onVolver()
+        return
+      }
+      if (isTransientError(err)) {
+        // Sin conexión: el cobro (completo o parcial) YA está en la cola local (escritura previa)
+        // con su propia key; se imprime un comprobante PROVISIONAL (la factura la numera el
+        // servidor al sincronizar) y sus unidades quedan reservadas en pantalla hasta que se registre.
         const provisional = `PROV-${s.key.slice(0, 6).toUpperCase()}`
-        onEnqueueCobro({
-          idempotency_key: s.key,
-          mesa_id:         mesa.id,
-          mesa_numero:     mesa.numero,
-          orden_id:        s.ordenId,
-          payload:         payloadDe(s),
-          queued_at: Date.now(),
-          total:      s.total,
-          provisional,
-        })
+        onPatchCobro(s.key, { provisional })
         imprimirTicketMesa({
           numero_venta: provisional,
           mesa_numero:  mesa.numero,
@@ -2283,7 +2311,8 @@ export default function MesasPage() {
   }, [qc])
 
   const { pendingCount: cobrosPendientes, failedCobros, syncStatus: cobroSyncStatus,
-          pendingCobros, enqueue: enqueueCobro, syncNow: syncCobrosNow,
+          pendingCobros, enqueue: enqueueCobro, dequeue: quitarCobroCola,
+          markInFlight: marcarCobroEnVuelo, patch: parchearCobro, syncNow: syncCobrosNow,
           retry: reintentarCobro, discard: descartarCobro, tagOrden: etiquetarCobrosConOrden,
         } = useOfflineMesasCobro(handleCobroSync)
 
@@ -2368,6 +2397,9 @@ export default function MesasPage() {
           cajaId={turnoActivo?.id}
           onVolver={() => { setVistaOrden(null); qc.invalidateQueries({ queryKey: ['mesas'] }) }}
           onEnqueueCobro={enqueueCobro}
+          onDequeueCobro={quitarCobroCola}
+          onMarkInFlight={marcarCobroEnVuelo}
+          onPatchCobro={parchearCobro}
           colaTodos={pendingCobros}
           mesasLibres={libres.filter(m => m.id !== mesaActual.id).sort((a, b) => a.numero - b.numero)}
           onTrasladada={(destino, ordenId, origenId) => {

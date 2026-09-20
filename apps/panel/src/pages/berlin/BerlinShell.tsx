@@ -13,6 +13,7 @@ import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
 import PerfilModal from '../../components/PerfilModal'
 import ComandasPanel from '../../components/ComandasPanel'
+import { useSincronizacionColas } from './useSincronizacionColas'
 
 // ── Paleta Berlín Café Bar (tomada del logo) ───────────────────
 const GOLD  = '#D9A652'
@@ -71,6 +72,9 @@ export default function BerlinShell() {
   const { signOut }     = useAuth()
   const rol             = user?.rol ?? ''
   const tabs            = getTabsByRol(rol)
+
+  // Reenvía en segundo plano las ventas/cobros guardados sin conexión (desde cualquier pantalla)
+  useSincronizacionColas()
 
   const [showPerfil, setShowPerfil] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)

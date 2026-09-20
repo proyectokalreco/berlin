@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
+import { COBRO_TIMEOUT_MS, isTransientError, isAuthError } from '../../../lib/offline'
 import type { Producto, Categoria } from '../../../types'
 import toast from 'react-hot-toast'
 import {
@@ -489,14 +490,17 @@ export default function POS() {
   } | null>(null)
 
   // ── Cola offline ──────────────────────────────────────────────
-  const handleSaleSync = useCallback((data: unknown) => {
-    const venta = data as { numero_venta: string }
-    toast.success(`☁️ Venta sincronizada: ${venta.numero_venta}`)
+  // El aviso "Venta sincronizada" lo muestra la propia cola (también cuando se sincroniza
+  // en segundo plano estando en otra pantalla); aquí solo se refrescan los datos.
+  const handleSaleSync = useCallback((_data: unknown) => {
     queryClient.invalidateQueries({ queryKey: ['productos-pos'] })
     queryClient.invalidateQueries({ queryKey: ['ventas-resumen-hoy'] })
   }, [queryClient])
 
-  const { status: netStatus, pendingCount, enqueue, syncNow } = useOfflineQueue(handleSaleSync)
+  const {
+    status: netStatus, pendingCount, failedSales, enqueue, dequeue, markInFlight,
+    syncNow, retry: reintentarVenta, discard: descartarVentaRechazada,
+  } = useOfflineQueue(handleSaleSync)
   const [busqueda,       setBusqueda]       = useState('')
   const [catActiva,      setCatActiva]      = useState<string | null>(null)
   const [efectivo,       setEfectivo]       = useState('')
@@ -938,23 +942,46 @@ export default function POS() {
   )
 
   // ── Venta ──
+  // Escritura previa (write-ahead): la venta se guarda en la cola local ANTES de enviarla y solo
+  // sale de la cola cuando el servidor confirma. Un corte de internet, un cierre brusco del
+  // navegador o del equipo a mitad del envío no la pierde: al reabrir se reenvía sola (la
+  // idempotency_key evita duplicados si el servidor sí la había procesado).
   const { mutate: cobrar, isPending } = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const metodoReal = metodoPago === 'exacto' ? 'efectivo' : metodoPago
-      return api.post('/berlin/ventas', {
-        items: cart.map(i => ({
-          producto_id:     i.producto.id,
-          cantidad:        i.cantidad,
-          precio_unitario: precioEfectivo(i),
-          notas:           i.notas,
-        })),
-        metodo_pago:      metodoReal,
-        cliente_id:       metodoPago === 'credito' ? clienteCredito?.id : undefined,
-        redondeo,
-        idempotency_key:  idempotencyKey,
-        monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
-        monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
-      })
+      const sale: QueuedSale = {
+        idempotency_key: idempotencyKey,
+        payload: {
+          items: cart.map(i => ({
+            producto_id:     i.producto.id,
+            cantidad:        i.cantidad,
+            precio_unitario: precioEfectivo(i),
+            notas:           i.notas,
+          })),
+          metodo_pago:         metodoReal,
+          cliente_id:          metodoPago === 'credito' ? clienteCredito?.id : undefined,
+          redondeo,
+          idempotency_key:     idempotencyKey,
+          monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+          monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
+        },
+        queued_at: Date.now(),
+      }
+      markInFlight(idempotencyKey, true)
+      enqueue(sale)
+      try {
+        const res = await api.post('/berlin/ventas', sale.payload, { timeout: COBRO_TIMEOUT_MS })
+        dequeue(idempotencyKey)
+        return res
+      } catch (err) {
+        // Fallo pasajero o sesión vencida: la venta se queda en la cola. Un rechazo real del
+        // servidor (stock, caja cerrada…) se ve al instante en pantalla: se saca de la cola
+        // para que el cajero corrija el carrito.
+        if (!isTransientError(err) && !isAuthError(err)) dequeue(idempotencyKey)
+        throw err
+      } finally {
+        markInFlight(idempotencyKey, false)
+      }
     },
     onSuccess: (res) => {
       const venta           = res.data
@@ -992,36 +1019,17 @@ export default function POS() {
       }
     },
     onError: (err: unknown) => {
-      const e = err as { code?: string; message?: string; response?: { data?: { error?: string } } }
-      const isNetErr = !e.response && (
-        e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED' ||
-        e.message === 'Network Error' || e.message?.includes('timeout')
-      )
-      if (isNetErr) {
-        const metodoReal = metodoPago === 'exacto' ? 'efectivo' : metodoPago
-        const sale: QueuedSale = {
-          idempotency_key: idempotencyKey,
-          payload: {
-            items: cart.map(i => ({
-              producto_id: i.producto.id,
-              cantidad: i.cantidad,
-              precio_unitario: precioEfectivo(i),
-              notas: i.notas,
-            })),
-            metodo_pago: metodoReal,
-            cliente_id: metodoPago === 'credito' ? clienteCredito?.id : undefined,
-            redondeo,
-            idempotency_key: idempotencyKey,
-            monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
-            monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
-          },
-          queued_at: Date.now(),
-        }
-        enqueue(sale)
-        toast('📶 Sin conexión — la venta quedó en cola y se enviará automáticamente', {
+      const e = err as { response?: { data?: { error?: string } } }
+      if (isTransientError(err)) {
+        // La venta ya está guardada en la cola local (escritura previa): se enviará sola.
+        toast('📶 Sin conexión — la venta quedó guardada y se enviará automáticamente', {
           icon: '⏳', duration: 5000,
         })
-        // Limpiar carrito y generar nuevo key para la próxima venta
+        clearCart()   // carrito limpio y nueva key para la próxima venta
+      } else if (isAuthError(err)) {
+        toast('🔒 Sesión vencida — la venta quedó guardada; se enviará al iniciar sesión de nuevo', {
+          icon: '⏳', duration: 8000,
+        })
         clearCart()
       } else {
         toast.error(e.response?.data?.error || 'Error al procesar la venta')
@@ -1238,6 +1246,34 @@ export default function POS() {
             )}
           </div>
         )}
+
+        {/* ── Ventas rechazadas por el servidor: nunca se descartan en silencio ── */}
+        {failedSales.map(v => {
+          const totalV = v.payload.items.reduce((t, i) => t + i.cantidad * i.precio_unitario, 0) + (v.payload.redondeo ?? 0)
+          return (
+            <div key={v.idempotency_key}
+              className="flex items-start justify-between gap-3 px-4 py-3 text-xs border-b bg-red-500/10 border-red-500/40 text-red-200">
+              <div className="space-y-0.5">
+                <p className="font-bold">⚠️ Venta NO registrada · {fmt(totalV)} · {v.payload.items.length} producto{v.payload.items.length !== 1 ? 's' : ''}</p>
+                <p>{v.error}</p>
+                <p className="text-red-300/80">
+                  Ya se cobró al cliente: reintenta, o descarta solo si la vas a registrar de otra forma.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <button onClick={() => reintentarVenta(v.idempotency_key)}
+                  className="px-3 py-1 rounded-lg border border-red-300/40 hover:bg-red-500/20 font-semibold">
+                  Reintentar
+                </button>
+                <button
+                  onClick={() => { if (confirm('¿Descartar esta venta? No se registrará en el sistema.')) descartarVentaRechazada(v.idempotency_key) }}
+                  className="px-3 py-1 rounded-lg border border-red-300/20 text-red-300/80 hover:bg-red-500/10">
+                  Descartar
+                </button>
+              </div>
+            </div>
+          )
+        })}
 
         {/* ── Búsqueda ── */}
         <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-brand-navy">

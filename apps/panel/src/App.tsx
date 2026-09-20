@@ -29,7 +29,13 @@ import CuentasPorCobrarPage from './pages/berlin/cuentas/CuentasPorCobrarPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 60_000 },
+    // 'offlineFirst': la primera petición sale aunque el navegador crea que no hay red (así falla
+    // rápido y entran en juego las copias locales) y solo se pausan los reintentos.
+    queries: { retry: 1, staleTime: 60_000, networkMode: 'offlineFirst' },
+    // 'always': con el navegador "sin red" React Query pausaría la mutación para siempre (el cajero
+    // vería "Procesando…" indefinido). Así la mutación se ejecuta, falla rápido y la venta pasa a
+    // la cola local (ver lib/offline.ts).
+    mutations: { networkMode: 'always' },
   },
 })
 
