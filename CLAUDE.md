@@ -1014,6 +1014,53 @@ comprobante provisional → sincronizar) y el aviso rojo de cobro rechazado — 
 "Sin conexión". Lo que **no** se probó contra BD antes del deploy: la lógica de `cobrar()`/reclamo
 (solo `node -c`); se validó en vivo por el cliente.
 
+### 31. Mesas — cambiar el pedido de una mesa a otra (trasladar) (2026-09-20, commit `e4edf19`, sin migración)
+
+Pedido del cliente: "un cliente se sienta, hace su pedido y después decide cambiar de mesa" — mover
+el pedido completo a otra mesa **sin que se afecte nada del pedido ni su estado**.
+
+*Decisiones del cliente (`AskUserQuestion`):* solo a mesas **libres** (unir con una ocupada sería otra
+función, más compleja), **cualquier usuario con acceso a Mesas** puede trasladar (mover no pierde ni
+borra nada; no se restringe como cancelar), aviso a cocina/barra **solo en pantalla** (sin tiquete),
+y —por su recordatorio de que "la app siempre debe poder trabajar fuera de línea"— los cobros guardados
+sin conexión **deben sobrevivir al traslado**.
+
+**Diseño (verificado en el código antes de tocar nada):** un pedido está atado a su mesa por una sola
+columna, `br_ordenes_mesa.mesa_id`; los ítems cuelgan de la orden. Trasladar = cambiar esa columna y los
+estados de las 2 mesas; ítems (enviado/visto/servido/cobrado), mesero, total y fechas no se tocan, por
+eso no se reimprime ni se repite nada en comandas (los ids de ítem no cambian).
+
+- **Backend — `POST /mesas/:id/trasladar {destino_id}` (`mesas.controller.js`, `trasladar`):** valida
+  destino existente/activo/`libre`/sin orden abierta. **No hay transacciones en supabase-js ni índice
+  único de 1 orden abierta por mesa** (`idx_br_ordenes_mesa_estado` es solo un índice normal), así que:
+  reserva el destino con `update ... .eq('estado','libre')` (409 si otro se lo llevó), mueve la orden con
+  update condicional (`id`+`mesa_id` origen+`estado='abierta'`), libera el origen, y si el paso 2 falla
+  revierte el destino a libre. Responde `{orden_id, origen_id, destino_id}`.
+- **`cobrar()` ubica la orden por `orden_id`** si viene en el body (si no, por mesa como siempre) y usa
+  `orden.mesa_id` como mesa vigente para etiquetar la venta y liberar. Los cobros que se encolan sin
+  conexión ahora llevan `orden_id` → se sincronizan contra el **pedido**, no contra una mesa que ya pudo
+  cambiar. `useOfflineMesasCobro.tagOrden(mesaId, ordenId)` etiqueta al trasladar los cobros guardados
+  **antes** de esta versión (sin `orden_id`). `VistaOrden` recibe `colaTodos` y filtra los suyos por
+  `orden_id` (o por mesa si no lo traen); `handleCobroSync` refresca todas las órdenes (`['mesa-orden']`).
+- **Pantalla:** botón "Cambiar de mesa" junto a "Cancelar orden" → ventana con las mesas libres →
+  `confirm()` → al éxito el padre etiqueta la cola, hace `setVistaOrden(destino)` y **`VistaOrden` lleva
+  `key={mesaActual.id}`** para abrir la mesa nueva limpia. ⚠️ Sin ese `key` y sin cambiar de vista de
+  inmediato, mi efecto "Mesa saldada y liberada" (mesa `ocupada`→`libre`) se disparaba por error al
+  liberarse la mesa vieja y devolvía al tablero.
+- **`ComandasPanel.tsx`:** `mesaPorOrdenRef` (orden_id → nombre de mesa) detecta el mismo pedido en otra
+  mesa y muestra el toast "🔄 El pedido de X pasó a Y" (sin reimprimir). Además la marca de "ya avisado"
+  del aviso 💰 *lista para cobrar* pasó a ser **por pedido** (`claveAviso = orden_activa.id`) y no por
+  mesa: si no, un pedido ya servido trasladado a otra mesa repetía la alerta y su sonido.
+- **Límite conocido:** el traslado **requiere conexión** (igual que agregar productos, enviar pedido o
+  marcar servido; solo el cobro se encola offline). Hacer todo Mesas offline de principio a fin exigiría
+  copia local del pedido + cola de operaciones + resolución de conflictos → propuesto como proyecto
+  aparte, sin aprobar todavía.
+
+`node -c`, `tsc --noEmit` y `npm run build` limpios. **✅ Desplegado (backend + panel); el usuario
+probó el traslado en producción y reporta "todo bien" (captura de la ventana con las mesas libres).**
+⏳ **Sin confirmar explícitamente por el usuario:** cobro guardado sin conexión + traslado (incluso
+hecho desde otro dispositivo) y el aviso en el panel de Comandas de cocina/barra.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
