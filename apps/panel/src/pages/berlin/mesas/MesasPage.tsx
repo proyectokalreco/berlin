@@ -286,10 +286,12 @@ const ROLES_ADMIN_MESA  = ['admin_berlin', 'admin', 'super_admin']
 // Ítem con unidades ya reservadas por cobros guardados sin conexión (cantidad/subtotal = lo que aún se puede cobrar)
 type ItemLocal = OrdenItem & { _reservado?: number }
 
-function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
+function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaTodos, mesasLibres, onTrasladada }: {
   mesa: Mesa; cajaId?: string; onVolver: () => void
   onEnqueueCobro: (cobro: QueuedCobro) => void
-  colaCobros: QueuedCobro[]   // cobros de ESTA mesa guardados sin conexión (o rechazados al sincronizar)
+  colaTodos: QueuedCobro[]    // TODA la cola de cobros guardados sin conexión (o rechazados al sincronizar)
+  mesasLibres: Mesa[]         // destinos posibles para "Cambiar de mesa"
+  onTrasladada: (destino: Mesa, ordenId: string, origenId: string) => void
 }) {
   const qc  = useQueryClient()
   const user = useAuthStore(s => s.user)
@@ -297,6 +299,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
   // Una key por cobro: se regenera tras cada cobro exitoso (varios cobros parciales en la misma pantalla)
   const [cobrarKey, setCobrarKey] = useState(() => crypto.randomUUID())
   // Dividir cuenta: seleccion[itemId] = unidades elegidas para cobrar ahora
+  const [showTrasladar, setShowTrasladar] = useState(false)
   const [modoDividir, setModoDividir] = useState(false)
   const [seleccion,   setSeleccion]   = useState<Record<string, number>>({})
   const [busqueda,    setBusqueda]    = useState('')
@@ -582,6 +585,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
   // el polling de la orden (cada 4 s) puede haber cambiado los datos vivos entretanto.
   interface CobroSnap {
     key:        string
+    ordenId?:   string                                    // pedido que se cobra (sobrevive a un traslado de mesa)
     parcial:    boolean                                   // true = dividir cuenta (se manda items[])
     items?:     { item_id: string; cantidad: number }[]
     ticketItems: { nombre: string; cantidad: number; precio_unitario: number; subtotal: number }[]
@@ -617,6 +621,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
     const explicito = parcial || colaCobros.length > 0
     return {
       key:      cobrarKey,
+      ordenId:  orden?.id,
       parcial,
       items:    parcial
         ? selItems.map(x => ({ item_id: x.item.id, cantidad: x.cant }))
@@ -638,6 +643,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
     caja_id:         cajaId || undefined,
     redondeo:        s.redondeo,
     idempotency_key: s.key,
+    orden_id:        s.ordenId,
     monto_efectivo:      s.metodo === 'mixto' ? s.mixtoEfe : undefined,
     monto_transferencia: s.metodo === 'mixto' ? s.mixtoTra : undefined,
     items:           s.items,
@@ -691,6 +697,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
           idempotency_key: s.key,
           mesa_id:         mesa.id,
           mesa_numero:     mesa.numero,
+          orden_id:        s.ordenId,
           payload:         payloadDe(s),
           queued_at: Date.now(),
           total:      s.total,
@@ -742,7 +749,31 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
     },
   })
 
+  // Cambiar el pedido a otra mesa libre — el backend solo cambia la mesa de la orden; ítems,
+  // estados (enviado/servido/cobrado), mesero y total viajan intactos. Requiere conexión.
+  const { mutate: trasladar, isPending: trasladando } = useMutation({
+    mutationFn: async (destino: Mesa) => {
+      const r = await api.post(`/berlin/mesas/${mesa.id}/trasladar`, { destino_id: destino.id })
+      return { ordenId: r.data.orden_id as string, destino }
+    },
+    onSuccess: ({ ordenId, destino }) => {
+      toast.success(`Pedido trasladado a ${destino.nombre ? `${destino.numero} — ${destino.nombre}` : `Mesa ${destino.numero}`}`)
+      setShowTrasladar(false)
+      onTrasladada(destino, ordenId, mesa.id)
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { error?: string } } }
+      toast.error(e.response?.data?.error
+        || 'No se pudo trasladar el pedido. Se necesita conexión — revisa la red e inténtalo de nuevo.')
+      qc.invalidateQueries({ queryKey: ['mesas'] })
+    },
+  })
+
   // Cobro parcial: `items` = solo lo PENDIENTE de cobro; lo ya cobrado (venta_id) va aparte.
+  // Cobros guardados de ESTE pedido: por orden_id (sobreviven a un traslado de mesa) y, los
+  // guardados antes de esta versión (sin orden_id), por la mesa.
+  const colaCobros = colaTodos.filter(c => c.orden_id ? c.orden_id === orden?.id : c.mesa_id === mesa.id)
+
   const itemsTodos     = orden?.items ?? []
   const itemsSrv       = itemsTodos.filter(i => !i.venta_id)   // pendientes según el servidor
   const itemsPagados   = itemsTodos.filter(i => !!i.venta_id)
@@ -881,6 +912,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
             </p>
           )}
         </div>
+        {orden && (
+          <button onClick={() => setShowTrasladar(true)}
+            className="flex items-center gap-1.5 text-xs text-brand-teal hover:text-white px-3 py-1.5 rounded-lg border border-brand-teal/30 hover:bg-brand-teal/10 transition-colors">
+            <RefreshCw size={12}/> Cambiar de mesa
+          </button>
+        )}
         {puedeCancelar && itemsPagados.length === 0 && colaCobros.length === 0 && (
           <button onClick={() => { if(confirm('¿Cancelar la orden y liberar la mesa?')) cancelar() }}
             className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10">
@@ -1203,6 +1240,57 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
       </div>
 
     </div>
+
+    {/* ── Ventana "Cambiar de mesa": trasladar el pedido a una mesa libre ─────── */}
+    {showTrasladar && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+        <div className="bg-[#2C2925] rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/10 flex-shrink-0">
+            <div className="min-w-0">
+              <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                <RefreshCw size={17} className="text-brand-teal flex-shrink-0"/>
+                Cambiar de mesa
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Pedido de Mesa {mesa.numero}{mesa.nombre ? ` · ${mesa.nombre}` : ''}. Elige la mesa libre a la que se pasa —
+                los productos, sus estados y lo ya cobrado no cambian.
+              </p>
+            </div>
+            <button onClick={() => setShowTrasladar(false)} disabled={trasladando}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg flex-shrink-0">
+              <X size={16}/>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 min-h-0">
+            {mesasLibres.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">No hay mesas libres en este momento.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {mesasLibres.map(m => (
+                  <button key={m.id} disabled={trasladando}
+                    onClick={() => {
+                      const nom = m.nombre ? `${m.numero} — ${m.nombre}` : `${m.numero}`
+                      if (confirm(`¿Pasar el pedido de la Mesa ${mesa.numero} a la Mesa ${nom}?`)) trasladar(m)
+                    }}
+                    className="rounded-xl p-3 border border-white/10 bg-brand-dark hover:border-brand-teal/50 hover:bg-brand-teal/10
+                               text-left transition-colors disabled:opacity-40 active:scale-[0.97]">
+                    <p className="text-sm font-black text-white leading-tight">{m.nombre ?? `Mesa ${m.numero}`}</p>
+                    {m.nombre && <p className="text-[11px] text-gray-500">Mesa {m.numero}</p>}
+                    <p className="text-[11px] text-gray-500 mt-1">{m.capacidad} personas</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="px-5 py-3 border-t border-white/10 flex-shrink-0">
+            <button onClick={() => setShowTrasladar(false)} disabled={trasladando}
+              className="w-full py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-sm font-semibold">
+              {trasladando ? 'Trasladando…' : 'Cancelar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── Ventana "Dividir cuenta": elegir qué paga cada persona ──────────────
         Queda abierta tras cada cobro parcial (se elige lo de la siguiente persona)
@@ -2144,14 +2232,16 @@ export default function MesasPage() {
       : `☁️ Mesa sincronizada: ${num}`, { duration: 8000 })
     qc.invalidateQueries({ queryKey: ['ventas-resumen-hoy'] })
     await Promise.all([
-      qc.refetchQueries({ queryKey: ['mesa-orden', mesaId] }),
+      // Prefijo (todas las órdenes abiertas en pantalla): el pedido pudo haberse trasladado
+      // de mesa, así que el id de mesa con que se guardó el cobro puede ya no ser el vigente.
+      qc.refetchQueries({ queryKey: ['mesa-orden'] }),
       qc.refetchQueries({ queryKey: ['mesas'] }),
     ])
   }, [qc])
 
   const { pendingCount: cobrosPendientes, failedCobros, syncStatus: cobroSyncStatus,
           pendingCobros, enqueue: enqueueCobro, syncNow: syncCobrosNow,
-          retry: reintentarCobro, discard: descartarCobro,
+          retry: reintentarCobro, discard: descartarCobro, tagOrden: etiquetarCobrosConOrden,
         } = useOfflineMesasCobro(handleCobroSync)
 
   const { data: mesas = [], isLoading } = useQuery<Mesa[]>({
@@ -2228,12 +2318,22 @@ export default function MesasPage() {
     const mesaActual = mesas.find(m => m.id === vistaOrden.id) ?? vistaOrden
     return (
       <div className="space-y-0">
+        {/* key por mesa: al trasladar el pedido se abre la mesa nueva con un VistaOrden limpio */}
         <VistaOrden
+          key={mesaActual.id}
           mesa={mesaActual}
           cajaId={turnoActivo?.id}
           onVolver={() => { setVistaOrden(null); qc.invalidateQueries({ queryKey: ['mesas'] }) }}
           onEnqueueCobro={enqueueCobro}
-          colaCobros={pendingCobros.filter(c => c.mesa_id === mesaActual.id)}
+          colaTodos={pendingCobros}
+          mesasLibres={libres.filter(m => m.id !== mesaActual.id).sort((a, b) => a.numero - b.numero)}
+          onTrasladada={(destino, ordenId, origenId) => {
+            // Cobros guardados sin conexión de este pedido (versión anterior, sin orden_id) →
+            // se etiquetan para que sincronicen contra el pedido y no contra la mesa vieja.
+            etiquetarCobrosConOrden(origenId, ordenId)
+            setVistaOrden(destino)
+            qc.invalidateQueries({ queryKey: ['mesas'] })
+          }}
         />
       </div>
     )

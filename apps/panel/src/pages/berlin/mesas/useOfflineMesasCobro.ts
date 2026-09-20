@@ -7,7 +7,12 @@ export interface QueuedCobro {
   idempotency_key: string
   mesa_id:         string
   mesa_numero:     number
+  // Pedido al que pertenece el cobro. El servidor ubica la orden por este id, no por la mesa:
+  // así el cobro sobrevive a un traslado de mesa hecho antes de sincronizar. Los cobros
+  // guardados antes de esta versión no lo traen (se etiquetan al trasladar, ver tagOrden).
+  orden_id?:       string
   payload: {
+    orden_id?:       string
     metodo_pago:     string
     cliente_id?:     string
     caja_id?:        string
@@ -117,6 +122,16 @@ export function useOfflineMesasCobro(
     setTimeout(() => { if (navigator.onLine) processQueue() }, 0)
   }, [updateQueue, processQueue])
 
+  // Al trasladar un pedido de mesa: los cobros guardados de esa mesa que aún no traen
+  // orden_id (versión anterior) lo reciben, para que se sincronicen contra el pedido y no
+  // contra la mesa vieja (que ya quedó libre).
+  const tagOrden = useCallback((mesaId: string, ordenId: string) => {
+    updateQueue(prev => prev.map(c =>
+      c.mesa_id === mesaId && !c.orden_id
+        ? { ...c, orden_id: ordenId, payload: { ...c.payload, orden_id: ordenId } }
+        : c))
+  }, [updateQueue])
+
   // Descartar uno rechazado, tras revisarlo (el cajero lo confirma en pantalla)
   const discard = useCallback((key: string) => {
     updateQueue(prev => prev.filter(c => c.idempotency_key !== key))
@@ -128,6 +143,6 @@ export function useOfflineMesasCobro(
     failedCobros:  failed,
     syncStatus,
     pendingCobros: queue,   // TODOS (incluye rechazados): sus unidades siguen reservadas en pantalla
-    enqueue, syncNow, retry, discard,
+    enqueue, syncNow, retry, discard, tagOrden,
   }
 }

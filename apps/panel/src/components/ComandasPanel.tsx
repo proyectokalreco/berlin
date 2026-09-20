@@ -76,8 +76,11 @@ interface ComandaOrden {
 }
 interface MesaEstado {
   id: string; numero: number; nombre?: string | null; estado: string
-  orden_activa?: { items: { enviado_at?: string | null; servido_at?: string | null; venta_id?: string | null }[] } | null
+  orden_activa?: { id?: string; items: { enviado_at?: string | null; servido_at?: string | null; venta_id?: string | null }[] } | null
 }
+// La marca de "ya avisado" va por PEDIDO, no por mesa: si el pedido se traslada a otra mesa
+// ya servida por completo, no debe repetirse el aviso "lista para cobrar".
+const claveAviso = (m: MesaEstado) => m.orden_activa?.id ?? m.id
 function mesaTodoServida(m: MesaEstado) {
   // Lo ya cobrado (cobro parcial, venta_id) no cuenta: solo lo pendiente de cobro
   const enviados = (m.orden_activa?.items ?? []).filter(i => i.enviado_at && !i.venta_id)
@@ -123,6 +126,7 @@ export default function ComandasPanel() {
   const primerCargaRef = useRef(true)
   const servidasAlertadasRef = useRef<Set<string>>(new Set())
   const primerCargaMesasRef = useRef(true)
+  const mesaPorOrdenRef = useRef<Map<string, string>>(new Map())   // orden_id → nombre de mesa vigente
 
   const habilitado = !!user && ROLES_COMANDAS.includes(user.rol)
 
@@ -145,11 +149,24 @@ export default function ComandasPanel() {
   // "Preparado"/"Servido" antes (reaparece con ítems nuevos) — cada pantalla
   // de cajero solo alerta de lo que le corresponde a su estación.
   useEffect(() => {
+    // Traslado de mesa: mismo pedido (orden_id), otra mesa → avisar en pantalla. No se
+    // reimprime ni se repite nada (los ítems y sus ids no cambian).
+    const cambiosDeMesa: string[] = []
+    for (const o of ordenes) {
+      const nom = o.mesa.nombre ? `${o.mesa.numero} — ${o.mesa.nombre}` : `Mesa ${o.mesa.numero}`
+      const previa = mesaPorOrdenRef.current.get(o.orden_id)
+      if (previa && previa !== nom) cambiosDeMesa.push(`🔄 El pedido de ${previa} pasó a ${nom}`)
+      mesaPorOrdenRef.current.set(o.orden_id, nom)
+    }
     if (primerCargaRef.current) {
       ordenes.forEach(o => o.items.forEach(i => impresosRef.current.add(i.id)))
       primerCargaRef.current = false
       return
     }
+    cambiosDeMesa.forEach(msg => toast(msg, {
+      duration: 8000,
+      style: { background: '#2C2925', color: '#fff', border: '1px solid #00C49A66' },
+    }))
     let huboNuevos = false
     for (const o of ordenes) {
       const nuevos = o.items.filter(i => !impresosRef.current.has(i.id))
@@ -182,7 +199,7 @@ export default function ComandasPanel() {
   })
 
   useEffect(() => {
-    const idsAhora = new Set(mesasEstado.filter(mesaTodoServida).map(m => m.id))
+    const idsAhora = new Set(mesasEstado.filter(mesaTodoServida).map(claveAviso))
     for (const id of Array.from(servidasAlertadasRef.current)) {
       if (!idsAhora.has(id)) servidasAlertadasRef.current.delete(id)
     }
@@ -192,14 +209,14 @@ export default function ComandasPanel() {
       return
     }
     for (const m of mesasEstado) {
-      if (idsAhora.has(m.id) && !servidasAlertadasRef.current.has(m.id)) {
+      if (idsAhora.has(claveAviso(m)) && !servidasAlertadasRef.current.has(claveAviso(m))) {
         const mesaNom = m.nombre ? `${m.numero} — ${m.nombre}` : `Mesa ${m.numero}`
         toast(`💰 ${mesaNom} — todo servido, lista para cobrar`, {
           duration: 6000,
           style: { background: '#2C2925', color: '#fff', border: '1px solid #D9A65255' },
         })
         sonidoListoCobrar()
-        servidasAlertadasRef.current.add(m.id)
+        servidasAlertadasRef.current.add(claveAviso(m))
       }
     }
   }, [mesasEstado])

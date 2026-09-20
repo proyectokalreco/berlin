@@ -210,6 +210,7 @@ router.patch ('/mesas/:id/orden/items/:itemId',       mesasCtrl.actualizarItem);
 router.patch ('/mesas/:id/orden/items/:itemId/servido', mesasCtrl.marcarServidoItem);
 router.delete('/mesas/:id/orden/items/:itemId',       mesasCtrl.eliminarItem);
 router.post  ('/mesas/:id/cobrar',                    mesasCtrl.cobrar);
+router.post  ('/mesas/:id/trasladar',                 mesasCtrl.trasladar);
 router.post  ('/mesas/:id/cancelar-orden',            mesasCtrl.cancelarOrden);
 router.post  ('/mesas/:id/enviar-pedido',             mesasCtrl.enviarPedido);
 

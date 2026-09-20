@@ -383,9 +383,9 @@ const cobrar = async (req, res, next) => {
   try {
     const {
       metodo_pago = 'efectivo', cliente_id, caja_id, redondeo = 0, idempotency_key,
-      monto_efectivo, monto_transferencia, items: itemsSel,
+      monto_efectivo, monto_transferencia, items: itemsSel, orden_id,
     } = req.body
-    const mesaId = req.params.id
+    let mesaId = req.params.id
 
     // Idempotencia: si ya se cobró con este key, devolver la venta existente
     const buscarPorKey = async () => {
@@ -401,11 +401,15 @@ const cobrar = async (req, res, next) => {
       if (existing) return res.status(200).json({ venta: existing, mesa: null, replay: true })
     }
 
-    // Obtener orden activa con items
-    const { data: orden } = await supabase.from('br_ordenes_mesa')
+    // Obtener orden activa con items. Si viene orden_id (los cobros guardados sin conexión
+    // lo mandan) se ubica POR ORDEN y no por mesa: el pedido pudo trasladarse a otra mesa
+    // entre que el cobro se guardó y se sincronizó.
+    let qOrden = supabase.from('br_ordenes_mesa')
       .select(`id, total, mesa_id, mesero_id, items:br_orden_mesa_items(id, producto_id, cantidad, precio_unitario, subtotal, notas, enviado_at, visto_at, servido_at, venta_id)`)
-      .eq('mesa_id', mesaId).eq('estado', 'abierta').maybeSingle()
+    qOrden = orden_id ? qOrden.eq('id', orden_id) : qOrden.eq('mesa_id', mesaId)
+    const { data: orden } = await qOrden.eq('estado', 'abierta').maybeSingle()
     if (!orden) return res.status(404).json({ error: 'Sin orden activa' })
+    mesaId = orden.mesa_id   // la mesa vigente del pedido (puede no ser la del URL si se trasladó)
     if (!orden.items?.length) return res.status(400).json({ error: 'La orden no tiene ítems' })
 
     const pendientes = orden.items.filter(i => !i.venta_id)
@@ -659,6 +663,64 @@ const cobrar = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+// ── POST /mesas/:id/trasladar ────────────────────────────────
+// Cambia el pedido abierto de la mesa :id a otra mesa LIBRE (el cliente se cambia de
+// mesa). Solo cambia br_ordenes_mesa.mesa_id y los estados de las 2 mesas: ítems (enviado/
+// visto/servido/cobrado), mesero, total y fechas no se tocan, así que no se reimprime ni
+// se repite nada en comandas. Cualquier usuario con acceso a Mesas puede hacerlo.
+// No hay transacciones en supabase-js ni índice único de 1 orden abierta por mesa, así
+// que el destino se reserva con una actualización condicional (estado='libre') y, si el
+// paso siguiente falla, se revierte.
+const trasladar = async (req, res, next) => {
+  try {
+    const origenId = req.params.id
+    const { destino_id } = req.body
+    if (!destino_id) return res.status(400).json({ error: 'Falta la mesa destino' })
+    if (destino_id === origenId) return res.status(400).json({ error: 'Elige una mesa distinta a la actual' })
+
+    const { data: orden } = await supabase.from('br_ordenes_mesa')
+      .select('id').eq('mesa_id', origenId).eq('estado', 'abierta').maybeSingle()
+    if (!orden) return res.status(404).json({ error: 'Esta mesa no tiene un pedido abierto' })
+
+    const { data: destino } = await supabase.from('br_mesas')
+      .select('id, numero, nombre, estado, activa').eq('id', destino_id).maybeSingle()
+    if (!destino || !destino.activa) return res.status(404).json({ error: 'Mesa destino no encontrada' })
+    const nombreDestino = destino.nombre ? `${destino.numero} — ${destino.nombre}` : `${destino.numero}`
+    if (destino.estado !== 'libre') {
+      return res.status(409).json({ error: `La mesa ${nombreDestino} ya no está libre. Elige otra.` })
+    }
+    const { count: abiertasDestino } = await supabase.from('br_ordenes_mesa')
+      .select('id', { count: 'exact', head: true })
+      .eq('mesa_id', destino_id).eq('estado', 'abierta')
+    if (abiertasDestino > 0) {
+      return res.status(409).json({ error: `La mesa ${nombreDestino} ya tiene un pedido abierto. Elige otra.` })
+    }
+
+    // 1) Reservar el destino (solo si sigue libre)
+    const { data: reservada } = await supabase.from('br_mesas')
+      .update({ estado: 'ocupada' }).eq('id', destino_id).eq('estado', 'libre').select('id')
+    if (!reservada?.length) {
+      return res.status(409).json({ error: `La mesa ${nombreDestino} acaba de ocuparse. Elige otra.` })
+    }
+
+    // 2) Mover la orden (solo si sigue abierta y en la mesa de origen)
+    const { data: movida, error: errMover } = await supabase.from('br_ordenes_mesa')
+      .update({ mesa_id: destino_id, updated_at: new Date().toISOString() })
+      .eq('id', orden.id).eq('mesa_id', origenId).eq('estado', 'abierta')
+      .select('id')
+    if (errMover || !movida?.length) {
+      await supabase.from('br_mesas').update({ estado: 'libre' }).eq('id', destino_id)
+      if (errMover) throw errMover
+      return res.status(409).json({ error: 'El pedido cambió mientras se trasladaba. Actualiza e inténtalo de nuevo.' })
+    }
+
+    // 3) Liberar la mesa de origen
+    await supabase.from('br_mesas').update({ estado: 'libre' }).eq('id', origenId)
+
+    res.json({ ok: true, orden_id: orden.id, origen_id: origenId, destino_id })
+  } catch (err) { next(err) }
+}
+
 // ── POST /mesas/:id/cancelar-orden ───────────────────────────
 // Solo puede cancelar quien tomó la mesa (br_meseros.usuario_id) o un admin —
 // antes cualquier cajero autenticado podía cancelar la orden de cualquier mesa.
@@ -849,6 +911,6 @@ const eliminar = async (req, res, next) => {
 
 module.exports = {
   listar, crear, actualizar, eliminar, abrirMesa, tomarMesa, obtenerOrden,
-  agregarItem, actualizarItem, eliminarItem, cobrar, cancelarOrden, enviarPedido,
+  agregarItem, actualizarItem, eliminarItem, cobrar, trasladar, cancelarOrden, enviarPedido,
   comandasPendientes, marcarVistoItem, marcarVistoMesa, marcarServidoItem,
 }
