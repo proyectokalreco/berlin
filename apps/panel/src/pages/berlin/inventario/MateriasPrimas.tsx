@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { coincide } from '../../../lib/buscar'
+import { esCategoriaSalsas, esCategoriaToppings } from '../../../lib/comida'
 import * as XLSX from 'xlsx'
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -1702,8 +1703,11 @@ function ModalProducto({
     },
   })
 
-  // Categorías "Sin control de stock" (salsas, toppings…) admiten precio $0; el resto exige > 0.
-  const permiteCero = !!categorias.find(c => c.id === form.categoria_id)?.sin_stock_control
+  // Admiten precio $0: las categorías SALSAS y TOPPINGS (por nombre, como el resto de la
+  // detección de comida — no dependen de tener la casilla marcada) y cualquier categoría
+  // con "Sin control de stock". Las demás exigen precio > 0.
+  const catSel      = categorias.find(c => c.id === form.categoria_id)
+  const permiteCero = !!catSel?.sin_stock_control || esCategoriaSalsas(catSel?.nombre) || esCategoriaToppings(catSel?.nombre)
   const precioNum   = parseFloat(form.precio_venta) || 0
   const valid = form.nombre.trim() && (permiteCero ? precioNum >= 0 : precioNum > 0)
 

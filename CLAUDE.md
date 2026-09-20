@@ -1128,6 +1128,14 @@ WHERE categoria_id IN (SELECT id FROM br_categorias WHERE nombre IN ('SALSAS','T
 Falta marcar **"Sin control de stock"** en SALSAS y TOPPINGS desde Inventario → Categorías (es el paso
 que las deja no-Agotado y sin descuento de stock).
 
+**Ajuste posterior (mismo día):** al abrir una salsa/topping en Inventario el formulario **seguía
+bloqueando el precio $0** ("Ingresa el Precio de Venta para poder guardar", capturas del usuario con
+SALSA BBQ y CEBOLLA). Causa: mi regla `permiteCero` dependía de que la categoría tuviera la casilla
+"Sin control de stock" marcada, y no lo estaba. Fix (`MateriasPrimas.tsx`): `permiteCero` = casilla
+marcada **o** categoría SALSAS/TOPPINGS **por nombre** (`esCategoriaSalsas`/`esCategoriaToppings`, la
+misma detección del modal) — el $0 ya no depende de un clic previo. La casilla sigue siendo lo que
+evita el "Agotado" y el descuento de stock.
+
 **Límites conocidos:** las salsas/toppings **siguen siendo productos sellables** por separado (ahora a
 $0); la ventana los usa solo como lista de opciones. La pregunta sale en todo producto de COMIDA. Los
 toppings/salsas se toman de los productos de esas categorías al cargar la pantalla (si se crea uno
