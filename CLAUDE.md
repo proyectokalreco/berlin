@@ -1147,11 +1147,21 @@ nuevo, hay que recargar).
 `node -c`, `tsc --noEmit` y `npm run build` limpios. **✅ Desplegado:** migración 111 aplicada
 (`ALTER TABLE`), backend + panel reconstruidos, `UPDATE 16` corrido. El usuario abrió en producción la
 ventana en Mesas (capturas: "Completo/Modificar", toppings tachados —lechuga, tomate—, salsas marcadas
-—berenjena, pimentón— y nota libre "Bien Cocida"). ⏳ **Sin confirmar todavía por el usuario:** que la
-línea quede con la nota en el carrito, la comanda impresa en cocina/barra, el ticket y la factura, y la
-venta por POS. ✅ **Confirmado por el usuario (2026-09-20, tras el ajuste `e105118`):** el formulario
-de producto ya guarda SALSAS/TOPPINGS con precio $0 ("ya funciona", captura con "Guardar cambios"
-habilitado y precio 0) y la bandera "Sin control de stock" ya está aplicada en las 2 categorías.
+—berenjena, pimentón— y nota libre "Bien Cocida").
+
+✅ **CONFIRMADO POR EL USUARIO EN PRODUCCIÓN (2026-09-20):**
+- Tras el ajuste `e105118` el formulario de producto guarda SALSAS/TOPPINGS con precio $0 ("ya
+  funciona", captura con "Guardar cambios" habilitado y precio 0) y la bandera "Sin control de stock"
+  está aplicada en las 2 categorías (`UPDATE 2`).
+- **Venta por POS con modificación:** la captura del ticket `VT-20260920-0007-37` muestra la línea
+  `HAMURGUESA PULLED PORK` con `** SIN: LECHUGA, RIPIO PAPA · SALSAS: SALSA BERENJENA · bien cocida`
+  bajo el nombre, precio sin cambio ($26.000) y total $36.000 (junto a CHORIARO $10.000) — es decir: la
+  ventana en POS, la nota en el carrito, el guardado de la venta (columna `notas` de la migración 111
+  operando) y el ticket impreso funcionan.
+- El usuario indicó "Ya probé todo" (Mesas, comanda, factura, POS); la única evidencia visual que
+  adjuntó de esa ronda es el ticket de POS de arriba.
+
+**Caso cerrado.** Nada pendiente de esta función.
 
 ## 📄 Documentación relacionada
 
