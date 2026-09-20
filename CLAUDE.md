@@ -1125,8 +1125,11 @@ opcional.
 UPDATE br_productos SET precio_venta = 0
 WHERE categoria_id IN (SELECT id FROM br_categorias WHERE nombre IN ('SALSAS','TOPPINGS'));
 ```
-Falta marcar **"Sin control de stock"** en SALSAS y TOPPINGS desde Inventario → Categorías (es el paso
-que las deja no-Agotado y sin descuento de stock).
+La bandera **"Sin control de stock"** de SALSAS y TOPPINGS (lo que las deja no-Agotado y sin descuento
+de stock) se marcó por SQL, corrido por el usuario (2026-09-20):
+```sql
+UPDATE br_categorias SET sin_stock_control = true WHERE nombre IN ('SALSAS','TOPPINGS');   -- UPDATE 2
+```
 
 **Ajuste posterior (mismo día):** al abrir una salsa/topping en Inventario el formulario **seguía
 bloqueando el precio $0** ("Ingresa el Precio de Venta para poder guardar", capturas del usuario con
@@ -1145,8 +1148,10 @@ nuevo, hay que recargar).
 (`ALTER TABLE`), backend + panel reconstruidos, `UPDATE 16` corrido. El usuario abrió en producción la
 ventana en Mesas (capturas: "Completo/Modificar", toppings tachados —lechuga, tomate—, salsas marcadas
 —berenjena, pimentón— y nota libre "Bien Cocida"). ⏳ **Sin confirmar todavía por el usuario:** que la
-línea quede con la nota en el carrito, la comanda impresa en cocina/barra, el ticket y la factura, la
-venta por POS, y el paso de marcar SALSAS/TOPPINGS como "Sin control de stock".
+línea quede con la nota en el carrito, la comanda impresa en cocina/barra, el ticket y la factura, y la
+venta por POS. ✅ **Confirmado por el usuario (2026-09-20, tras el ajuste `e105118`):** el formulario
+de producto ya guarda SALSAS/TOPPINGS con precio $0 ("ya funciona", captura con "Guardar cambios"
+habilitado y precio 0) y la bandera "Sin control de stock" ya está aplicada en las 2 categorías.
 
 ## 📄 Documentación relacionada
 
