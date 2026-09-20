@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutGrid, X, Plus, Minus, Trash2, Search, ChevronLeft,
   Lock, Unlock, CreditCard, Banknote, Smartphone, Layers,
-  Settings, Edit2, Check, Send, AlertTriangle, Delete, RefreshCw,
+  Settings, Edit2, Check, Send, AlertTriangle, RefreshCw,
   GlassWater, Droplet, Milk,
 } from 'lucide-react'
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
@@ -283,54 +283,6 @@ function MesaCard({
 // ── Vista de orden (carrito) ──────────────────────────────────
 const ROLES_COBRAR      = ['cajero', 'admin_berlin', 'admin', 'super_admin', 'vendedor']
 const ROLES_ADMIN_MESA  = ['admin_berlin', 'admin', 'super_admin']
-const DENOMINACIONES    = [1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000]
-
-// ── Teclado numérico idéntico al POS ─────────────────────────
-function NumPadMesas({ valor, onChange, total }: { valor: string; onChange: (v: string) => void; total: number }) {
-  const press = (key: string) => {
-    if (key === 'DEL') onChange(valor.slice(0, -1))
-    else if (key === 'CLR') onChange('')
-    else {
-      if (valor === '' && key === '0') return
-      onChange(valor + key)
-    }
-  }
-  const teclas = ['7','8','9','4','5','6','1','2','3','CLR','0','DEL']
-  return (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-4 gap-1">
-        {DENOMINACIONES.filter(d => d <= Math.max(total * 2, 20_000)).slice(0, 4).map(d => (
-          <button key={d} type="button"
-            style={{ touchAction: 'manipulation' }}
-            onClick={() => onChange(String(d))}
-            className="bg-brand-dark hover:bg-white/8 active:scale-[0.94] border border-white/5
-                       rounded-lg py-2 text-[11px] text-gray-400 hover:text-white font-semibold
-                       transition-all select-none">
-            {d >= 1_000 ? `$${d / 1_000}K` : `$${d}`}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-1">
-        {teclas.map(k => (
-          <button key={k} type="button"
-            style={{ touchAction: 'manipulation' }}
-            onClick={() => press(k)}
-            className={cn(
-              'h-10 rounded-xl font-bold text-base transition-all select-none active:scale-[0.91] border',
-              k === 'DEL'
-                ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
-                : k === 'CLR'
-                ? 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 text-sm'
-                : 'bg-brand-dark border-white/5 text-white hover:bg-white/8',
-            )}>
-            {k === 'DEL' ? <Delete size={14} className="mx-auto" /> : k}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // Ítem con unidades ya reservadas por cobros guardados sin conexión (cantidad/subtotal = lo que aún se puede cobrar)
 type ItemLocal = OrdenItem & { _reservado?: number }
 
@@ -1555,7 +1507,6 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
                       />
                     </div>
                   </div>
-                  <NumPadMesas valor={efectivoRecibido} onChange={setEfectivoRecibido} total={totalFinal} />
                   {efectivoNum >= totalFinal && totalFinal > 0 && (
                     <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2.5
                                     flex items-center justify-between">
