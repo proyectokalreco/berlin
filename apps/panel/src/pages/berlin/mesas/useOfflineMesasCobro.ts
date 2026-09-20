@@ -15,6 +15,7 @@ export interface QueuedCobro {
     idempotency_key: string
     monto_efectivo?:      number
     monto_transferencia?: number
+    items?:               { item_id: string; cantidad: number }[]
   }
   queued_at: number
 }

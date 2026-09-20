@@ -76,10 +76,11 @@ interface ComandaOrden {
 }
 interface MesaEstado {
   id: string; numero: number; nombre?: string | null; estado: string
-  orden_activa?: { items: { enviado_at?: string | null; servido_at?: string | null }[] } | null
+  orden_activa?: { items: { enviado_at?: string | null; servido_at?: string | null; venta_id?: string | null }[] } | null
 }
 function mesaTodoServida(m: MesaEstado) {
-  const enviados = (m.orden_activa?.items ?? []).filter(i => i.enviado_at)
+  // Lo ya cobrado (cobro parcial, venta_id) no cuenta: solo lo pendiente de cobro
+  const enviados = (m.orden_activa?.items ?? []).filter(i => i.enviado_at && !i.venta_id)
   return enviados.length > 0 && enviados.every(i => i.servido_at)
 }
 

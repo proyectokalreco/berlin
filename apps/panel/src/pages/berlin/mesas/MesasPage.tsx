@@ -68,6 +68,7 @@ function imprimirTicketMesa(datos: {
   cambio?:           number
   mixto_efectivo?:      number
   mixto_transferencia?: number
+  parcial?:             boolean
 }) {
   const fecha = new Date().toLocaleString('es-CO', {
     day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
@@ -113,7 +114,7 @@ function imprimirTicketMesa(datos: {
 </div>
 <div class="sep2"></div>
 <div class="c">
-  <h3>CUENTA DE MESA</h3>
+  <h3>${datos.parcial ? 'CUENTA PARCIAL DE MESA' : 'CUENTA DE MESA'}</h3>
   <p>No. <strong>${datos.numero_venta}</strong></p>
   <p class="sm">${fecha}</p>
   <p class="sm"><b>Mesa ${mesaNom}</b></p>
@@ -147,6 +148,7 @@ ${datos.efectivo_recibido && datos.metodo_pago === 'efectivo' ? `
 <div class="row b" style="color:#000"><span>Cambio:</span><span class="amt">${fmt(datos.cambio ?? 0)}</span></div>` : ''}
 <div class="sep"></div>
 <div class="c sm">
+  ${datos.parcial ? '<p>Pago parcial: el resto de la mesa se cobra aparte</p>' : ''}
   <p>Conserve este tiquete como soporte de pago</p>
 </div>
 <div class="sep"></div>
@@ -170,6 +172,7 @@ interface Mesero  { id: string; nombre: string; color: string; usuario_id?: stri
 interface OrdenItem {
   id: string; cantidad: number; precio_unitario: number; subtotal: number; notas?: string
   enviado_at?: string | null; servido_at?: string | null
+  venta_id?: string | null; pagado_at?: string | null   // venta_id != null → ya cobrado (cobro parcial)
   producto?: { id:string; nombre:string; imagen_url?:string; precio_venta:number; unidad_venta:string }
 }
 interface Orden { id:string; total:number; estado:string; created_at:string; mesero?:Mesero; items:OrdenItem[] }
@@ -183,8 +186,11 @@ function MesaCard({
 }) {
   const libre  = mesa.estado === 'libre'
   const mesero = mesa.orden_activa?.mesero
-  const total  = mesa.orden_activa?.total ?? 0
-  const items  = mesa.orden_activa?.items?.length ?? 0
+  const total  = mesa.orden_activa?.total ?? 0   // total PENDIENTE de cobro (el backend excluye lo ya cobrado)
+  const itemsOrden  = mesa.orden_activa?.items ?? []
+  const pendientes  = itemsOrden.filter(i => !i.venta_id)
+  const hayCobrados = itemsOrden.some(i => i.venta_id)
+  const items  = pendientes.length
   // Mesa ocupada por otro: atenuar (fallback por nombre si usuario_id no está vinculado aún)
   const esMia  = !mesero || mesero.usuario_id === currentUserId || !currentUserId
     || (!mesero.usuario_id && !!currentUserName && mesero.nombre === currentUserName)
@@ -192,7 +198,7 @@ function MesaCard({
   // Estado de servido (Fase E) — derivado de los ítems reales, sin columna nueva en mesa.
   // Solo cuenta ítems ya enviados a las estaciones (enviado_at) — lo que aún está en el
   // carrito sin enviar no aplica todavía.
-  const enviados = (mesa.orden_activa?.items ?? []).filter(i => i.enviado_at)
+  const enviados = pendientes.filter(i => i.enviado_at)
   const estadoServido: 'falta' | 'servido' | null = enviados.length === 0
     ? null
     : enviados.some(i => !i.servido_at) ? 'falta' : 'servido'
@@ -250,6 +256,11 @@ function MesaCard({
           </div>
           <p className="text-xs text-gray-500">{items} producto{items !== 1 ? 's' : ''}</p>
           {total > 0 && <p className="text-sm font-bold" style={{ color: mesero?.color ?? '#00C49A' }}>{fmt(total)}</p>}
+          {hayCobrados && (
+            <p className="text-[10px] font-bold px-2 py-0.5 rounded-lg inline-block bg-blue-500/15 text-blue-300">
+              Cobro parcial · falta {fmt(total)}
+            </p>
+          )}
           {estadoServido && (
             <p className={cn(
               'text-xs font-bold px-2 py-1 rounded-lg inline-block',
@@ -325,7 +336,11 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const qc  = useQueryClient()
   const user = useAuthStore(s => s.user)
   const puedeCobar = ROLES_COBRAR.includes(user?.rol ?? '')
-  const [cobrarKey] = useState(() => crypto.randomUUID())
+  // Una key por cobro: se regenera tras cada cobro exitoso (varios cobros parciales en la misma pantalla)
+  const [cobrarKey, setCobrarKey] = useState(() => crypto.randomUUID())
+  // Dividir cuenta: seleccion[itemId] = unidades elegidas para cobrar ahora
+  const [modoDividir, setModoDividir] = useState(false)
+  const [seleccion,   setSeleccion]   = useState<Record<string, number>>({})
   const [busqueda,    setBusqueda]    = useState('')
   const [catActiva,   setCatActiva]   = useState<string|null>(null)
   const [metodoPago,       setMetodoPago]       = useState<'efectivo'|'exacto'|'transferencia'|'credito'|'mixto'>('efectivo')
@@ -566,7 +581,19 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
 
   const { mutate: quitarItem } = useMutation({
     mutationFn: (itemId: string) => api.delete(`/berlin/mesas/${mesa.id}/orden/items/${itemId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] })
+      // Cobro parcial previo + se quitó lo último pendiente → el backend cerró la mesa
+      if (res.data?.orden_cerrada) {
+        toast.success('Mesa saldada — todo lo demás ya estaba cobrado')
+        qc.invalidateQueries({ queryKey: ['mesas'] })
+        onVolver()
+      }
+    },
+    onError: (err: unknown) => {
+      const msg = (err as {response?:{data?:{error?:string}}})?.response?.data?.error
+      toast.error(msg || 'Error al quitar el producto')
+    },
   })
 
   // Estado "Servido" manual (Fase E) — lo marca quien atiende la mesa al entregar el
@@ -593,63 +620,119 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     },
   })
 
-  const { mutate: cobrar, isPending: cobrando } = useMutation({
-    mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/cobrar`, {
-      metodo_pago:     metodoPago === 'exacto' ? 'efectivo' : metodoPago,
-      cliente_id:      metodoPago === 'credito' ? clienteId || undefined : undefined,
-      caja_id:         cajaId || undefined,
-      redondeo:        orden ? redondear(orden.total) - orden.total : 0,
-      idempotency_key: cobrarKey,
-      monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
-      monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
-    }),
-    onSuccess: (res) => {
-      toast.success(`¡Cobrado! ${fmt(res.data.venta.total)}`)
+  // Foto de TODO lo que se cobra, tomada al pulsar "Cobrar": la respuesta llega después y
+  // el polling de la orden (cada 4 s) puede haber cambiado los datos vivos entretanto.
+  interface CobroSnap {
+    key:        string
+    parcial:    boolean                                   // true = dividir cuenta (se manda items[])
+    items?:     { item_id: string; cantidad: number }[]
+    ticketItems: { nombre: string; cantidad: number; precio_unitario: number; subtotal: number }[]
+    subtotal:   number
+    redondeo:   number
+    total:      number
+    metodo:     string
+    clienteId?: string
+    efectivoNum: number
+    cambio:     number
+    mixtoEfe:   number
+    mixtoTra:   number
+  }
+
+  const armarCobro = (): CobroSnap => {
+    const parcial = modoDividir
+    const ticketItems = parcial
+      ? selItems.map(x => ({
+          nombre:          x.item.producto?.nombre ?? 'Producto',
+          cantidad:        x.cant,
+          precio_unitario: x.item.precio_unitario,
+          subtotal:        x.cant === Number(x.item.cantidad) ? x.item.subtotal : x.item.precio_unitario * x.cant,
+        }))
+      : items.map(i => ({
+          nombre:          i.producto?.nombre ?? 'Producto',
+          cantidad:        i.cantidad,
+          precio_unitario: i.precio_unitario,
+          subtotal:        i.subtotal,
+        }))
+    return {
+      key:      cobrarKey,
+      parcial,
+      items:    parcial ? selItems.map(x => ({ item_id: x.item.id, cantidad: x.cant })) : undefined,
+      ticketItems,
+      subtotal: total,
+      redondeo: redond,
+      total:    totalFinal,
+      metodo:   metodoPago === 'exacto' ? 'efectivo' : metodoPago,
+      clienteId: metodoPago === 'credito' ? clienteId || undefined : undefined,
+      efectivoNum, cambio,
+      mixtoEfe: mixtoEfeNum, mixtoTra: mixtoTraNum,
+    }
+  }
+
+  const payloadDe = (s: CobroSnap) => ({
+    metodo_pago:     s.metodo,
+    cliente_id:      s.clienteId,
+    caja_id:         cajaId || undefined,
+    redondeo:        s.redondeo,
+    idempotency_key: s.key,
+    monto_efectivo:      s.metodo === 'mixto' ? s.mixtoEfe : undefined,
+    monto_transferencia: s.metodo === 'mixto' ? s.mixtoTra : undefined,
+    items:           s.items,
+  })
+
+  const { mutate: cobrarMutate, isPending: cobrando } = useMutation({
+    mutationFn: (s: CobroSnap) => api.post(`/berlin/mesas/${mesa.id}/cobrar`, payloadDe(s)),
+    onSuccess: (res, s) => {
+      const liberada = res.data.mesa_liberada === true
+      const pendiente = Number(res.data.total_pendiente ?? 0)
+      toast.success(liberada || !s.parcial
+        ? `¡Cobrado! ${fmt(res.data.venta.total)}`
+        : `¡Cobrado ${fmt(res.data.venta.total)}! Faltan ${fmt(pendiente)} por cobrar`)
       qc.invalidateQueries({ queryKey: ['mesas'] })
+      qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] })
       qc.invalidateQueries({ queryKey: ['ventas-resumen-hoy'] })
-      // Imprimir ticket de mesa
+      // Imprimir ticket de mesa (solo lo cobrado en ESTE cobro)
       imprimirTicketMesa({
         numero_venta: res.data.venta.numero_venta ?? res.data.venta.id?.slice(0,8).toUpperCase(),
         mesa_numero:  mesa.numero,
         mesa_nombre:  mesa.nombre ?? null,
         mesero:       mesero ? `${mesero.nombre}` : undefined,
-        items:        (orden?.items ?? []).map(i => ({
-          nombre:          i.producto?.nombre ?? 'Producto',
-          cantidad:        i.cantidad,
-          precio_unitario: i.precio_unitario,
-          subtotal:        i.subtotal,
-        })),
-        subtotal:          orden?.total ?? 0,
-        redondeo:          redond,
-        total:             totalFinal,
-        metodo_pago:       metodoPago === 'exacto' ? 'efectivo' : metodoPago,
-        efectivo_recibido: metodoPago === 'efectivo' && efectivoNum > 0 ? efectivoNum : undefined,
-        cambio:            metodoPago === 'efectivo' && efectivoNum > 0 ? cambio : undefined,
-        mixto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
-        mixto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
+        items:        s.ticketItems,
+        subtotal:          s.subtotal,
+        redondeo:          s.redondeo,
+        total:             s.total,
+        metodo_pago:       s.metodo,
+        efectivo_recibido: s.metodo === 'efectivo' && s.efectivoNum > 0 ? s.efectivoNum : undefined,
+        cambio:            s.metodo === 'efectivo' && s.efectivoNum > 0 ? s.cambio : undefined,
+        mixto_efectivo:      s.metodo === 'mixto' ? s.mixtoEfe : undefined,
+        mixto_transferencia: s.metodo === 'mixto' ? s.mixtoTra : undefined,
+        parcial:           s.parcial && !liberada,
       })
-      onVolver()
+      if (liberada || !s.parcial) { onVolver(); return }
+      // Cobro parcial: la mesa sigue abierta — limpiar y dejar listo el siguiente cobro
+      setShowCobrar(false)
+      setSeleccion({})
+      setMetodoPago('efectivo'); setEfectivoRecibido(''); setMixtoEfectivo(''); setMixtoTransferencia('')
+      setClienteId(''); setBuscandoCli('')
+      setCobrarKey(crypto.randomUUID())
     },
-    onError: (err: unknown) => {
+    onError: (err: unknown, s: CobroSnap) => {
       const e = err as { code?: string; message?: string; response?: { data?: { error?: string } } }
       const isNetErr = !e.response && (
         e.code === 'ERR_NETWORK' || e.code === 'ECONNABORTED' ||
         e.message === 'Network Error' || !!e.message?.includes('timeout')
       )
       if (isNetErr) {
+        // El cobro parcial sin conexión se habilita en la fase de modo offline; el cobro
+        // completo de la mesa conserva la cola offline de siempre.
+        if (s.parcial) {
+          toast.error('Sin conexión — no se pudo registrar el cobro parcial. Reintenta al volver la red.')
+          return
+        }
         onEnqueueCobro({
-          idempotency_key: cobrarKey,
+          idempotency_key: s.key,
           mesa_id:         mesa.id,
           mesa_numero:     mesa.numero,
-          payload: {
-            metodo_pago:     metodoPago === 'exacto' ? 'efectivo' : metodoPago,
-            cliente_id:      metodoPago === 'credito' ? clienteId || undefined : undefined,
-            caja_id:         cajaId || undefined,
-            redondeo:        orden ? redondear(orden.total) - orden.total : 0,
-            idempotency_key: cobrarKey,
-            monto_efectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
-            monto_transferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
-          },
+          payload:         payloadDe(s),
           queued_at: Date.now(),
         })
         toast('📶 Sin conexión — el cobro de la mesa quedó en cola', { icon: '⏳', duration: 5000 })
@@ -660,6 +743,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     },
   })
 
+  const cobrar = () => cobrarMutate(armarCobro())
+
   const { mutate: cancelar } = useMutation({
     mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/cancelar-orden`),
     onSuccess: () => { toast('Orden cancelada'); qc.invalidateQueries({ queryKey: ['mesas'] }); onVolver() },
@@ -669,10 +754,27 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     },
   })
 
-  const total      = orden?.total ?? 0
+  // Cobro parcial: `items` = solo lo PENDIENTE de cobro; lo ya cobrado (venta_id) va aparte.
+  const itemsTodos     = orden?.items ?? []
+  const items          = itemsTodos.filter(i => !i.venta_id)
+  const itemsPagados   = itemsTodos.filter(i => !!i.venta_id)
+  const totalPagado    = itemsPagados.reduce((s, i) => s + Number(i.subtotal), 0)
+  const totalPendiente = orden?.total ?? 0   // el backend lo mantiene = suma de lo pendiente
+
+  // Dividir cuenta: unidades elegidas por línea (acotadas a la cantidad vigente de la línea)
+  const selItems = items
+    .map(i => ({ item: i, cant: Math.min(seleccion[i.id] ?? 0, Number(i.cantidad)) }))
+    .filter(x => x.cant > 0)
+  const subtotalSel = selItems.reduce((s, x) =>
+    s + (x.cant === Number(x.item.cantidad) ? Number(x.item.subtotal) : Number(x.item.precio_unitario) * x.cant), 0)
+  const selListo = selItems.length > 0 && selItems.every(x => x.item.enviado_at && x.item.servido_at)
+  const selFaltaEnviar = selItems.some(x => !x.item.enviado_at)
+
+  // `total`/`redond`/`totalFinal` = lo que se cobra AHORA: la selección en modo dividir,
+  // o todo lo pendiente en modo normal. Todo el modal de cobro y el ticket leen de acá.
+  const total      = modoDividir ? subtotalSel : totalPendiente
   const redond     = redondear(total) - total
   const totalFinal = total + redond
-  const items      = orden?.items ?? []
   const mesero     = mesa.orden_activa?.mesero
 
   // Aviso "lista para cobrar" — cuando el último ítem enviado queda servido, avisa
@@ -683,8 +785,11 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   const todoServidoOrden = enviadosOrden.length > 0 && enviadosOrden.every(i => i.servido_at)
   // Cobrar solo si TODO lo que hay en el carrito ya se envió Y se sirvió — evita
   // cobrar una cuenta con algo pendiente en cocina/barra o sin enviar todavía.
-  const listoParaCobrar = items.length > 0 && items.every(i => i.enviado_at && i.servido_at)
-  const faltaPorEnviar  = items.some(i => !i.enviado_at)
+  // En modo dividir el candado aplica solo a lo seleccionado (lo de otra persona puede seguir en cocina).
+  const listoParaCobrar = modoDividir
+    ? selListo
+    : items.length > 0 && items.every(i => i.enviado_at && i.servido_at)
+  const faltaPorEnviar  = modoDividir ? selFaltaEnviar : items.some(i => !i.enviado_at)
   const todoServidoAntesRef = useRef(false)
   const [resaltarCobrar, setResaltarCobrar] = useState(false)
   useEffect(() => {
@@ -751,7 +856,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
             </p>
           )}
         </div>
-        {puedeCancelar && (
+        {puedeCancelar && itemsPagados.length === 0 && (
           <button onClick={() => { if(confirm('¿Cancelar la orden y liberar la mesa?')) cancelar() }}
             className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10">
             Cancelar orden
@@ -870,10 +975,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
             <div className="divide-y divide-white/5">
               {items.map(item => {
                 const pendienteServir = !!item.enviado_at && !item.servido_at
+                const cantN  = Number(item.cantidad)
+                const sel    = Math.min(seleccion[item.id] ?? 0, cantN)
+                const puedeSel = !!item.enviado_at && !!item.servido_at
+                const setSel = (n: number) => setSeleccion(prev => ({ ...prev, [item.id]: Math.max(0, Math.min(n, cantN)) }))
                 return (
                 <div key={item.id}
                   className={cn('flex items-center gap-2 py-2.5 pl-1.5 -ml-1.5',
-                    pendienteServir ? 'border-l-2 border-[#EA580C]/60' : '')}>
+                    modoDividir && sel > 0 ? 'border-l-2 border-brand-teal bg-brand-teal/10 rounded-r-lg'
+                      : pendienteServir ? 'border-l-2 border-[#EA580C]/60' : '')}>
                   {/* Mini ícono */}
                   <MiniIconMesa
                     nombre={item.producto?.nombre ?? ''}
@@ -888,7 +998,29 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                       {fmt(item.precio_unitario)} c/u
                     </p>
                   </div>
-                  {/* +/- cantidad */}
+                  {modoDividir ? (
+                    /* Dividir cuenta: cuántas unidades de esta línea se cobran ahora */
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button disabled={!puedeSel || sel <= 0}
+                        onClick={() => setSel(sel - 1)}
+                        className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/12 active:scale-[0.90] disabled:opacity-30
+                                   flex items-center justify-center text-gray-300 transition-all select-none">
+                        <Minus size={10}/>
+                      </button>
+                      <span className={cn('min-w-[30px] text-center font-bold text-xs tabular-nums',
+                        sel > 0 ? 'text-brand-teal' : 'text-white')}>
+                        {sel}/{cantN}
+                      </span>
+                      <button disabled={!puedeSel || sel >= cantN}
+                        onClick={() => setSel(sel + 1)}
+                        className="w-6 h-6 rounded-lg bg-white/5 hover:bg-brand-teal/20 active:scale-[0.90] disabled:opacity-30
+                                   flex items-center justify-center text-gray-300 hover:text-brand-teal
+                                   transition-all select-none">
+                        <Plus size={10}/>
+                      </button>
+                    </div>
+                  ) : (
+                  /* +/- cantidad */
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => {
@@ -910,9 +1042,25 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                       <Plus size={10}/>
                     </button>
                   </div>
-                  {/* Subtotal + eliminar */}
+                  )}
+                  {/* Subtotal + eliminar (o "Toda la línea" en modo dividir) */}
                   <div className="text-right flex-shrink-0 min-w-[44px] flex flex-col items-end gap-0.5">
                     <p className="text-xs font-bold text-white tabular-nums">{fmt(item.subtotal)}</p>
+                    {modoDividir ? (
+                      puedeSel ? (
+                        <button onClick={() => setSel(sel === cantN ? 0 : cantN)}
+                          className={cn('text-[9px] font-semibold px-1.5 py-0.5 rounded-md transition-colors',
+                            sel === cantN
+                              ? 'bg-brand-teal text-brand-dark'
+                              : 'bg-brand-teal/15 text-brand-teal hover:bg-brand-teal/25')}>
+                          {sel === cantN ? 'Quitar' : 'Toda'}
+                        </button>
+                      ) : (
+                        <span className="text-[9px] font-semibold text-[#EA580C]">
+                          {item.enviado_at ? 'Falta servir' : 'Falta enviar'}
+                        </span>
+                      )
+                    ) : (<>
                     {item.enviado_at && (
                       <button
                         title={item.servido_at ? 'Marcar como pendiente por servir' : 'Marcar como servido'}
@@ -928,10 +1076,32 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                       className="text-gray-600 hover:text-red-400 transition-colors">
                       <Trash2 size={10}/>
                     </button>
+                    </>)}
                   </div>
                 </div>
               )})}
             </div>
+
+            {/* Ya cobrado (cobros parciales) — solo historial, no se puede modificar */}
+            {itemsPagados.length > 0 && (
+              <div className="mt-3 pt-2 border-t border-white/10">
+                <p className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-1 flex items-center justify-between">
+                  <span>Ya cobrado</span>
+                  <span className="tabular-nums text-gray-400 normal-case tracking-normal">{fmt(totalPagado)}</span>
+                </p>
+                <div className="divide-y divide-white/5 opacity-60">
+                  {itemsPagados.map(item => (
+                    <div key={item.id} className="flex items-center gap-2 py-1.5">
+                      <Check size={11} className="text-green-400 flex-shrink-0"/>
+                      <p className="flex-1 min-w-0 text-[11px] text-gray-300 truncate">
+                        {Number(item.cantidad)} × {item.producto?.nombre ?? '—'}
+                      </p>
+                      <p className="text-[11px] text-gray-400 tabular-nums flex-shrink-0">{fmt(item.subtotal)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Divisor vertical arrastrable — mismo patrón que POS */}
@@ -958,8 +1128,19 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               style={{ height: paymentHeight }}>
               {/* Totales */}
               <div className="space-y-0.5">
+                {modoDividir && (
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-brand-teal">
+                    Dividir cuenta · {selItems.length === 0 ? 'elige qué cobrar' : `${selItems.length} línea${selItems.length !== 1 ? 's' : ''} elegida${selItems.length !== 1 ? 's' : ''}`}
+                  </p>
+                )}
+                {!modoDividir && itemsPagados.length > 0 && (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Ya cobrado</span>
+                    <span className="tabular-nums text-green-400">{fmt(totalPagado)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Sub Total</span>
+                  <span>{modoDividir ? 'Selección' : itemsPagados.length > 0 ? 'Falta por cobrar' : 'Sub Total'}</span>
                   <span className="tabular-nums text-gray-300">{fmt(total)}</span>
                 </div>
                 {redond !== 0 && (
@@ -993,7 +1174,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
               {puedeCobar && (
                 <>
                   <button onClick={() => setShowCobrar(true)}
-                    disabled={!listoParaCobrar}
+                    disabled={!listoParaCobrar || (modoDividir && total <= 0)}
                     title={!listoParaCobrar ? (faltaPorEnviar ? 'Falta enviar el pedido a comanda' : 'Falta servir productos en la mesa') : undefined}
                     className={cn(
                       'w-full py-3 rounded-xl text-brand-dark font-bold text-sm transition-colors',
@@ -1004,12 +1185,28 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                           ? 'bg-[#D9A652] hover:bg-[#c7913f] ring-2 ring-[#D9A652] ring-offset-2 ring-offset-brand-navy animate-pulse'
                           : 'bg-brand-teal hover:bg-[#00A882]',
                     )}>
-                    {resaltarCobrar && listoParaCobrar ? '💰 ' : ''}Cobrar · {fmt(totalFinal)}
+                    {resaltarCobrar && listoParaCobrar && !modoDividir ? '💰 ' : ''}
+                    {modoDividir ? 'Cobrar selección' : itemsPagados.length > 0 ? 'Cobrar lo que falta' : 'Cobrar'} · {fmt(totalFinal)}
                   </button>
                   {!listoParaCobrar && items.length > 0 && (
                     <p className="text-[10px] text-center text-[#EA580C] -mt-1">
-                      {faltaPorEnviar ? '⏳ Falta enviar el pedido a comanda' : '⏳ Falta servir productos en la mesa'}
+                      {modoDividir && selItems.length === 0
+                        ? '👆 Elige las unidades que va a pagar esta persona'
+                        : faltaPorEnviar ? '⏳ Falta enviar el pedido a comanda' : '⏳ Falta servir productos en la mesa'}
                     </p>
+                  )}
+                  {modoDividir ? (
+                    <button onClick={() => { setModoDividir(false); setSeleccion({}) }}
+                      className="w-full py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white
+                                 hover:bg-white/5 text-xs font-semibold transition-colors">
+                      Salir de dividir cuenta
+                    </button>
+                  ) : (
+                    <button onClick={() => { setModoDividir(true); setSeleccion({}) }}
+                      className="w-full py-2 rounded-xl border border-brand-teal/30 bg-brand-teal/10 text-brand-teal
+                                 hover:bg-brand-teal/20 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                      <Layers size={13}/> Dividir cuenta
+                    </button>
                   )}
                 </>
               )}
@@ -1025,11 +1222,25 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70">
           <div className="bg-[#2C2925] rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <h3 className="text-white font-bold">Cobrar mesa {mesa.numero}</h3>
+              <h3 className="text-white font-bold">
+                {modoDividir ? `Cobrar selección — mesa ${mesa.numero}` : `Cobrar mesa ${mesa.numero}`}
+              </h3>
               <button onClick={() => setShowCobrar(false)}
                 className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg"><X size={16}/></button>
             </div>
             <div className="p-5 space-y-4">
+              {modoDividir && (
+                <div className="bg-brand-dark rounded-xl p-3 border border-white/5 space-y-1 max-h-32 overflow-y-auto">
+                  {selItems.map(x => (
+                    <div key={x.item.id} className="flex justify-between gap-2 text-xs">
+                      <span className="text-gray-300 truncate">{x.cant} × {x.item.producto?.nombre ?? '—'}</span>
+                      <span className="text-gray-400 tabular-nums flex-shrink-0">
+                        {fmt(x.cant === Number(x.item.cantidad) ? Number(x.item.subtotal) : Number(x.item.precio_unitario) * x.cant)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="bg-brand-dark rounded-xl p-3 flex justify-between border border-white/5">
                 <span className="text-sm text-gray-400">Total a cobrar</span>
                 <span className="text-lg font-bold text-brand-teal tabular-nums">{fmt(totalFinal)}</span>
