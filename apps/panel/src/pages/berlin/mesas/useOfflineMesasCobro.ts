@@ -15,9 +15,16 @@ export interface QueuedCobro {
     idempotency_key: string
     monto_efectivo?:      number
     monto_transferencia?: number
+    // Cobro parcial (dividir cuenta): solo esas unidades. Sin items = todo lo pendiente.
     items?:               { item_id: string; cantidad: number }[]
   }
   queued_at: number
+  total?:       number   // monto del cobro (para mostrarlo en el aviso)
+  provisional?: string   // número del comprobante provisional impreso sin conexión
+  // Si el servidor lo rechazó por algo que NO es la red (mesa ya cobrada, ítem ya cobrado,
+  // etc.) queda en la cola marcado con el motivo — nunca se descarta en silencio: es plata
+  // que el cajero ya recibió y hay que resolver a mano.
+  error?: string
 }
 
 const STORAGE_KEY = 'mesas_berlin_offline_cobros'
@@ -42,7 +49,7 @@ function isNetworkError(err: unknown): boolean {
 }
 
 export function useOfflineMesasCobro(
-  onCobroSync: (mesaId: string, data: unknown) => void
+  onCobroSync: (mesaId: string, data: unknown, cobro: QueuedCobro) => void | Promise<unknown>
 ) {
   const [queue,      setQueue]      = useState<QueuedCobro[]>(loadQueue)
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
@@ -54,31 +61,36 @@ export function useOfflineMesasCobro(
 
   const processQueue = useCallback(async () => {
     if (syncingRef.current) return
-    const pending = loadQueue()
+    // Solo los que aún no fallaron por una razón del servidor
+    const pending = loadQueue().filter(c => !c.error)
     if (!pending.length) return
 
     syncingRef.current = true
     setSyncStatus('syncing')
 
-    const remaining: QueuedCobro[] = []
     for (const item of pending) {
       try {
         const res = await api.post(`/berlin/mesas/${item.mesa_id}/cobrar`, item.payload)
-        onCobroSync(item.mesa_id, res.data)
+        // Esperar a que la pantalla refresque la orden ANTES de sacarlo de la cola: mientras
+        // esté en la cola sus unidades se restan de "pendiente" en pantalla; si se saca antes
+        // de que llegue la orden actualizada, esas unidades reaparecerían como cobrables.
+        await onCobroSync(item.mesa_id, res.data, item)
+        updateQueue(prev => prev.filter(c => c.idempotency_key !== item.idempotency_key))
       } catch (err) {
-        if (isNetworkError(err)) remaining.push(item)
-        // Error no-red (ej: mesa ya cobrada) → descartar
+        if (isNetworkError(err)) break   // sigue sin red: dejar el resto en cola, en orden
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+          || 'El servidor rechazó el cobro'
+        updateQueue(prev => prev.map(c =>
+          c.idempotency_key === item.idempotency_key ? { ...c, error: msg } : c))
       }
     }
 
-    saveQueue(remaining)
-    setQueue(remaining)
     syncingRef.current = false
     setSyncStatus('idle')
-  }, [onCobroSync])
+  }, [onCobroSync, updateQueue])
 
   useEffect(() => {
-    const goOnline = () => { if (loadQueue().length) processQueue() }
+    const goOnline = () => { if (loadQueue().some(c => !c.error)) processQueue() }
     window.addEventListener('online', goOnline)
     return () => window.removeEventListener('online', goOnline)
   }, [processQueue])
@@ -94,5 +106,28 @@ export function useOfflineMesasCobro(
     if (navigator.onLine) processQueue()
   }, [processQueue])
 
-  return { pendingCount: queue.length, syncStatus, pendingCobros: queue, enqueue, syncNow }
+  // Reintentar uno rechazado (quita la marca de error y vuelve a procesar)
+  const retry = useCallback((key: string) => {
+    updateQueue(prev => prev.map(c => {
+      if (c.idempotency_key !== key) return c
+      const { error: _e, ...rest } = c
+      void _e
+      return rest
+    }))
+    setTimeout(() => { if (navigator.onLine) processQueue() }, 0)
+  }, [updateQueue, processQueue])
+
+  // Descartar uno rechazado, tras revisarlo (el cajero lo confirma en pantalla)
+  const discard = useCallback((key: string) => {
+    updateQueue(prev => prev.filter(c => c.idempotency_key !== key))
+  }, [updateQueue])
+
+  const failed = queue.filter(c => !!c.error)
+  return {
+    pendingCount:  queue.length - failed.length,
+    failedCobros:  failed,
+    syncStatus,
+    pendingCobros: queue,   // TODOS (incluye rechazados): sus unidades siguen reservadas en pantalla
+    enqueue, syncNow, retry, discard,
+  }
 }

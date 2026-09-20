@@ -69,6 +69,7 @@ function imprimirTicketMesa(datos: {
   mixto_efectivo?:      number
   mixto_transferencia?: number
   parcial?:             boolean
+  provisional?:         boolean   // cobro guardado sin conexión: la factura se numera al sincronizar
 }) {
   const fecha = new Date().toLocaleString('es-CO', {
     day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
@@ -114,7 +115,8 @@ function imprimirTicketMesa(datos: {
 </div>
 <div class="sep2"></div>
 <div class="c">
-  <h3>${datos.parcial ? 'CUENTA PARCIAL DE MESA' : 'CUENTA DE MESA'}</h3>
+  <h3>${datos.provisional ? 'COMPROBANTE PROVISIONAL' : datos.parcial ? 'CUENTA PARCIAL DE MESA' : 'CUENTA DE MESA'}</h3>
+  ${datos.provisional ? '<p class="sm">Pago recibido SIN CONEXIÓN. La factura definitiva se numera al sincronizar.</p>' : ''}
   <p>No. <strong>${datos.numero_venta}</strong></p>
   <p class="sm">${fecha}</p>
   <p class="sm"><b>Mesa ${mesaNom}</b></p>
@@ -329,9 +331,13 @@ function NumPadMesas({ valor, onChange, total }: { valor: string; onChange: (v: 
   )
 }
 
-function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
+// Ítem con unidades ya reservadas por cobros guardados sin conexión (cantidad/subtotal = lo que aún se puede cobrar)
+type ItemLocal = OrdenItem & { _reservado?: number }
+
+function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
   mesa: Mesa; cajaId?: string; onVolver: () => void
   onEnqueueCobro: (cobro: QueuedCobro) => void
+  colaCobros: QueuedCobro[]   // cobros de ESTA mesa guardados sin conexión (o rechazados al sincronizar)
 }) {
   const qc  = useQueryClient()
   const user = useAuthStore(s => s.user)
@@ -653,10 +659,16 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
           precio_unitario: i.precio_unitario,
           subtotal:        i.subtotal,
         }))
+    // Con cobros guardados sin conexión en la cola, "cobrar todo" NO puede mandarse sin
+    // items (el servidor cobraría también las unidades reservadas por la cola): se manda
+    // explícito lo que queda libre en pantalla.
+    const explicito = parcial || colaCobros.length > 0
     return {
       key:      cobrarKey,
       parcial,
-      items:    parcial ? selItems.map(x => ({ item_id: x.item.id, cantidad: x.cant })) : undefined,
+      items:    parcial
+        ? selItems.map(x => ({ item_id: x.item.id, cantidad: x.cant }))
+        : explicito ? items.map(i => ({ item_id: i.id, cantidad: Number(i.cantidad) })) : undefined,
       ticketItems,
       subtotal: total,
       redondeo: redond,
@@ -683,8 +695,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     mutationFn: (s: CobroSnap) => api.post(`/berlin/mesas/${mesa.id}/cobrar`, payloadDe(s)),
     onSuccess: (res, s) => {
       const liberada = res.data.mesa_liberada === true
+      const sinInfo  = res.data.mesa_liberada === undefined   // respuesta repetida (idempotencia)
       const pendiente = Number(res.data.total_pendiente ?? 0)
-      toast.success(liberada || !s.parcial
+      toast.success(liberada || (sinInfo && !s.parcial)
         ? `¡Cobrado! ${fmt(res.data.venta.total)}`
         : `¡Cobrado ${fmt(res.data.venta.total)}! Faltan ${fmt(pendiente)} por cobrar`)
       qc.invalidateQueries({ queryKey: ['mesas'] })
@@ -705,15 +718,11 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
         cambio:            s.metodo === 'efectivo' && s.efectivoNum > 0 ? s.cambio : undefined,
         mixto_efectivo:      s.metodo === 'mixto' ? s.mixtoEfe : undefined,
         mixto_transferencia: s.metodo === 'mixto' ? s.mixtoTra : undefined,
-        parcial:           s.parcial && !liberada,
+        parcial:           !liberada && (s.parcial || !sinInfo),
       })
-      if (liberada || !s.parcial) { onVolver(); return }
-      // Cobro parcial: la mesa sigue abierta — limpiar y dejar listo el siguiente cobro
-      setShowCobrar(false)
-      setSeleccion({})
-      setMetodoPago('efectivo'); setEfectivoRecibido(''); setMixtoEfectivo(''); setMixtoTransferencia('')
-      setClienteId(''); setBuscandoCli('')
-      setCobrarKey(crypto.randomUUID())
+      if (liberada || (sinInfo && !s.parcial)) { onVolver(); return }
+      // La mesa sigue abierta — limpiar y dejar listo el siguiente cobro
+      reiniciarTrasCobro()
     },
     onError: (err: unknown, s: CobroSnap) => {
       const e = err as { code?: string; message?: string; response?: { data?: { error?: string } } }
@@ -722,21 +731,39 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
         e.message === 'Network Error' || !!e.message?.includes('timeout')
       )
       if (isNetErr) {
-        // El cobro parcial sin conexión se habilita en la fase de modo offline; el cobro
-        // completo de la mesa conserva la cola offline de siempre.
-        if (s.parcial) {
-          toast.error('Sin conexión — no se pudo registrar el cobro parcial. Reintenta al volver la red.')
-          return
-        }
+        // Sin conexión: el cobro (completo o parcial) queda en la cola local con su propia
+        // key, se imprime un comprobante PROVISIONAL (la factura la numera el servidor al
+        // sincronizar) y sus unidades quedan reservadas en pantalla hasta que se registre.
+        const provisional = `PROV-${s.key.slice(0, 6).toUpperCase()}`
         onEnqueueCobro({
           idempotency_key: s.key,
           mesa_id:         mesa.id,
           mesa_numero:     mesa.numero,
           payload:         payloadDe(s),
           queued_at: Date.now(),
+          total:      s.total,
+          provisional,
         })
-        toast('📶 Sin conexión — el cobro de la mesa quedó en cola', { icon: '⏳', duration: 5000 })
-        onVolver()
+        imprimirTicketMesa({
+          numero_venta: provisional,
+          mesa_numero:  mesa.numero,
+          mesa_nombre:  mesa.nombre ?? null,
+          mesero:       mesero ? `${mesero.nombre}` : undefined,
+          items:        s.ticketItems,
+          subtotal:          s.subtotal,
+          redondeo:          s.redondeo,
+          total:             s.total,
+          metodo_pago:       s.metodo,
+          efectivo_recibido: s.metodo === 'efectivo' && s.efectivoNum > 0 ? s.efectivoNum : undefined,
+          cambio:            s.metodo === 'efectivo' && s.efectivoNum > 0 ? s.cambio : undefined,
+          mixto_efectivo:      s.metodo === 'mixto' ? s.mixtoEfe : undefined,
+          mixto_transferencia: s.metodo === 'mixto' ? s.mixtoTra : undefined,
+          parcial:           s.parcial,
+          provisional:       true,
+        })
+        toast('📶 Sin conexión — cobro guardado; se registrará al reconectar', { icon: '⏳', duration: 6000 })
+        if (s.items) reiniciarTrasCobro()   // parcial o explícito: seguir en la mesa
+        else onVolver()
       } else {
         toast.error(e.response?.data?.error || 'Error al cobrar')
       }
@@ -744,6 +771,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
   })
 
   const cobrar = () => cobrarMutate(armarCobro())
+
+  // Deja la pantalla lista para el siguiente cobro de la misma mesa
+  const reiniciarTrasCobro = () => {
+    setShowCobrar(false)
+    setSeleccion({})
+    setMetodoPago('efectivo'); setEfectivoRecibido(''); setMixtoEfectivo(''); setMixtoTransferencia('')
+    setClienteId(''); setBuscandoCli('')
+    setCobrarKey(crypto.randomUUID())
+  }
 
   const { mutate: cancelar } = useMutation({
     mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/cancelar-orden`),
@@ -756,10 +792,29 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
 
   // Cobro parcial: `items` = solo lo PENDIENTE de cobro; lo ya cobrado (venta_id) va aparte.
   const itemsTodos     = orden?.items ?? []
-  const items          = itemsTodos.filter(i => !i.venta_id)
+  const itemsSrv       = itemsTodos.filter(i => !i.venta_id)   // pendientes según el servidor
   const itemsPagados   = itemsTodos.filter(i => !!i.venta_id)
   const totalPagado    = itemsPagados.reduce((s, i) => s + Number(i.subtotal), 0)
-  const totalPendiente = orden?.total ?? 0   // el backend lo mantiene = suma de lo pendiente
+
+  // Modo sin conexión: las unidades de cobros guardados en la cola local (todavía no
+  // registrados en el servidor) se restan de lo pendiente, para que nadie las vuelva a
+  // cobrar. Un cobro encolado SIN items = cobro completo de la mesa → todo reservado.
+  const reservado: Record<string, number> = {}
+  let todoEnCola = false
+  for (const c of colaCobros) {
+    if (c.payload.items) for (const x of c.payload.items) reservado[x.item_id] = (reservado[x.item_id] ?? 0) + Number(x.cantidad)
+    else todoEnCola = true
+  }
+  const items: ItemLocal[] = todoEnCola ? [] : itemsSrv
+    .map((i): ItemLocal => {
+      const r = Math.min(reservado[i.id] ?? 0, Number(i.cantidad))
+      if (!r) return i
+      const cant = Number(i.cantidad) - r
+      return { ...i, cantidad: cant, subtotal: Number(i.precio_unitario) * cant, _reservado: r }
+    })
+    .filter(i => Number(i.cantidad) > 0)
+  const totalCola = colaCobros.reduce((s, c) => s + Number(c.total ?? 0), 0)
+  const totalPendiente = items.reduce((s, i) => s + Number(i.subtotal), 0)
 
   // Dividir cuenta: unidades elegidas por línea (acotadas a la cantidad vigente de la línea)
   const selItems = items
@@ -800,6 +855,22 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
     if (!todoServidoOrden) setResaltarCobrar(false)
     todoServidoAntesRef.current = todoServidoOrden
   }, [todoServidoOrden])
+
+  // Sin nada pendiente ya no hay qué dividir
+  useEffect(() => {
+    if (modoDividir && items.length === 0) { setModoDividir(false); setSeleccion({}) }
+  }, [modoDividir, items.length])
+
+  // Si la mesa se libera mientras se está en su pantalla (por ejemplo, al sincronizar un
+  // cobro guardado sin conexión que cerraba la cuenta), volver al tablero.
+  const estadoMesaPrevRef = useRef(mesa.estado)
+  useEffect(() => {
+    if (estadoMesaPrevRef.current === 'ocupada' && mesa.estado === 'libre') {
+      toast.success('Mesa saldada y liberada')
+      onVolver()
+    }
+    estadoMesaPrevRef.current = mesa.estado
+  }, [mesa.estado, onVolver])
   // Cancelar orden: solo quien tomó la mesa o un admin — mismo criterio que el backend
   // (antes cualquier cajero podía cancelar la orden de cualquier mesa, hueco real).
   const nombrePropioCancel = user?.apellido ? `${user.nombre} ${user.apellido}` : user?.nombre ?? ''
@@ -856,7 +927,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
             </p>
           )}
         </div>
-        {puedeCancelar && itemsPagados.length === 0 && (
+        {puedeCancelar && itemsPagados.length === 0 && colaCobros.length === 0 && (
           <button onClick={() => { if(confirm('¿Cancelar la orden y liberar la mesa?')) cancelar() }}
             className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10">
             Cancelar orden
@@ -966,7 +1037,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
           {/* Items — estilo POS */}
           <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0 touch-pan-y overscroll-contain">
             {loadOrden && <p className="text-xs text-gray-600 text-center py-4">Cargando…</p>}
-            {!loadOrden && items.length === 0 && (
+            {!loadOrden && items.length === 0 && itemsPagados.length === 0 && colaCobros.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-700 py-8">
                 <LayoutGrid size={32} className="opacity-15"/>
                 <p className="text-xs text-gray-600">Toca un producto para agregarlo</p>
@@ -996,6 +1067,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                     </p>
                     <p className="text-[10px] text-gray-500 mt-0.5">
                       {fmt(item.precio_unitario)} c/u
+                      {item._reservado ? <span className="text-amber-400"> · {item._reservado} en cola de cobro</span> : null}
                     </p>
                   </div>
                   {modoDividir ? (
@@ -1023,11 +1095,12 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                   /* +/- cantidad */
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
+                      disabled={!!item._reservado}
                       onClick={() => {
                         if (item.cantidad <= 1) quitarItem(item.id)
                         else actualizarCantidad({ itemId: item.id, cantidad: item.cantidad - 1 })
                       }}
-                      className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/12 active:scale-[0.90]
+                      className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/12 active:scale-[0.90] disabled:opacity-30
                                  flex items-center justify-center text-gray-300 transition-all select-none">
                       <Minus size={10}/>
                     </button>
@@ -1035,8 +1108,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                       {item.cantidad}
                     </span>
                     <button
+                      disabled={!!item._reservado}
                       onClick={() => actualizarCantidad({ itemId: item.id, cantidad: item.cantidad + 1 })}
-                      className="w-6 h-6 rounded-lg bg-white/5 hover:bg-[#EA580C]/20 active:scale-[0.90]
+                      className="w-6 h-6 rounded-lg bg-white/5 hover:bg-[#EA580C]/20 active:scale-[0.90] disabled:opacity-30
                                  flex items-center justify-center text-gray-300 hover:text-[#EA580C]
                                  transition-all select-none">
                       <Plus size={10}/>
@@ -1072,8 +1146,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                         <Check size={9}/> {item.servido_at ? 'Servido' : 'Servir'}
                       </button>
                     )}
-                    <button onClick={() => quitarItem(item.id)}
-                      className="text-gray-600 hover:text-red-400 transition-colors">
+                    <button onClick={() => quitarItem(item.id)} disabled={!!item._reservado}
+                      className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-30">
                       <Trash2 size={10}/>
                     </button>
                     </>)}
@@ -1081,6 +1155,24 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro }: {
                 </div>
               )})}
             </div>
+
+            {/* Cobros guardados sin conexión — se registran solos al reconectar */}
+            {colaCobros.length > 0 && (
+              <div className={cn('mt-3 rounded-xl border px-3 py-2 text-[11px] space-y-0.5',
+                colaCobros.some(c => c.error)
+                  ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-200')}>
+                <p className="font-bold">
+                  ⏳ {colaCobros.length} cobro{colaCobros.length !== 1 ? 's' : ''} guardado{colaCobros.length !== 1 ? 's' : ''} sin conexión
+                  {totalCola > 0 ? ` · ${fmt(totalCola)}` : ''}
+                </p>
+                <p className="opacity-80">
+                  {colaCobros.some(c => c.error)
+                    ? 'Alguno fue rechazado al sincronizar — revisa el aviso rojo en el tablero de mesas.'
+                    : 'Se registran solos al volver la conexión. Esas unidades ya no se pueden cobrar de nuevo.'}
+                </p>
+              </div>
+            )}
 
             {/* Ya cobrado (cobros parciales) — solo historial, no se puede modificar */}
             {itemsPagados.length > 0 && (
@@ -1930,16 +2022,24 @@ export default function MesasPage() {
   const [showConfig, setShowConfig] = useState(false)
 
   // ── Cola offline para cobros de mesa ─────────────────────────
-  const handleCobroSync = useCallback((mesaId: string, data: unknown) => {
+  // Devuelve una promesa: la cola espera a que la orden se refresque antes de sacar el
+  // cobro de la cola (ver useOfflineMesasCobro).
+  const handleCobroSync = useCallback(async (mesaId: string, data: unknown, cobro: QueuedCobro) => {
     const d = data as { venta?: { numero_venta?: string; total?: number } }
     const num = d?.venta?.numero_venta ?? mesaId.slice(0, 8).toUpperCase()
-    toast.success(`☁️ Mesa sincronizada: ${num}`)
-    qc.invalidateQueries({ queryKey: ['mesas'] })
+    toast.success(cobro.provisional
+      ? `☁️ Mesa ${cobro.mesa_numero} sincronizada: ${num} (era el comprobante provisional ${cobro.provisional})`
+      : `☁️ Mesa sincronizada: ${num}`, { duration: 8000 })
     qc.invalidateQueries({ queryKey: ['ventas-resumen-hoy'] })
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ['mesa-orden', mesaId] }),
+      qc.refetchQueries({ queryKey: ['mesas'] }),
+    ])
   }, [qc])
 
-  const { pendingCount: cobrosPendientes, syncStatus: cobroSyncStatus,
+  const { pendingCount: cobrosPendientes, failedCobros, syncStatus: cobroSyncStatus,
           pendingCobros, enqueue: enqueueCobro, syncNow: syncCobrosNow,
+          retry: reintentarCobro, discard: descartarCobro,
         } = useOfflineMesasCobro(handleCobroSync)
 
   const { data: mesas = [], isLoading } = useQuery<Mesa[]>({
@@ -2021,6 +2121,7 @@ export default function MesasPage() {
           cajaId={turnoActivo?.id}
           onVolver={() => { setVistaOrden(null); qc.invalidateQueries({ queryKey: ['mesas'] }) }}
           onEnqueueCobro={enqueueCobro}
+          colaCobros={pendingCobros.filter(c => c.mesa_id === mesaActual.id)}
         />
       </div>
     )
@@ -2042,7 +2143,7 @@ export default function MesasPage() {
             <span>
               {cobroSyncStatus === 'syncing'
                 ? `Sincronizando ${cobrosPendientes} cobro${cobrosPendientes > 1 ? 's' : ''} de mesa…`
-                : `${cobrosPendientes} cobro${cobrosPendientes > 1 ? 's' : ''} de mesa pendiente${cobrosPendientes > 1 ? 's' : ''} · ${pendingCobros.map(c => `Mesa ${c.mesa_numero}`).join(', ')}`
+                : `${cobrosPendientes} cobro${cobrosPendientes > 1 ? 's' : ''} de mesa pendiente${cobrosPendientes > 1 ? 's' : ''} · ${pendingCobros.filter(c => !c.error).map(c => `Mesa ${c.mesa_numero}${c.total ? ` (${fmt(c.total)})` : ''}`).join(', ')}`
               }
             </span>
           </div>
@@ -2054,6 +2155,33 @@ export default function MesasPage() {
           )}
         </div>
       )}
+
+      {/* Cobros que el servidor rechazó al sincronizar — NUNCA se descartan solos */}
+      {failedCobros.map(c => (
+        <div key={c.idempotency_key}
+          className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl text-xs border bg-red-500/10 border-red-500/40 text-red-200">
+          <div className="space-y-0.5">
+            <p className="font-bold">
+              ⚠️ Cobro NO registrado — Mesa {c.mesa_numero}{c.total ? ` · ${fmt(c.total)}` : ''}{c.provisional ? ` · comprobante ${c.provisional}` : ''}
+            </p>
+            <p>{c.error}</p>
+            <p className="text-red-300/80">
+              Ese dinero ya se recibió en la mesa: revisa la mesa y reintenta, o descarta este cobro si ya lo cobraste de otra forma.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 flex-shrink-0">
+            <button onClick={() => reintentarCobro(c.idempotency_key)}
+              className="px-3 py-1 rounded-lg border border-red-300/40 hover:bg-red-500/20 font-semibold">
+              Reintentar
+            </button>
+            <button
+              onClick={() => { if (confirm(`¿Descartar este cobro de la Mesa ${c.mesa_numero}? No se registrará ninguna venta.`)) descartarCobro(c.idempotency_key) }}
+              className="px-3 py-1 rounded-lg border border-red-300/20 text-red-300/80 hover:bg-red-500/10">
+              Descartar
+            </button>
+          </div>
+        </div>
+      ))}
 
       {/* Cabecera */}
       <div className="flex items-center justify-between flex-wrap gap-3">
