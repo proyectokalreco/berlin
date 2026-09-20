@@ -926,6 +926,94 @@ más compacto que antes del rediseño — el Cobrar ya no se corta ni en ventana
 producción** (captura: carrito con 4 productos, Efectivo $50.000, Cambio $20.000, botón
 Cobrar totalmente visible).
 
+### 30. Mesas — carrito redimensionable + "Dividir cuenta" (cobro parcial por persona) (2026-09-18/20, commits `bb204bc`→`ff4e9e0`, migración 110)
+
+Dos pedidos seguidos del cliente sobre el módulo Mesas, ambos investigados antes de tocar código
+(y con plan aprobado por fases).
+
+**A) Carrito de Mesas redimensionable (commit `bb204bc`, solo panel).** Mismo patrón que ya tenía
+`POS.tsx` (handle horizontal catálogo↔carrito + divisor vertical ítems↔pago) portado a `VistaOrden`
+de `MesasPage.tsx`. Keys de `localStorage` **propias de Mesas** (`berlin-mesas-panel-width`,
+`berlin-mesas-payment-height`) — nunca reutilizar las de POS (`pos-panel-width`/`pos-payment-height`).
+
+**B) Dividir cuenta — varias personas en una mesa, cada una paga lo suyo.** Antes `cobrar()` cobraba
+SIEMPRE toda la orden en una sola venta y liberaba la mesa. Ahora se puede cobrar por partes: una
+venta/factura/ticket por cobro, la mesa sigue abierta hasta que no quede nada pendiente.
+
+*Decisiones del cliente (`AskUserQuestion`):* selección **mixta** (línea completa o unidad por unidad),
+candado servido **solo sobre lo seleccionado** (lo de otra persona puede seguir en cocina), redondeo
+a $50 **por cada factura**, y el cobro parcial **debe funcionar sin conexión** ("el objetivo es que
+este software trabaje fuera de línea").
+
+**Fase 1 — BD + backend (`bf593db` berlin, `68a2533` kalreco; migración 110):**
+- `br_orden_mesa_items.venta_id` (FK `br_ventas`, NULL = pendiente) + `pagado_at`. Un ítem con
+  `venta_id` ya está cobrado y se sabe en qué factura. Si se cobra **parte** de una línea (2 de 3
+  unidades) la fila original queda con lo pendiente (`cantidad` reducida) y se inserta una fila nueva
+  con lo pagado. Rollback documentado en el archivo.
+- `cobrar()` (`mesas.controller.js`) acepta `items: [{item_id, cantidad}]`. **Sin `items` cobra todo
+  lo pendiente** (compatible con el cobro completo y con la cola offline anterior).
+- **`br_ordenes_mesa.total` pasó a significar "total PENDIENTE de cobro"** mientras la orden está
+  abierta (helper `recalcularTotalOrden`, suma solo ítems con `venta_id IS NULL`) — por eso la tarjeta
+  de mesa y el tablero muestran lo que falta sin cambios. Al cerrarse (`cerrarOrdenCobrada`) queda
+  `total` = consumo completo (pagado + pendiente), igual que el significado histórico.
+- **Reclamo optimista de ítems:** después de crear la venta se marcan los ítems con
+  `update ... .is('venta_id', null).eq('cantidad', <la leída>)`; si otro cobro se los llevó → se deshace
+  todo (ítems + borra la venta) y responde **409**, *antes* de tocar stock, caja o contabilidad. Si el
+  insert de la venta choca con el índice único de `idempotency_key` (doble envío simultáneo, `23505`)
+  devuelve la venta ya creada.
+- Protecciones: `actualizarItem`/`eliminarItem`/`marcarServidoItem` rechazan ítems ya cobrados;
+  `cancelarOrden` se bloquea si hay cobros parciales; quitar lo **último pendiente** de una mesa con
+  algo ya cobrado cierra la mesa sola (`orden_cerrada: true`). Respuesta de `cobrar()`:
+  `{venta, orden_id, mesa_liberada, total_pendiente}`.
+- Stock/insumos se descuentan **solo de lo cobrado** en ese cobro; `numero_venta`/turno/movimiento
+  contable por venta sin cambios (Caja, Libro Diario, Facturación y desgloses leen de `br_ventas`, así
+  que varias facturas por mesa cuadran solas — no se tocó nada de eso).
+- ⚠️ **Orden de despliegue: migración primero, backend después** (el backend ya lee las columnas).
+
+**Fase 2 — pantalla (`b6605c4`):** foto (`CobroSnap`) de todo lo que se cobra tomada al pulsar Cobrar
+— la respuesta llega después y el polling de la orden (4 s) puede haber cambiado los datos vivos
+(ticket con datos viejos/nuevos mezclados); `cobrarKey` es estado y se **regenera tras cada cobro**;
+`total/redond/totalFinal` = lo que se cobra ahora (selección o todo lo pendiente); `MesaCard` y
+`ComandasPanel.mesaTodoServida` ignoran ítems ya cobrados; ticket con título "CUENTA PARCIAL DE MESA".
+
+**Fase 3 — sin conexión (`e5964dc`, `useOfflineMesasCobro.ts` reescrito):**
+- Solo el **cobro** se encola offline (agregar productos, enviar pedido y marcar servido siguen
+  necesitando red, como siempre — tomar una mesa entera offline sería un proyecto aparte).
+- Cobro sin red → cola local con su key + **comprobante PROVISIONAL** impreso (`PROV-xxxxxx`; el
+  número `MS-…` lo asigna el servidor al sincronizar y el toast relaciona ambos). Antes un cobro
+  encolado no imprimía nada.
+- **Reserva local de unidades:** mientras un cobro está en cola, sus unidades se restan de lo
+  pendiente en pantalla (`_reservado`), no se pueden editar ni volver a cobrar. Un cobro encolado sin
+  `items` (completo) reserva toda la mesa.
+- "Cobrar todo" con cola presente **manda `items` explícitos** (si no, el servidor cobraría también
+  las unidades reservadas → doble cobro al sincronizar).
+- Cada cobro sale de la cola **solo después de refrescar la orden** (si no, sus unidades
+  reaparecerían como cobrables un instante).
+- ⚠️ **Cambio de comportamiento:** un cobro rechazado por el servidor por algo que NO es la red ya no
+  se descarta en silencio (antes `// descartar`): queda en la cola con `error`, aviso rojo en el
+  tablero con **Reintentar / Descartar** — es plata que el cajero ya recibió.
+- La pantalla vuelve sola al tablero si la mesa pasa de `ocupada` a `libre` (p. ej. al sincronizar
+  el último cobro guardado).
+
+**Ventana "Dividir cuenta" (`28feae1`):** el botón del carrito abre un modal grande (una fila por
+producto pendiente: stepper por unidad, "Toda la línea", "Marcar servido" si falta, resumen pendiente/
+ya cobrado, "Elegir todo lo servido", "Limpiar", total con redondeo) en vez de la selección apretada
+dentro del carrito de 280 px. "Cobrar selección" abre **encima** el modal de cobro de siempre
+(`z-[60]` sobre `z-50`); tras cada cobro parcial la ventana sigue abierta para la siguiente persona y
+se cierra sola al saldar la mesa (`modoDividir` = ventana abierta). El carrito lateral volvió al
+normal con totales de todo lo pendiente (`totalFinalCarrito`, separado de `totalFinal`).
+
+**Teclado numérico del modal de cobro de Mesas eliminado (`ff4e9e0`, pedido del cliente):**
+`NumPadMesas`, `DENOMINACIONES` y el import `Delete` — el campo "Efectivo recibido" ya es un `<input>`
+real (mismo criterio que POS en el incidente 29).
+
+`node -c`, `tsc --noEmit` y `npm run build` limpios en cada commit. **✅ Desplegado; el usuario probó
+en producción la ventana "Dividir cuenta" y el modal de cobro con una selección real (Mesa 6).**
+⏳ **Sin confirmar todavía por el usuario:** el flujo **offline** de cobro parcial (encolar →
+comprobante provisional → sincronizar) y el aviso rojo de cobro rechazado — probar con F12 → Red →
+"Sin conexión". Lo que **no** se probó contra BD antes del deploy: la lógica de `cobrar()`/reclamo
+(solo `node -c`); se validó en vivo por el cliente.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
