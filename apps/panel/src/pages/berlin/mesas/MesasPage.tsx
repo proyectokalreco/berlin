@@ -825,11 +825,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
   const selListo = selItems.length > 0 && selItems.every(x => x.item.enviado_at && x.item.servido_at)
   const selFaltaEnviar = selItems.some(x => !x.item.enviado_at)
 
-  // `total`/`redond`/`totalFinal` = lo que se cobra AHORA: la selección en modo dividir,
-  // o todo lo pendiente en modo normal. Todo el modal de cobro y el ticket leen de acá.
+  // `total`/`redond`/`totalFinal` = lo que se cobra AHORA: la selección de la ventana
+  // "Dividir cuenta" (modoDividir = ventana abierta), o todo lo pendiente si se cobra
+  // desde el carrito. El modal de cobro y el ticket leen de acá.
   const total      = modoDividir ? subtotalSel : totalPendiente
   const redond     = redondear(total) - total
   const totalFinal = total + redond
+  // Lo del carrito lateral es siempre "todo lo pendiente", esté o no abierta la ventana.
+  const redondCarrito      = redondear(totalPendiente) - totalPendiente
+  const totalFinalCarrito  = totalPendiente + redondCarrito
   const mesero     = mesa.orden_activa?.mesero
 
   // Aviso "lista para cobrar" — cuando el último ítem enviado queda servido, avisa
@@ -840,11 +844,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
   const todoServidoOrden = enviadosOrden.length > 0 && enviadosOrden.every(i => i.servido_at)
   // Cobrar solo si TODO lo que hay en el carrito ya se envió Y se sirvió — evita
   // cobrar una cuenta con algo pendiente en cocina/barra o sin enviar todavía.
-  // En modo dividir el candado aplica solo a lo seleccionado (lo de otra persona puede seguir en cocina).
-  const listoParaCobrar = modoDividir
-    ? selListo
-    : items.length > 0 && items.every(i => i.enviado_at && i.servido_at)
-  const faltaPorEnviar  = modoDividir ? selFaltaEnviar : items.some(i => !i.enviado_at)
+  // (En la ventana "Dividir cuenta" el candado aplica solo a lo seleccionado: selListo.)
+  const listoParaCobrar = items.length > 0 && items.every(i => i.enviado_at && i.servido_at)
+  const faltaPorEnviar  = items.some(i => !i.enviado_at)
   const todoServidoAntesRef = useRef(false)
   const [resaltarCobrar, setResaltarCobrar] = useState(false)
   useEffect(() => {
@@ -1046,15 +1048,10 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
             <div className="divide-y divide-white/5">
               {items.map(item => {
                 const pendienteServir = !!item.enviado_at && !item.servido_at
-                const cantN  = Number(item.cantidad)
-                const sel    = Math.min(seleccion[item.id] ?? 0, cantN)
-                const puedeSel = !!item.enviado_at && !!item.servido_at
-                const setSel = (n: number) => setSeleccion(prev => ({ ...prev, [item.id]: Math.max(0, Math.min(n, cantN)) }))
                 return (
                 <div key={item.id}
                   className={cn('flex items-center gap-2 py-2.5 pl-1.5 -ml-1.5',
-                    modoDividir && sel > 0 ? 'border-l-2 border-brand-teal bg-brand-teal/10 rounded-r-lg'
-                      : pendienteServir ? 'border-l-2 border-[#EA580C]/60' : '')}>
+                    pendienteServir ? 'border-l-2 border-[#EA580C]/60' : '')}>
                   {/* Mini ícono */}
                   <MiniIconMesa
                     nombre={item.producto?.nombre ?? ''}
@@ -1070,29 +1067,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
                       {item._reservado ? <span className="text-amber-400"> · {item._reservado} en cola de cobro</span> : null}
                     </p>
                   </div>
-                  {modoDividir ? (
-                    /* Dividir cuenta: cuántas unidades de esta línea se cobran ahora */
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button disabled={!puedeSel || sel <= 0}
-                        onClick={() => setSel(sel - 1)}
-                        className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/12 active:scale-[0.90] disabled:opacity-30
-                                   flex items-center justify-center text-gray-300 transition-all select-none">
-                        <Minus size={10}/>
-                      </button>
-                      <span className={cn('min-w-[30px] text-center font-bold text-xs tabular-nums',
-                        sel > 0 ? 'text-brand-teal' : 'text-white')}>
-                        {sel}/{cantN}
-                      </span>
-                      <button disabled={!puedeSel || sel >= cantN}
-                        onClick={() => setSel(sel + 1)}
-                        className="w-6 h-6 rounded-lg bg-white/5 hover:bg-brand-teal/20 active:scale-[0.90] disabled:opacity-30
-                                   flex items-center justify-center text-gray-300 hover:text-brand-teal
-                                   transition-all select-none">
-                        <Plus size={10}/>
-                      </button>
-                    </div>
-                  ) : (
-                  /* +/- cantidad */
+                  {/* +/- cantidad */}
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       disabled={!!item._reservado}
@@ -1116,25 +1091,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
                       <Plus size={10}/>
                     </button>
                   </div>
-                  )}
-                  {/* Subtotal + eliminar (o "Toda la línea" en modo dividir) */}
+                  {/* Subtotal + eliminar */}
                   <div className="text-right flex-shrink-0 min-w-[44px] flex flex-col items-end gap-0.5">
                     <p className="text-xs font-bold text-white tabular-nums">{fmt(item.subtotal)}</p>
-                    {modoDividir ? (
-                      puedeSel ? (
-                        <button onClick={() => setSel(sel === cantN ? 0 : cantN)}
-                          className={cn('text-[9px] font-semibold px-1.5 py-0.5 rounded-md transition-colors',
-                            sel === cantN
-                              ? 'bg-brand-teal text-brand-dark'
-                              : 'bg-brand-teal/15 text-brand-teal hover:bg-brand-teal/25')}>
-                          {sel === cantN ? 'Quitar' : 'Toda'}
-                        </button>
-                      ) : (
-                        <span className="text-[9px] font-semibold text-[#EA580C]">
-                          {item.enviado_at ? 'Falta servir' : 'Falta enviar'}
-                        </span>
-                      )
-                    ) : (<>
                     {item.enviado_at && (
                       <button
                         title={item.servido_at ? 'Marcar como pendiente por servir' : 'Marcar como servido'}
@@ -1150,7 +1109,6 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
                       className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-30">
                       <Trash2 size={10}/>
                     </button>
-                    </>)}
                   </div>
                 </div>
               )})}
@@ -1220,32 +1178,27 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
               style={{ height: paymentHeight }}>
               {/* Totales */}
               <div className="space-y-0.5">
-                {modoDividir && (
-                  <p className="text-[10px] uppercase tracking-widest font-bold text-brand-teal">
-                    Dividir cuenta · {selItems.length === 0 ? 'elige qué cobrar' : `${selItems.length} línea${selItems.length !== 1 ? 's' : ''} elegida${selItems.length !== 1 ? 's' : ''}`}
-                  </p>
-                )}
-                {!modoDividir && itemsPagados.length > 0 && (
+                {itemsPagados.length > 0 && (
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Ya cobrado</span>
                     <span className="tabular-nums text-green-400">{fmt(totalPagado)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>{modoDividir ? 'Selección' : itemsPagados.length > 0 ? 'Falta por cobrar' : 'Sub Total'}</span>
-                  <span className="tabular-nums text-gray-300">{fmt(total)}</span>
+                  <span>{itemsPagados.length > 0 ? 'Falta por cobrar' : 'Sub Total'}</span>
+                  <span className="tabular-nums text-gray-300">{fmt(totalPendiente)}</span>
                 </div>
-                {redond !== 0 && (
+                {redondCarrito !== 0 && (
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Redondeo</span>
-                    <span className={cn('tabular-nums font-medium', redond > 0 ? 'text-orange-400' : 'text-green-400')}>
-                      {redond > 0 ? '+' : ''}{fmt(redond)}
+                    <span className={cn('tabular-nums font-medium', redondCarrito > 0 ? 'text-orange-400' : 'text-green-400')}>
+                      {redondCarrito > 0 ? '+' : ''}{fmt(redondCarrito)}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-1.5 border-t border-white/5">
                   <span className="text-white font-bold text-xs">TOTAL</span>
-                  <span className="text-white font-bold text-lg tabular-nums text-brand-teal">{fmt(totalFinal)}</span>
+                  <span className="text-white font-bold text-lg tabular-nums text-brand-teal">{fmt(totalFinalCarrito)}</span>
                 </div>
               </div>
 
@@ -1266,7 +1219,7 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
               {puedeCobar && (
                 <>
                   <button onClick={() => setShowCobrar(true)}
-                    disabled={!listoParaCobrar || (modoDividir && total <= 0)}
+                    disabled={!listoParaCobrar}
                     title={!listoParaCobrar ? (faltaPorEnviar ? 'Falta enviar el pedido a comanda' : 'Falta servir productos en la mesa') : undefined}
                     className={cn(
                       'w-full py-3 rounded-xl text-brand-dark font-bold text-sm transition-colors',
@@ -1277,29 +1230,19 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
                           ? 'bg-[#D9A652] hover:bg-[#c7913f] ring-2 ring-[#D9A652] ring-offset-2 ring-offset-brand-navy animate-pulse'
                           : 'bg-brand-teal hover:bg-[#00A882]',
                     )}>
-                    {resaltarCobrar && listoParaCobrar && !modoDividir ? '💰 ' : ''}
-                    {modoDividir ? 'Cobrar selección' : itemsPagados.length > 0 ? 'Cobrar lo que falta' : 'Cobrar'} · {fmt(totalFinal)}
+                    {resaltarCobrar && listoParaCobrar ? '💰 ' : ''}
+                    {itemsPagados.length > 0 ? 'Cobrar lo que falta' : 'Cobrar'} · {fmt(totalFinalCarrito)}
                   </button>
                   {!listoParaCobrar && items.length > 0 && (
                     <p className="text-[10px] text-center text-[#EA580C] -mt-1">
-                      {modoDividir && selItems.length === 0
-                        ? '👆 Elige las unidades que va a pagar esta persona'
-                        : faltaPorEnviar ? '⏳ Falta enviar el pedido a comanda' : '⏳ Falta servir productos en la mesa'}
+                      {faltaPorEnviar ? '⏳ Falta enviar el pedido a comanda' : '⏳ Falta servir productos en la mesa'}
                     </p>
                   )}
-                  {modoDividir ? (
-                    <button onClick={() => { setModoDividir(false); setSeleccion({}) }}
-                      className="w-full py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white
-                                 hover:bg-white/5 text-xs font-semibold transition-colors">
-                      Salir de dividir cuenta
-                    </button>
-                  ) : (
-                    <button onClick={() => { setModoDividir(true); setSeleccion({}) }}
-                      className="w-full py-2 rounded-xl border border-brand-teal/30 bg-brand-teal/10 text-brand-teal
-                                 hover:bg-brand-teal/20 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-                      <Layers size={13}/> Dividir cuenta
-                    </button>
-                  )}
+                  <button onClick={() => { setModoDividir(true); setSeleccion({}) }}
+                    className="w-full py-2 rounded-xl border border-brand-teal/30 bg-brand-teal/10 text-brand-teal
+                               hover:bg-brand-teal/20 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                    <Layers size={13}/> Dividir cuenta
+                  </button>
                 </>
               )}
             </div>
@@ -1308,6 +1251,224 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, colaCobros }: {
       </div>
 
     </div>
+
+    {/* ── Ventana "Dividir cuenta": elegir qué paga cada persona ──────────────
+        Queda abierta tras cada cobro parcial (se elige lo de la siguiente persona)
+        y se cierra sola cuando no queda nada pendiente. El modal de cobro (z-[60])
+        se abre encima al pulsar "Cobrar selección". */}
+    {modoDividir && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+        <div className="bg-[#2C2925] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl flex flex-col max-h-[92vh]">
+          {/* Encabezado */}
+          <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/10 flex-shrink-0">
+            <div className="min-w-0">
+              <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                <Layers size={18} className="text-brand-teal flex-shrink-0"/>
+                Dividir cuenta — Mesa {mesa.numero}{mesa.nombre ? ` · ${mesa.nombre}` : ''}
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Elige lo que va a pagar esta persona. Al terminar de cobrar podrás elegir lo de la siguiente.
+              </p>
+            </div>
+            <button onClick={() => { setModoDividir(false); setSeleccion({}) }}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg flex-shrink-0">
+              <X size={16}/>
+            </button>
+          </div>
+
+          {/* Resumen de la mesa */}
+          <div className="flex flex-wrap gap-2 px-5 pt-3 flex-shrink-0">
+            <span className="text-xs px-2.5 py-1 rounded-lg bg-brand-dark border border-white/5 text-gray-300">
+              Falta por cobrar: <b className="text-white tabular-nums">{fmt(totalPendiente)}</b>
+            </span>
+            {itemsPagados.length > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-lg bg-green-500/10 border border-green-500/20 text-green-300">
+                Ya cobrado: <b className="tabular-nums">{fmt(totalPagado)}</b>
+              </span>
+            )}
+          </div>
+
+          {/* Productos pendientes */}
+          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 min-h-0 touch-pan-y overscroll-contain">
+            {items.map(item => {
+              const cantN    = Number(item.cantidad)
+              const sel      = Math.min(seleccion[item.id] ?? 0, cantN)
+              const puedeSel = !!item.enviado_at && !!item.servido_at
+              const setSel   = (n: number) => setSeleccion(prev => ({ ...prev, [item.id]: Math.max(0, Math.min(n, cantN)) }))
+              const montoSel = sel === cantN ? Number(item.subtotal) : Number(item.precio_unitario) * sel
+              return (
+                <div key={item.id}
+                  className={cn('flex items-center gap-3 px-3 py-3 rounded-xl border transition-colors',
+                    sel > 0 ? 'border-brand-teal/60 bg-brand-teal/10' : 'border-white/5 bg-brand-dark',
+                    !puedeSel && 'opacity-80')}>
+                  <MiniIconMesa nombre={item.producto?.nombre ?? ''} imagenUrl={item.producto?.imagen_url}/>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white leading-snug">{item.producto?.nombre ?? '—'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {fmt(item.precio_unitario)} c/u · {cantN} pendiente{cantN !== 1 ? 's' : ''}
+                      {item._reservado ? <span className="text-amber-400"> · {item._reservado} en cola de cobro</span> : null}
+                    </p>
+                    {!puedeSel && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-semibold text-[#EA580C]">
+                          {item.enviado_at ? 'Falta servir en la mesa' : 'Falta enviar a comanda'}
+                        </span>
+                        {item.enviado_at && (
+                          <button onClick={() => marcarServido(item.id)}
+                            className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md
+                                       bg-[#EA580C]/15 text-[#EA580C] hover:bg-[#EA580C]/25 transition-colors">
+                            <Check size={10}/> Marcar servido
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* Unidades que paga esta persona */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button disabled={!puedeSel || sel <= 0} onClick={() => setSel(sel - 1)}
+                      className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/12 active:scale-[0.92] disabled:opacity-30
+                                 flex items-center justify-center text-gray-200 transition-all select-none">
+                      <Minus size={14}/>
+                    </button>
+                    <span className={cn('min-w-[42px] text-center font-bold text-base tabular-nums',
+                      sel > 0 ? 'text-brand-teal' : 'text-white')}>
+                      {sel}/{cantN}
+                    </span>
+                    <button disabled={!puedeSel || sel >= cantN} onClick={() => setSel(sel + 1)}
+                      className="w-9 h-9 rounded-xl bg-white/5 hover:bg-brand-teal/20 active:scale-[0.92] disabled:opacity-30
+                                 flex items-center justify-center text-gray-200 hover:text-brand-teal transition-all select-none">
+                      <Plus size={14}/>
+                    </button>
+                  </div>
+                  {/* Monto + toda la línea */}
+                  <div className="w-[92px] text-right flex-shrink-0 flex flex-col items-end gap-1">
+                    <p className={cn('text-sm font-bold tabular-nums', sel > 0 ? 'text-brand-teal' : 'text-gray-400')}>
+                      {fmt(sel > 0 ? montoSel : item.subtotal)}
+                    </p>
+                    {puedeSel && (
+                      <button onClick={() => setSel(sel === cantN ? 0 : cantN)}
+                        className={cn('text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors',
+                          sel === cantN
+                            ? 'bg-brand-teal text-brand-dark'
+                            : 'bg-brand-teal/15 text-brand-teal hover:bg-brand-teal/25')}>
+                        {sel === cantN ? 'Quitar' : 'Toda la línea'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            {items.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-6">No queda nada pendiente de cobro.</p>
+            )}
+
+            {/* Cobros guardados sin conexión */}
+            {colaCobros.length > 0 && (
+              <div className={cn('rounded-xl border px-3 py-2 text-xs space-y-0.5',
+                colaCobros.some(c => c.error)
+                  ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-200')}>
+                <p className="font-bold">
+                  ⏳ {colaCobros.length} cobro{colaCobros.length !== 1 ? 's' : ''} guardado{colaCobros.length !== 1 ? 's' : ''} sin conexión
+                  {totalCola > 0 ? ` · ${fmt(totalCola)}` : ''}
+                </p>
+                <p className="opacity-80">
+                  {colaCobros.some(c => c.error)
+                    ? 'Alguno fue rechazado al sincronizar — revisa el aviso rojo en el tablero de mesas.'
+                    : 'Se registran solos al volver la conexión. Esas unidades ya no se pueden cobrar de nuevo.'}
+                </p>
+              </div>
+            )}
+
+            {/* Ya cobrado — solo lectura */}
+            {itemsPagados.length > 0 && (
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-[11px] uppercase tracking-widest text-gray-500 font-semibold mb-1">Ya cobrado</p>
+                <div className="divide-y divide-white/5 opacity-70">
+                  {itemsPagados.map(item => (
+                    <div key={item.id} className="flex items-center gap-2 py-1.5">
+                      <Check size={12} className="text-green-400 flex-shrink-0"/>
+                      <p className="flex-1 min-w-0 text-xs text-gray-300 truncate">
+                        {Number(item.cantidad)} × {item.producto?.nombre ?? '—'}
+                      </p>
+                      <p className="text-xs text-gray-400 tabular-nums flex-shrink-0">{fmt(item.subtotal)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Pie: atajos, total de la selección y cobrar */}
+          <div className="border-t border-white/10 px-5 py-4 space-y-3 flex-shrink-0">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSeleccion(Object.fromEntries(
+                    items.filter(i => i.enviado_at && i.servido_at).map(i => [i.id, Number(i.cantidad)])))}
+                  className="text-brand-teal hover:underline font-semibold">
+                  Elegir todo lo servido
+                </button>
+                <button onClick={() => setSeleccion({})}
+                  disabled={selItems.length === 0}
+                  className="text-gray-400 hover:text-white disabled:opacity-30 font-semibold">
+                  Limpiar
+                </button>
+              </div>
+              <span className="text-gray-500">
+                {selItems.length === 0
+                  ? 'Nada elegido todavía'
+                  : `${selItems.length} línea${selItems.length !== 1 ? 's' : ''} · ${selItems.reduce((s, x) => s + x.cant, 0)} unidad${selItems.reduce((s, x) => s + x.cant, 0) !== 1 ? 'es' : ''}`}
+              </span>
+            </div>
+
+            <div className="bg-brand-dark rounded-xl p-3 space-y-1 border border-white/5">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Selección</span>
+                <span className="tabular-nums text-gray-200">{fmt(subtotalSel)}</span>
+              </div>
+              {redond !== 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Redondeo</span>
+                  <span className={cn('tabular-nums font-medium', redond > 0 ? 'text-orange-400' : 'text-green-400')}>
+                    {redond > 0 ? '+' : ''}{fmt(redond)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-1.5 border-t border-white/5">
+                <span className="text-white font-bold text-sm">TOTAL A COBRAR</span>
+                <span className="text-brand-teal font-bold text-xl tabular-nums">{fmt(totalFinal)}</span>
+              </div>
+            </div>
+
+            {selItems.length === 0 ? (
+              <p className="text-xs text-center text-[#EA580C]">👆 Elige las unidades que va a pagar esta persona</p>
+            ) : !selListo ? (
+              <p className="text-xs text-center text-[#EA580C]">
+                {selFaltaEnviar ? '⏳ Hay productos elegidos sin enviar a comanda' : '⏳ Hay productos elegidos sin servir en la mesa'}
+              </p>
+            ) : null}
+
+            <div className="flex gap-3">
+              <button onClick={() => { setModoDividir(false); setSeleccion({}) }}
+                className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-sm font-semibold transition-colors">
+                Cerrar
+              </button>
+              <button onClick={() => setShowCobrar(true)}
+                disabled={!selListo || total <= 0}
+                className={cn(
+                  'flex-[2] py-3 rounded-xl font-bold text-sm transition-colors min-h-[48px] active:scale-[0.98] select-none',
+                  !selListo || total <= 0
+                    ? 'bg-white/5 text-gray-600 cursor-not-allowed'
+                    : 'bg-brand-teal hover:bg-[#00A882] text-brand-dark')}>
+                Cobrar selección · {fmt(totalFinal)}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── Modal cobrar — fuera del overflow-hidden para que los clicks lleguen ── */}
     {showCobrar && (
