@@ -75,3 +75,16 @@ export function pedirAlmacenamientoPersistente(): void {
     if (navigator.storage?.persist) void navigator.storage.persist()
   } catch { /* sin soporte: no pasa nada */ }
 }
+
+// Para consultas que devuelven un valor "vacío" cuando el servidor responde con error de negocio
+// (por ejemplo "no hay turno abierto" -> null). Un fallo de RED o de sesión NO es "no hay dato": se
+// relanza para que React Query conserve lo último que se supo (y la copia guardada en el equipo)
+// en vez de sobrescribirlo con un vacío falso, p. ej. "No hay caja abierta" cuando solo se cayó
+// internet.
+//   api.get('/berlin/caja/turno-activo').then(r => r.data).catch(fallbackSiNoRed(null))
+export function fallbackSiNoRed<T>(valor: T): (err: unknown) => T {
+  return (err: unknown) => {
+    if (isTransientError(err) || isAuthError(err)) throw err
+    return valor
+  }
+}

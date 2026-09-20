@@ -9,6 +9,7 @@ import {
   DollarSign, ArrowUpCircle, ArrowDownCircle, Calendar, Shuffle, FileBarChart2, X,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { fallbackSiNoRed } from '../../../lib/offline'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -187,14 +188,14 @@ export default function CajaPage() {
   // ── Turno activo ──
   const { data: turnoActivo, isLoading } = useQuery<TurnoCaja | null>({
     queryKey: ['caja-activa'],
-    queryFn:  () => api.get('/berlin/caja/turno-activo').then(r => r.data).catch(() => null),
+    queryFn:  () => api.get('/berlin/caja/turno-activo').then(r => r.data).catch(fallbackSiNoRed(null)),
     refetchInterval: 30_000,
   })
 
   // ── Turno pendiente de días anteriores (sin cerrar) ──
   const { data: turnoPendienteDia } = useQuery<{ id: string; fecha: string } | null>({
     queryKey: ['caja-turno-pendiente'],
-    queryFn:  () => api.get('/berlin/caja/turno-pendiente').then(r => r.data).catch(() => null),
+    queryFn:  () => api.get('/berlin/caja/turno-pendiente').then(r => r.data).catch(fallbackSiNoRed(null)),
     refetchInterval: 60_000,
     enabled: !turnoActivo,
   })
@@ -228,7 +229,7 @@ export default function CajaPage() {
   // ── Productos para conteo aleatorio ──
   const { data: todosProductos = [] } = useQuery<{id:string;nombre:string;imagen_url?:string;stock_actual:number}[]>({
     queryKey: ['productos-conteo'],
-    queryFn:  () => api.get('/berlin/productos', { params: { limit: 200 } }).then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 200 } }).then(r => r.data).catch(fallbackSiNoRed([])),
     enabled:  !!turnoActivo,
     staleTime: 5 * 60_000,
   })

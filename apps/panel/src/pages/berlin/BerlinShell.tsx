@@ -14,6 +14,7 @@ import toast from 'react-hot-toast'
 import PerfilModal from '../../components/PerfilModal'
 import ComandasPanel from '../../components/ComandasPanel'
 import { useSincronizacionColas } from './useSincronizacionColas'
+import { useHayInternet } from '../../lib/conexion'
 
 // ── Paleta Berlín Café Bar (tomada del logo) ───────────────────
 const GOLD  = '#D9A652'
@@ -77,14 +78,8 @@ export default function BerlinShell() {
   useSincronizacionColas()
 
   const [showPerfil, setShowPerfil] = useState(false)
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
-  useEffect(() => {
-    const on  = () => setIsOnline(true)
-    const off = () => setIsOnline(false)
-    window.addEventListener('online',  on)
-    window.addEventListener('offline', off)
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
-  }, [])
+  // Conexión REAL con el servidor (no solo "conectado al Wi-Fi"): ver lib/conexion.ts
+  const isOnline = useHayInternet()
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: BG_DARK }}>

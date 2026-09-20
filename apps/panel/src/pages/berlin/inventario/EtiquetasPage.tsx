@@ -5,6 +5,7 @@ import { api } from '../../../lib/api'
 import type { Producto } from '../../../types'
 import { cn } from '../../../lib/utils'
 import { coincide } from '../../../lib/buscar'
+import { fallbackSiNoRed } from '../../../lib/offline'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -97,7 +98,7 @@ export default function EtiquetasPage() {
 
   const { data: productosTodos = [], isLoading } = useQuery<Producto[]>({
     queryKey: ['productos-etiquetas'],
-    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 1000 } }).then(r => r.data).catch(fallbackSiNoRed([])),
   })
   const productos = useMemo(
     () => busqueda.trim()

@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/queryClient'
+import PwaUpdateBanner from './components/PwaUpdateBanner'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/authStore'
 import Login from './pages/Login'
@@ -27,18 +29,6 @@ import ReportesPage     from './pages/berlin/reportes/ReportesPage'
 import CuentasPorPagarPage  from './pages/berlin/cuentas/CuentasPorPagarPage'
 import CuentasPorCobrarPage from './pages/berlin/cuentas/CuentasPorCobrarPage'
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    // 'offlineFirst': la primera petición sale aunque el navegador crea que no hay red (así falla
-    // rápido y entran en juego las copias locales) y solo se pausan los reintentos.
-    queries: { retry: 1, staleTime: 60_000, networkMode: 'offlineFirst' },
-    // 'always': con el navegador "sin red" React Query pausaría la mutación para siempre (el cajero
-    // vería "Procesando…" indefinido). Así la mutación se ejecuta, falla rápido y la venta pasa a
-    // la cola local (ver lib/offline.ts).
-    mutations: { networkMode: 'always' },
-  },
-})
-
 // Con basename="/login", una ruta "/login" aparte quedaba en /login/login
 // (el basename ya aporta ese prefijo). Login vive en la raíz del router:
 // se muestra si no hay sesión, o el Shell si la hay — mismo candado que
@@ -51,6 +41,7 @@ function RootGate() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <PwaUpdateBanner />
       <BrowserRouter basename="/login">
         <Routes>
           <Route path="/" element={<RootGate />}>

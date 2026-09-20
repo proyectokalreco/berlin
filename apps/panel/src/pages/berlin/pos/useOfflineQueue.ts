@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import {
   SYNC_TIMEOUT_MS, isTransientError, isAuthError, mensajeError, leerLocal, guardarLocal,
 } from '../../../lib/offline'
+import { EVT_CONEXION, hayInternet } from '../../../lib/conexion'
 
 export type NetworkStatus = 'online' | 'offline' | 'syncing'
 
@@ -103,7 +104,7 @@ export async function sincronizarColaPos(): Promise<void> {
 
 export function useOfflineQueue(onSaleSuccess: (data: unknown) => void) {
   const leerEstado = () =>
-    sincronizando ? 'syncing' : navigator.onLine ? 'online' : 'offline'
+    sincronizando ? 'syncing' : hayInternet() ? 'online' : 'offline'
   const [status, setStatus] = useState<NetworkStatus>(leerEstado)
   const [queue,  setQueue]  = useState<QueuedSale[]>(cargarColaPos)
 
@@ -113,14 +114,12 @@ export function useOfflineQueue(onSaleSuccess: (data: unknown) => void) {
 
     window.addEventListener(EVT_COLA, refrescar)
     window.addEventListener(EVT_SINC, enSincronizada)
-    window.addEventListener('online',  refrescar)
-    window.addEventListener('offline', refrescar)
+    window.addEventListener(EVT_CONEXION, refrescar)
     refrescar()
     return () => {
       window.removeEventListener(EVT_COLA, refrescar)
       window.removeEventListener(EVT_SINC, enSincronizada)
-      window.removeEventListener('online',  refrescar)
-      window.removeEventListener('offline', refrescar)
+      window.removeEventListener(EVT_CONEXION, refrescar)
     }
   }, [onSaleSuccess])
 

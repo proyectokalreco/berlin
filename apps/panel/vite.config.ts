@@ -15,7 +15,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': una versión nueva NO recarga la app sola en medio de una venta; un aviso deja
+      // al usuario elegir cuándo actualizar (ver components/PwaUpdateBanner.tsx).
+      registerType: 'prompt',
       manifest: false, // se controla a mano en index.html + public/manifest.json
       includeAssets: [
         'icons/berlin-512.png',
@@ -24,12 +26,27 @@ export default defineConfig({
         'manifest.json',
       ],
       workbox: {
-        skipWaiting: true,
+        skipWaiting: false,
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
+          // Tipografías de Google: con caché, la app se ve igual sin conexión
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'google-fonts-css' },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-files',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/supabase\.mymulticentro\.com\/storage/,
             handler: 'CacheFirst',
@@ -48,5 +65,7 @@ export default defineConfig({
       '/api': { target: 'http://localhost:4001', changeOrigin: true },
     },
   },
+  // Identifica la compilación: la copia local de datos de otra versión se descarta (cacheLocal.ts)
+  define: { __APP_BUILD__: JSON.stringify(Date.now().toString(36)) },
   build: { outDir: 'dist', sourcemap: false },
 })

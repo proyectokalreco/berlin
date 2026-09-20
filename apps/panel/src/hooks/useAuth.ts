@@ -2,6 +2,8 @@ import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
+import { hayInternet } from '../lib/conexion'
+import { borrarCacheLocal } from '../lib/cacheLocal'
 import { useAuthStore } from '../store/authStore'
 import type { LoginResponse } from '../types'
 
@@ -22,7 +24,7 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     // Bloquear logout sin conexión — evita quedar atrapado en login sin internet
-    if (!navigator.onLine) {
+    if (!navigator.onLine || !hayInternet()) {
       toast.error(
         'Sin conexión a internet. Para salir temporalmente cierra el navegador.\nCierra sesión cuando tengas internet.',
         { duration: 6000, id: 'offline-logout' }
@@ -35,6 +37,7 @@ export function useAuth() {
     } catch { /* ignora errores de red */ }
 
     queryClient.clear()
+    await borrarCacheLocal()   // la copia de datos de este usuario no debe quedar en el equipo
     // Limpiar localStorage sin pasar por Zustand (evita re-render → flash de ruta protegida)
     localStorage.removeItem('berlin-auth')
     window.location.href = '/login'

@@ -45,8 +45,12 @@ export function useProductosConSnapshot() {
         const res = await api.get('/berlin/categorias')
         saveSnap(SNAP_CATEGORIAS, res.data)
         return res.data as Categoria[]
-      } catch {
-        return loadSnap<Categoria[]>(SNAP_CATEGORIAS) ?? []
+      } catch (err) {
+        // Sin red: la copia guardada; si no hay ninguna, error (NO una lista vacía: se guardaría
+        // como dato bueno y taparía las categorías reales al volver a abrir sin internet).
+        const snap = loadSnap<Categoria[]>(SNAP_CATEGORIAS)
+        if (snap) return snap
+        throw err
       }
     },
     staleTime: 300_000,

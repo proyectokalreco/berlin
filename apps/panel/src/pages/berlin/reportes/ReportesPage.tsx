@@ -6,6 +6,7 @@ import {
   X, TrendingUp, TrendingDown, ShoppingCart, Package, Scale, Percent,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { fallbackSiNoRed } from '../../../lib/offline'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -466,42 +467,42 @@ export default function ReportesPage() {
 
   const { data: ventasDia = [] } = useQuery<VentaDia[]>({
     queryKey: ['rep-ventas-dia', hoy],
-    queryFn:  () => api.get('/berlin/reportes/ventas-dia', { params: { fecha: hoy } }).then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/reportes/ventas-dia', { params: { fecha: hoy } }).then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   const { data: topProd = [] } = useQuery<{nombre:string;cantidad:number;total:number}[]>({
     queryKey: ['rep-top'],
-    queryFn:  () => api.get('/berlin/reportes/productos-top').then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/reportes/productos-top').then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   const { data: gastos = [] } = useQuery<{categoria:string;monto:number}[]>({
     queryKey: ['rep-gastos'],
-    queryFn:  () => api.get('/berlin/gastos', { params: { desde: mes1, hasta: hoy } }).then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/gastos', { params: { desde: mes1, hasta: hoy } }).then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   const { data: movResumen } = useQuery<Resumen>({
     queryKey: ['rep-mov-mes'],
-    queryFn:  () => api.get('/berlin/movimientos/resumen', { params: { periodo: 'mes' } }).then(r => r.data).catch(() => ({ ingresos:0,egresos:0,utilidad:0 })),
+    queryFn:  () => api.get('/berlin/movimientos/resumen', { params: { periodo: 'mes' } }).then(r => r.data).catch(fallbackSiNoRed(({ ingresos:0,egresos:0,utilidad:0 }))),
   })
 
   const { data: movimientos = [] } = useQuery<{fecha:string;tipo:string;categoria:string;concepto:string;monto:number}[]>({
     queryKey: ['rep-movimientos-mes'],
-    queryFn:  () => api.get('/berlin/movimientos', { params: { desde: mes1, hasta: hoy } }).then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/movimientos', { params: { desde: mes1, hasta: hoy } }).then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   const { data: productos = [] } = useQuery<{nombre:string;precio_venta:number;stock_actual:number;tipo_producto:string;reportar_a_dian:boolean;unidad_venta:string}[]>({
     queryKey: ['rep-productos'],
-    queryFn:  () => api.get('/berlin/productos', { params: { limit: 500 } }).then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/productos', { params: { limit: 500 } }).then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   const { data: insumos = [] } = useQuery<{nombre:string;stock_actual:number;costo_unitario:number;unidad_medida:string}[]>({
     queryKey: ['rep-insumos'],
-    queryFn:  () => api.get('/berlin/insumos').then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/insumos').then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   const { data: rentabilidadData = [] } = useQuery<{nombre:string;tipo:string;precio_venta:number;costo_base:number;costo_real:number;margen_pct:number|null;tiene_receta:boolean}[]>({
     queryKey: ['rep-rentabilidad'],
-    queryFn:  () => api.get('/berlin/reportes/rentabilidad').then(r => r.data).catch(() => []),
+    queryFn:  () => api.get('/berlin/reportes/rentabilidad').then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
   // ── Reportes disponibles ──────────────────────────────────────

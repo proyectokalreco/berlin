@@ -9,7 +9,7 @@ import {
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
 import type { QueuedCobro } from './useOfflineMesasCobro'
 import { api } from '../../../lib/api'
-import { COBRO_TIMEOUT_MS, isTransientError, isAuthError } from '../../../lib/offline'
+import { COBRO_TIMEOUT_MS, isTransientError, isAuthError, fallbackSiNoRed } from '../../../lib/offline'
 import toast from 'react-hot-toast'
 import type { Producto, Categoria } from '../../../types'
 import { cn } from '../../../lib/utils'
@@ -2325,7 +2325,7 @@ export default function MesasPage() {
   // Caja activa del usuario logueado (para cobro en cajero/admin)
   const { data: turnoActivo } = useQuery<{ id: string } | null>({
     queryKey: ['turno-activo-mesas'],
-    queryFn:  () => api.get('/berlin/caja/turno-activo').then(r => r.data).catch(() => null),
+    queryFn:  () => api.get('/berlin/caja/turno-activo').then(r => r.data).catch(fallbackSiNoRed(null)),
     refetchInterval: 10_000,
     refetchOnMount:  'always',
     staleTime: 0,
@@ -2334,7 +2334,7 @@ export default function MesasPage() {
   // Cualquier caja abierta en el negocio (para que mesero valide antes de tomar mesa)
   const { data: cajaDelNegocio } = useQuery<{ id: string } | null>({
     queryKey: ['turno-negocio-activo'],
-    queryFn:  () => api.get('/berlin/caja/turno-negocio-activo').then(r => r.data).catch(() => null),
+    queryFn:  () => api.get('/berlin/caja/turno-negocio-activo').then(r => r.data).catch(fallbackSiNoRed(null)),
     refetchInterval: 10_000,
     refetchOnMount: 'always',
     staleTime: 0,

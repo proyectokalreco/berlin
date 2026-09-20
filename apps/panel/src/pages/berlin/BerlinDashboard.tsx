@@ -18,6 +18,7 @@ import {
   Pencil, X, Upload, Link2, ImageIcon, Settings2, CreditCard, GripVertical,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { fallbackSiNoRed } from '../../lib/offline'
 
 // ── Colores corporativos Berlín (tomados del logo) ──────────────
 const FUCHSIA = '#D9A652'  // dorado principal (mantiene el nombre de variable por brevedad)
@@ -457,7 +458,7 @@ export default function BerlinDashboard() {
     queryKey: ['caja-activa'],
     queryFn:  () => api.get('/berlin/caja/turno-activo')
       .then(r => r.data)
-      .catch(() => null),
+      .catch(fallbackSiNoRed(null)),
     refetchInterval: 60_000,
     enabled: mostrarKpiCaja,
   })
