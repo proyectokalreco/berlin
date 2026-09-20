@@ -116,7 +116,7 @@ cd /opt/berlin/infra && docker compose up -d --build
 Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los valores reales de
 `kalreco/infra/.env`, mismo Supabase).
 
-## 📦 Estado de fases (actualizado 2026-08-30)
+## 📦 Estado de fases (actualizado 2026-09-20)
 
 - ✅ **Fase 0** — BD: 38 tablas `br_*`, 71 FKs, 10 funciones, aplicado en producción.
 - ✅ **Fase 1** — Backend: 24 controllers clonados de Tulio, login aislado, verificado con curl.
@@ -137,6 +137,9 @@ Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los val
 - ✅ **2026-08-30** — Inventario inicial cargado (migración 091: 17 categorías/234 productos/
   21 insumos) · POS con venta múltiple + carrito unificado + impresión térmica corregida en
   7 archivos + fix bug abonos/pago cliente (migración 092) — ver incidentes 8-10 abajo.
+- ✅ **2026-09-20** — Modo sin conexión completo (ventas, arranque tras cierre brusco, Mesas 100% offline,
+  migración 112), celulares/tablets, hallazgos de las pruebas y **reportes de cierre con detalle por cajero
+  y por área (también al reimprimir)** — ver incidentes 33-35. ⏳ Pruebas completas del usuario pendientes.
 - ⏳ **Pendiente**: fotos reales del local (las actuales son de un generador de imágenes,
   placeholder de Google Stitch).
 
@@ -1162,6 +1165,184 @@ ventana en Mesas (capturas: "Completo/Modificar", toppings tachados —lechuga, 
   adjuntó de esa ronda es el ticket de POS de arriba.
 
 **Caso cerrado.** Nada pendiente de esta función.
+
+### 33. Modo sin conexión completo + recuperación ante caídas + celulares/tablets (2026-09-20, 5 fases)
+
+**Pedido:** "validar y probar que todo el sistema sea capaz de trabajar fuera de línea, recuperarse cuando
+hay una caída de Internet o un cierre brusco del SO o el navegador, y que funcione perfectamente en
+celulares y tablets". Requisito de fondo del cliente: *la aplicación siempre debe poder trabajar sin
+internet y después sincronizar todo*. Contexto del local: las caídas duran **minutos**; equipos = PC con
+Windows 10 Pro (Edge) + celulares. Se auditó el código real antes de proponer nada (nada supuesto).
+
+**Hallazgos de la auditoría (confirmados en código):**
+- React Query con `networkMode:'online'` (default) **pausa** las mutaciones con `navigator.onLine=false`:
+  el cobro nunca llegaba al `onError` que lo mandaba a la cola → "Procesando…" eterno y venta perdida si
+  se cerraba el navegador.
+- Con Wi-Fi conectado pero **sin internet** `navigator.onLine` sigue en `true` y axios esperaba 30 s.
+- La cola del POS **descartaba en silencio** cualquier error que no fuera de red (400/500/401).
+- La venta se encolaba **después** de fallar el envío: un cierre brusco durante el POST la perdía.
+- Tras reiniciar sin internet: POS "Bloqueado", Mesas/Caja vacías (solo el catálogo del POS tenía copia).
+- 15 `queryFn` con `.catch(() => null/[])` convertían un fallo de red en "no hay dato" ("No hay caja
+  abierta" con internet caído; listas vacías en Reportes/Caja).
+- Móvil: solo el POS tenía layout móvil; en Mesas el carrito de ancho fijo (240–520 px) dejaba el
+  buscador del catálogo en **50 px** a 375 px; el desplegable de Comandas se cortaba 30 px.
+
+**Decisiones del cliente (`AskUserQuestion`):** alcance **Mesas 100% offline** (no solo el cobro) · todos
+los dispositivos · móvil: operativos primero (POS, Mesas, Caja, Comandas) · misma mesa tomada offline en
+2 equipos → **fusionar** las cuentas y avisar · precio → **el que vio el cliente** (aviso si difiere) ·
+hora → **hora real del pedido** (nunca posterior a la del servidor). Fases una por una; las pruebas
+completas al final.
+
+**Fase 1 — ventas sin pérdida (commit `9219970`, solo panel):**
+- `lib/offline.ts`: helpers (`isNetworkError`, `isTransientError` = red + 408/429/502/503/504,
+  `isAuthError` = 401, `guardarLocal` sin excepción por cuota, `pedirAlmacenamientoPersistente`) y
+  tiempos: cobro 10 s (antes 30), sync 15 s, reintento cada 20 s.
+- **Escritura previa (write-ahead):** POS y cobro de Mesas guardan la venta en la cola local ANTES de
+  enviarla; solo sale cuando el servidor confirma (y, en Mesas, cuando la pantalla ya refrescó la orden).
+  Set en memoria `enVuelo` para que la sincronización de fondo no reenvíe lo que el primer plano está
+  enviando. La `idempotency_key` evita duplicados en cualquier reenvío.
+- `App.tsx`→`lib/queryClient.ts`: mutations `networkMode:'always'`, queries `'offlineFirst'`.
+- Cola del POS ya no descarta rechazos: quedan con el motivo + Reintentar/Descartar (igual que Mesas).
+  502/503/504 (despliegue) y 401 (sesión vencida) se tratan como pasajeros: la venta se conserva.
+- Las colas viven a **nivel de módulo** (`useOfflineQueue.ts`, `useOfflineMesasCobro.ts`) y las
+  sincroniza `useSincronizacionColas.ts` desde el shell (al abrir, al volver la conexión, al volver a la
+  pestaña y cada 20 s) desde CUALQUIER pantalla.
+
+**Fase 2 — arranque sin internet tras un cierre brusco (commit `f0f6174`, solo panel):**
+- `lib/cacheLocal.ts`: copia de las consultas en **IndexedDB** (`berlin-cache`), restaurada ANTES de
+  pintar (`main.tsx`). Por usuario, por versión de compilación (`__APP_BUILD__`), caduca a las 24 h, se
+  borra en `signOut`. Guarda también las consultas que fallaron al refrescar (conservan el último dato
+  bueno; el error se limpia porque `AxiosError` no se puede copiar a IndexedDB).
+- `fallbackSiNoRed()` reemplaza los 15 `.catch(() => null/[])`: un fallo de red se relanza (se conserva lo
+  último que se supo); solo un error de negocio devuelve el vacío.
+- `lib/conexion.ts`: conexión **REAL** sondeando `GET /api/health` (20 s conectado / 5 s caído; cualquier
+  respuesta HTTP = servidor arriba, salvo 502/503/504). `navigator.onLine` miente con Wi-Fi sin
+  internet. Alimenta el indicador del encabezado, el POS y la sincronización.
+- Service Worker en `registerType:'prompt'` (una versión nueva ya no recarga la app sola a mitad de una
+  venta) + `PwaUpdateBanner` "Hay una versión nueva" (revisa cada 30 min). Fuentes de Google en caché.
+- Cerrar sesión bloqueado también con Wi-Fi sin internet.
+
+**Fase 3a/3b — Mesas 100% sin conexión (commits `1197eca`, `7185ca4`; migración 112):**
+- Todas las acciones de la cuenta son **operaciones locales** (`useOutboxMesas.ts`): tomar, agregar,
+  cantidad, quitar, enviar a cocina, **servido**, **cancelar**, **trasladar**. Se guardan en el equipo
+  (`mesas_berlin_outbox`), se aplican al instante en pantalla y se sincronizan solas en lote.
+- `overlayMesas.ts` (funciones puras e **idempotentes**): `ordenConOps`, `ordenParaMesa`,
+  `tableroConOps` superponen las operaciones pendientes al dato del servidor (cancelar libera la mesa,
+  trasladar mueve la cuenta, tomar ocupa la mesa). Cantidad y "servido" son valores ABSOLUTOS en pantalla
+  (aplicarlos dos veces da lo mismo) y RELATIVOS (`delta`) para el servidor.
+- Ids de cuenta, de líneas y de cada operación (`op_id`) se generan en el equipo (`crypto.randomUUID`):
+  se pueden encadenar operaciones (tomar → agregar → enviar → cobrar) sin haber hablado con el servidor.
+- Backend `POST /berlin/mesas/sync` (`mesas-sync.controller.js`): reserva el `op_id` en **`br_ops_log`**
+  ANTES de aplicar (reenviar no duplica; si falla se libera la reserva). Fusión de cuentas: `orden_id →
+  orden_real_id` en `br_ops_log`; `cobrar` resuelve el id de cuenta con `resolverOrdenId`. Mismas reglas
+  que los endpoints originales (cancelar: solo quien tomó la mesa o un admin y sin cobros parciales;
+  trasladar: destino libre). No exige caja abierta (el pedido ya ocurrió). Resultados por operación:
+  `ok` / `conflicto` (queda marcada con el motivo, Reintentar/Descartar) / `reintentar` (fallo del servidor).
+- Un cobro guardado sin conexión espera a que se sincronicen las operaciones de SU cuenta.
+- Helpers extraídos a `mesas.controller.js`: `obtenerOCrearMesero`, `resolverOrdenId`.
+- **Límites físicos:** cocina no ve un pedido enviado sin conexión hasta que el equipo del mesero
+  sincroniza (el servidor está en la nube; no hay red local entre equipos) · iOS solo sincroniza con la app
+  abierta · el tablero sin conexión es el último estado conocido, no ve lo que hacen otros equipos.
+
+**Fases 4 y 5 — celulares y tablets (commit `78da032`, solo panel), medido en un navegador a 375/768 px:**
+- Mesas: pestañas **Catálogo / Pedido** bajo 768 px (con conteo y total); tablet en dos columnas.
+- Comandas: el desplegable en celular pasa a `fixed` (antes −30 px fuera de pantalla).
+- `viewport-fit=cover` + `safe-area-inset` en `#root` (notch / barra de gestos con la app instalada) ·
+  `100dvh` en vez de `100vh` · campos a 16 px en pantallas táctiles (iOS Safari hace zoom con <16 px) ·
+  ventanas emergentes pegadas arriba con scroll propio en pantallas chicas · tablas con scroll lateral
+  dentro de su tarjeta (<768 px) · rejillas de 4 columnas → 2 (<480 px).
+- Auditados a 375 px 15 módulos (Dashboard, POS, Caja, Mesas, Inventario, Proveedores, Facturación,
+  Clientes, Empleados, Gastos, Movimientos, Reportes, CxP/CxC, Recetas, Mojes, Planilla, Mermas,
+  Etiquetas): sin desborde lateral **con datos vacíos** (las tablas con datos reales no se vieron).
+
+**Verificación hecha:** backend con Supabase simulado en memoria (11 escenarios: idempotencia, fusión,
+conflictos, servido, trasladar, cancelar con permisos) · lógica de colas y superposición con un arnés de
+Node (red simulada) · flujo completo en un navegador real contra un servidor simulado (tomar/agregar en
+línea → cortar el servidor → agregar, enviar, servido y cambiar de mesa → reconectar → un solo lote).
+El navegador embebido de Claude **no soporta Service Workers**: el SW solo se pudo probar en Edge real.
+
+**Orden de despliegue (IMPORTANTE):** migración 112 → backend → panel. Un panel con Mesas nuevo sin
+backend deja las acciones solo en el equipo y nunca llegan al servidor.
+**Limitación conocida:** la cola de ventas no es por usuario (una venta encolada por el cajero A la envía
+el cajero B si inicia sesión primero en ese equipo).
+
+### 34. Pruebas en producción del bloque offline — 3 hallazgos reales (2026-09-20, commits `739e172`, `142e3b7`)
+
+Al probar Fase 1/2 en los PC de Luisa e Isabela aparecieron tres fallos que las pruebas simuladas no
+mostraron:
+
+1. **El botón "Actualizar" del aviso de versión no hacía nada (Edge).** Dependía del flujo interno de
+   `updateServiceWorker()` del plugin. Fix (`739e172`): `PwaUpdateBanner` pide `SKIP_WAITING` al SW nuevo y
+   recarga al tomar el control; **plan B** a los 2,5 s: desregistra el SW, borra sus cachés y recarga (no
+   toca localStorage ni IndexedDB → sesión, colas y copia de datos se conservan). Como el botón viejo
+   estaba roto, **la primera vez hubo que actualizar a mano** (consola F12: desregistrar SW + borrar cachés).
+2. **POS sin conexión: sin ticket y botón en "Procesando…".** El POS no imprimía comprobante offline
+   (Mesas sí) y esperaba a que el envío fallara aunque ya se supiera que no había conexión. Fix
+   (`142e3b7`): comprobante **PROVISIONAL** `PROV-xxxxxx` ("la factura se numera al sincronizar") y, si
+   `hayInternet()` es falso, la venta pasa a la cola al instante (POS y cobro de Mesas).
+3. **"POS Bloqueado" al abrir sin internet (Isabela y Luisa).** La copia local del turno de caja
+   (`turno-activo-pos`) solo existía si ESA pantalla se había abierto antes con internet en esa versión.
+   Fix: `precargarBasicos()` en `useSincronizacionColas` trae en segundo plano, desde cualquier pantalla,
+   con las mismas claves que usan las pantallas: turno de caja (POS/Mesas/negocio), mesas, productos y
+   categorías de Mesas y el catálogo del POS (`precargarCatalogoPos`) — al abrir, al volver la conexión y
+   cada 5 min. Además, **sin conexión y sin ningún dato guardado del turno NO se bloquea** vender ni tomar
+   mesa (no se puede *saber* si hay caja abierta; solo se bloquea con la respuesta real del servidor).
+
+**Lección:** una copia local que depende de qué pantallas se abrieron es frágil — precargar lo que
+decide si se puede operar. Y un bloqueo por "no hay dato" debe distinguir "el servidor dijo que no" de
+"no pude preguntar".
+
+⏳ **Pendiente:** el usuario debe repetir las pruebas del protocolo (venta offline, cierre brusco,
+Wi-Fi sin internet, arranque sin internet, Mesas offline, dos equipos en la misma mesa, celular). Solo se
+reportaron y corrigieron los hallazgos 1-3; el resto del protocolo no está confirmado.
+
+### 35. Reportes de cierre: detalle por cajero y por área, también al reimprimir (2026-09-20, commit `bcfbdf5`, sin migración) — URGENTE
+
+**Pedido del cliente:** que el reporte de cierre (parcial y final) muestre todas las ventas de **POS y
+Mesas** con el detalle de qué se vendió, para saber qué responde cada cajero — **Cocina es
+responsabilidad de Isabela; Bebidas y Bar, de Luisa**. Los cambios ya se habían hecho el 15 y 17-sep
+(incidentes 24 y 28) pero el reporte que el cliente miró no los traía.
+
+**Causa (confirmada en código y con datos reales):** "Ventas por cajero" y "Despacho por área" solo se
+calculan **en vivo** (`cerrarCaja`, `cerrarTurnoHistorico`, cierre parcial) y **no se guardan**. La
+reimpresión del **Historial de turnos** imprimía la fila cruda de `br_turnos_caja` → ningún cierre
+reimpreso podía traerlas. Además "Ventas por cajero" se ocultaba con un solo cajero (`length > 1`) y el
+despacho por área solo contaba Mesas (decisión de la Fase 4 de Comandas). El turno 19/09 sí tuvo dos
+vendedores (ISABELA 21 mesas $1.167.800; MARIVEL 41 mesas $2.132.400 + 1 POS $36.000).
+
+**Decisiones del cliente:** agrupar **por área con su responsable** · detalle producto por producto ·
+el despacho incluye **POS y Mesas** · el formato del cierre parcial del 17/09 es la referencia · aplicar a
+**todos los reportes históricos**.
+
+**Solución:**
+- `obtenerDesgloseEstaciones` (`caja.controller.js`) cuenta POS y Mesas y devuelve el **responsable** de
+  cada área (`br_empleados.estacion_id`, activos) y los subtotales `pos`/`mesa`.
+- **`GET /berlin/caja/turnos/:id/desglose`** reconstruye el detalle de CUALQUIER turno desde sus ventas.
+  Los turnos se cerraron con dos reglas y se prueban las dos: `turno` (apertura→cierre, `cerrarCaja`) y
+  `dia` (día calendario, `cerrarTurnoHistorico`, cierre manual de un turno viejo). Usa la que coincide con
+  el **total Y el número de ventas guardados** al cerrar; si ninguna coincide devuelve `exacto:false` y el
+  ticket lo avisa ("Detalle reconstruido: NO coincide…") en vez de mostrar un dato dudoso.
+  **Validado con los 9 turnos reales:** 8 exactos por `turno`; el del 03/09 (cerrado a mano días después,
+  $15.000 en 1 venta vs $1.175.500 en la ventana del turno) exacto por `dia`.
+- Panel (`CajaPage.tsx`): helpers únicos `htmlVentasPorCajero` / `htmlDespachoPorArea` → cierre final,
+  cierre parcial y reimpresión salen **idénticos**. "Despacho por área — Mesas y POS" con el responsable
+  ("Cocina — ISABELA", "Bebidas y Barra — Luisa") y una línea **"Redondeo y ajustes"** (total de ventas −
+  suma de las áreas: el redondeo a $50 y los descuentos) para que todo cuadre. "Ventas por cajero" se ve
+  siempre. La impresora del Historial (`reimprimirCierreHistorico`) pide el detalle al servidor.
+- **Sin migración y sin tocar dinero** (arqueo, totales y movimientos contables intactos).
+
+**Límites:** el área de cada producto sale de cómo están asignadas HOY las categorías a áreas (las áreas
+existen desde el 15/09; antes no había ninguna); si una venta se anuló o cambió después del cierre, ese
+turno sale con la nota de diferencia. Las áreas y sus responsables se cambian desde Empleados/Categorías,
+sin tocar código.
+
+`node -c`, `tsc --noEmit` y `npm run build` limpios; backend probado con Supabase simulado (turno normal
+con redondeo, cierre por día completo, turno que no cuadra, permisos).
+✅ **DESPLEGADO (2026-09-20)**; la captura que envió el usuario de la reimpresión del turno 19/09 con datos
+reales muestra "VENTAS POR CAJERO — POS / MESAS" (MARIVEL 42: POS 1 $36.000 + Mesas 41 $2.132.400; ISABELA
+21: Mesas $1.167.800) y "DESPACHO POR AREA — MESAS Y POS" con **"Bebidas y Barra — Luisa $1.700.200"** y su
+detalle (8x HUERTA, 20x TRAGO RON CALDAS, 10x SODA CEREZA…). ⏳ Falta su confirmación explícita del resto
+(reimprimir 17/09 y 14/09, cierre parcial de hoy, cierre final) y de que Cocina aparece con ISABELA.
 
 ## 📄 Documentación relacionada
 
