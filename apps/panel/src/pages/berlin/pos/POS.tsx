@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
 import { COBRO_TIMEOUT_MS, isTransientError, isAuthError } from '../../../lib/offline'
+import { hayInternet, useHayInternet } from '../../../lib/conexion'
 import type { Producto, Categoria } from '../../../types'
 import toast from 'react-hot-toast'
 import {
@@ -168,6 +169,7 @@ function imprimirTicket(venta: {
   clienteNombre?: string
   mixtoEfectivo?: number
   mixtoTransferencia?: number
+  provisional?: boolean   // venta guardada sin conexión: la factura definitiva se numera al sincronizar
 }) {
   const fecha = new Date().toLocaleString('es-CO', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -256,7 +258,9 @@ function imprimirTicket(venta: {
 <div class="sep2"></div>
 <div class="c">
   <h3>TIQUETE DE CAJA POS</h3>
-  <p>No. <strong>${venta.numero_venta}</strong></p>
+  <p>No. <strong>${venta.numero_venta}</strong></p>${venta.provisional ? `
+  <p class="b">COMPROBANTE PROVISIONAL</p>
+  <p class="sm">Sin conexión: la factura se numera al sincronizar</p>` : ''}
   <p class="sm">${fecha}</p>
   ${venta.cajero ? `<p class="sm">Atendido por: <b>${venta.cajero}</b></p>` : ''}
 </div>
@@ -688,6 +692,7 @@ export default function POS() {
   }
 
   // ── Verificar turno de caja activo ──
+  const hayNet = useHayInternet()
   const { data: turnoActivo, isLoading: isLoadingCaja } = useQuery<{ id: string } | null>({
     queryKey: ['turno-activo-pos'],
     queryFn:  () => api.get('/berlin/caja/turno-activo').then(r => r.data ?? null),
@@ -970,6 +975,9 @@ export default function POS() {
       markInFlight(idempotencyKey, true)
       enqueue(sale)
       try {
+        // Ya se sabe que no hay conexión con el servidor: no esperar a que el envío falle, la venta
+        // (ya guardada arriba) se queda en la cola y se envía sola al volver.
+        if (!hayInternet()) throw Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' })
         const res = await api.post('/berlin/ventas', sale.payload, { timeout: COBRO_TIMEOUT_MS })
         dequeue(idempotencyKey)
         return res
@@ -1021,7 +1029,23 @@ export default function POS() {
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { error?: string } } }
       if (isTransientError(err)) {
-        // La venta ya está guardada en la cola local (escritura previa): se enviará sola.
+        // La venta ya está guardada en la cola local (escritura previa): se enviará sola. Se
+        // imprime un comprobante PROVISIONAL (la factura la numera el servidor al sincronizar).
+        imprimirTicket({
+          numero_venta: `PROV-${idempotencyKey.slice(0, 6).toUpperCase()}`,
+          items:        cart,
+          subTotal,
+          total,
+          redondeo,
+          efectivo:     metodoPago === 'exacto' ? total : metodoPago === 'efectivo' ? efectivoNum : 0,
+          cambio:       metodoPago === 'efectivo' ? cambio : 0,
+          cajero:       user?.nombre,
+          metodoPago:   metodoPago === 'exacto' ? 'efectivo' : metodoPago,
+          clienteNombre: clienteCredito?.nombre,
+          mixtoEfectivo:      metodoPago === 'mixto' ? mixtoEfeNum : undefined,
+          mixtoTransferencia: metodoPago === 'mixto' ? mixtoTraNum : undefined,
+          provisional:  true,
+        })
         toast('📶 Sin conexión — la venta quedó guardada y se enviará automáticamente', {
           icon: '⏳', duration: 5000,
         })
@@ -1098,7 +1122,11 @@ export default function POS() {
   const puedeBypassCaja = user?.rol === 'super_admin' || user?.rol === 'admin_berlin'
 
   // Bloquear POS si no hay turno de caja abierto (bypass para super_admin y admin_berlin)
-  if (!isLoadingCaja && !turnoActivo && !puedeBypassCaja) {
+  // Sin conexión y sin ningún dato guardado del turno: no se puede SABER si hay caja abierta. No se
+  // bloquea la venta (se guarda y se registra al volver); solo se bloquea con la respuesta real del
+  // servidor de que no hay turno abierto.
+  const cajaDesconocida = turnoActivo === undefined && !hayNet
+  if (!isLoadingCaja && !turnoActivo && !puedeBypassCaja && !cajaDesconocida) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[480px] gap-6 px-6 text-center">
         <div className="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">

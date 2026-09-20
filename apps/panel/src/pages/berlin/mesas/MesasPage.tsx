@@ -9,7 +9,7 @@ import {
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
 import { useOpsMesas, useOutboxMesas, encolarOp, nuevaOp, cargarOps, hayOpsPendientes, sincronizarOpsMesas } from './useOutboxMesas'
 import { ordenConOps, ordenParaMesa, tableroConOps } from './overlayMesas'
-import { hayInternet } from '../../../lib/conexion'
+import { hayInternet, useHayInternet } from '../../../lib/conexion'
 import type { QueuedCobro } from './useOfflineMesasCobro'
 import { api } from '../../../lib/api'
 import { COBRO_TIMEOUT_MS, isTransientError, isAuthError, fallbackSiNoRed } from '../../../lib/offline'
@@ -753,6 +753,8 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
         total:           s.total,
       })
       try {
+        // Sin conexión con el servidor: el cobro (ya guardado arriba) se queda en la cola
+        if (!hayInternet()) throw Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' })
         // La cuenta (o sus productos) puede existir solo en este equipo todavía: primero se
         // sincroniza; si no se logra, el cobro se queda guardado y sale después, en orden.
         if (hayOpsPendientes(s.ordenId ?? null, mesa.id)) {
@@ -2452,10 +2454,14 @@ export default function MesasPage() {
   const ocupadas = mesas.filter(m => m.estado === 'ocupada')
 
   const ROLES_SIN_CAJA = ['admin_berlin', 'admin', 'super_admin']
+  // Sin conexión y sin ningún dato guardado de la caja: no se puede SABER si hay turno abierto, así
+  // que no se bloquea tomar mesas (las operaciones se guardan y se registran al volver).
+  const hayNetMesas = useHayInternet()
+  const cajaDesconocida = turnoActivo === undefined && cajaDelNegocio === undefined && !hayNetMesas
   const handleClickMesa = (mesa: Mesa) => {
     if (mesa.estado === 'libre') {
       // Validar caja abierta (admin/superadmin pueden entrar sin caja; cajero con turno propio también)
-      if (!cajaDelNegocio && !turnoActivo && !ROLES_SIN_CAJA.includes(rol)) {
+      if (!cajaDelNegocio && !turnoActivo && !cajaDesconocida && !ROLES_SIN_CAJA.includes(rol)) {
         toast.error('⚠️ No hay caja abierta. Un cajero debe abrir el turno antes de atender mesas.')
         return
       }
@@ -2644,7 +2650,7 @@ export default function MesasPage() {
       </div>
 
       {/* Aviso: sin caja abierta (no aplica a admin/superadmin) */}
-      {!cajaDelNegocio && !turnoActivo && !ROLES_SIN_CAJA.includes(rol) && (
+      {!cajaDelNegocio && !turnoActivo && !cajaDesconocida && !ROLES_SIN_CAJA.includes(rol) && (
         <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
           <AlertTriangle size={16} className="text-amber-400 flex-shrink-0"/>
           <p className="text-xs text-amber-300">

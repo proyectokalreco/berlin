@@ -61,3 +61,14 @@ export function useProductosConSnapshot() {
 
   return { productos, categorias, isLoading }
 }
+
+// Guarda la copia local del catálogo y de las categorías del POS (la misma que el POS usa cuando no
+// hay conexión) sin necesidad de abrir el POS. La llama la sincronización en segundo plano, así un
+// equipo que nunca abrió el POS con internet igual arranca sin conexión con su catálogo.
+export async function precargarCatalogoPos(): Promise<void> {
+  try {
+    const [prods, cats] = await Promise.all([api.get('/berlin/productos'), api.get('/berlin/categorias')])
+    saveSnap(SNAP_PRODUCTOS, (prods.data as Producto[]).filter(p => p.disponible && p.activo))
+    saveSnap(SNAP_CATEGORIAS, cats.data)
+  } catch { /* sin conexión: queda la copia anterior */ }
+}
