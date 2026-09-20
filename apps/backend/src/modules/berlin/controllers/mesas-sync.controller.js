@@ -2,7 +2,8 @@
 // mesas-sync.controller.js
 // Sincroniza en lote las operaciones de Mesas hechas SIN conexión
 // (POST /berlin/mesas/sync): tomar mesa, agregar / quitar / cambiar
-// cantidad de productos y enviar el pedido a las estaciones.
+// cantidad de productos, enviar el pedido a las estaciones, marcar
+// servido, cancelar la cuenta y trasladarla a otra mesa.
 //
 // Reglas (acordadas con el cliente, 2026-09-20):
 //  · Cada operación trae un op_id generado en el equipo. Se reserva en
@@ -21,7 +22,8 @@ const {
 } = require('./mesas.controller')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const TIPOS = ['tomar', 'agregar', 'cantidad', 'quitar', 'enviar']
+const TIPOS = ['tomar', 'agregar', 'cantidad', 'quitar', 'enviar', 'servido', 'cancelar', 'trasladar']
+const ROLES_ADMIN_MESA = ['super_admin', 'admin', 'admin_berlin']
 const MAX_OPS = 200
 const MAX_ANTIGUEDAD_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -195,9 +197,81 @@ const aplicarEnviar = async (op, user) => {
   return ok(op)
 }
 
+// Marca / desmarca "servido al cliente". Es un valor ABSOLUTO (no un cambio de estado): repetirlo
+// deja lo mismo.
+const aplicarServido = async (op) => {
+  const orden = await ordenDeOp(op)
+  if (!orden || orden.estado !== 'abierta') return conflicto(op, 'La cuenta ya no está abierta — no se marcó como servido')
+  const { data: item } = await supabase.from('br_orden_mesa_items')
+    .select('id, venta_id').eq('id', op.item_id).eq('orden_id', orden.id).maybeSingle()
+  if (!item) return conflicto(op, 'Ese producto ya no está en la cuenta')
+  if (item.venta_id) return conflicto(op, 'Ese producto ya fue cobrado')
+  const { error } = await supabase.from('br_orden_mesa_items')
+    .update({ servido_at: op.servido ? horaReal(op.ts) : null }).eq('id', item.id)
+  if (error) throw error
+  return ok(op)
+}
+
+// Cancela la cuenta y libera la mesa. Mismas reglas que POST /mesas/:id/cancelar-orden: solo quien
+// tomó la mesa o un administrador, y nunca con cobros parciales ya hechos.
+const aplicarCancelar = async (op, user) => {
+  const ordenId = await resolverOrdenId(op.orden_id)
+  const { data: orden } = await supabase.from('br_ordenes_mesa')
+    .select('id, estado, mesa_id, mesero:mesero_id(usuario_id, nombre)').eq('id', ordenId).maybeSingle()
+  if (!orden || orden.estado === 'cancelada') return ok(op)   // ya no está
+  if (orden.estado !== 'abierta') return conflicto(op, 'La cuenta ya fue cobrada — no se puede cancelar')
+
+  if (!ROLES_ADMIN_MESA.includes(user.rol) && orden.mesero?.usuario_id && orden.mesero.usuario_id !== user.id) {
+    return conflicto(op, `Solo ${orden.mesero?.nombre ?? 'quien tomó la mesa'} o un administrador pueden cancelar esta cuenta`)
+  }
+  const { count: yaCobrados } = await supabase.from('br_orden_mesa_items')
+    .select('id', { count: 'exact', head: true }).eq('orden_id', orden.id).not('venta_id', 'is', null)
+  if (yaCobrados > 0) return conflicto(op, 'La cuenta ya tiene cobros parciales — no se puede cancelar')
+
+  await supabase.from('br_ordenes_mesa').update({ estado: 'cancelada' }).eq('id', orden.id)
+  await supabase.from('br_mesas').update({ estado: 'libre' }).eq('id', orden.mesa_id)
+  return ok(op)
+}
+
+// Pasa la cuenta a otra mesa libre. Mismas reglas que POST /mesas/:id/trasladar.
+const aplicarTrasladar = async (op) => {
+  const orden = await ordenDeOp(op)
+  if (!orden || orden.estado !== 'abierta') return conflicto(op, 'La cuenta ya no está abierta — no se trasladó')
+  if (orden.mesa_id === op.destino_id) return ok(op)   // ya estaba en la mesa destino
+  if (!UUID_RE.test(String(op.destino_id || ''))) return conflicto(op, 'Mesa destino inválida')
+
+  const { data: destino } = await supabase.from('br_mesas')
+    .select('id, numero, nombre, estado, activa').eq('id', op.destino_id).maybeSingle()
+  if (!destino || destino.activa === false) return conflicto(op, 'La mesa destino ya no existe')
+  const nombreDestino = destino.nombre ? `${destino.numero} — ${destino.nombre}` : `${destino.numero}`
+  if (destino.estado !== 'libre') return conflicto(op, `La mesa ${nombreDestino} ya no está libre — la cuenta se quedó en su mesa`)
+  const { count: abiertasDestino } = await supabase.from('br_ordenes_mesa')
+    .select('id', { count: 'exact', head: true }).eq('mesa_id', op.destino_id).eq('estado', 'abierta')
+  if (abiertasDestino > 0) return conflicto(op, `La mesa ${nombreDestino} ya tiene una cuenta abierta — la cuenta se quedó en su mesa`)
+
+  const origenId = orden.mesa_id
+  // 1) reservar el destino (solo si sigue libre)
+  const { data: reservada } = await supabase.from('br_mesas')
+    .update({ estado: 'ocupada' }).eq('id', op.destino_id).eq('estado', 'libre').select('id')
+  if (!reservada?.length) return conflicto(op, `La mesa ${nombreDestino} acaba de ocuparse — la cuenta se quedó en su mesa`)
+  // 2) mover la cuenta (solo si sigue abierta y en su mesa)
+  const { data: movida, error } = await supabase.from('br_ordenes_mesa')
+    .update({ mesa_id: op.destino_id, updated_at: new Date().toISOString() })
+    .eq('id', orden.id).eq('mesa_id', origenId).eq('estado', 'abierta').select('id')
+  if (error || !movida?.length) {
+    await supabase.from('br_mesas').update({ estado: 'libre' }).eq('id', op.destino_id)
+    if (error) throw error
+    return conflicto(op, 'La cuenta cambió mientras se trasladaba — inténtalo de nuevo')
+  }
+  // 3) liberar la mesa de origen
+  await supabase.from('br_mesas').update({ estado: 'libre' }).eq('id', origenId)
+  return ok(op)
+}
+
 const APLICADORES = {
   tomar: aplicarTomar, agregar: aplicarAgregar, cantidad: aplicarCantidad,
   quitar: aplicarQuitar, enviar: aplicarEnviar,
+  servido: aplicarServido, cancelar: aplicarCancelar, trasladar: aplicarTrasladar,
 }
 
 // Reserva el op_id (si ya estaba, es un reintento: ya se aplicó)

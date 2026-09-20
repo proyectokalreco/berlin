@@ -7,8 +7,8 @@ import {
   GlassWater, Droplet, Milk,
 } from 'lucide-react'
 import { useOfflineMesasCobro } from './useOfflineMesasCobro'
-import { useOpsMesas, useOutboxMesas, encolarOp, nuevaOp, opsDeMesa, hayOpsPendientes, sincronizarOpsMesas } from './useOutboxMesas'
-import { ordenConOps, mesaConOps } from './overlayMesas'
+import { useOpsMesas, useOutboxMesas, encolarOp, nuevaOp, cargarOps, hayOpsPendientes, sincronizarOpsMesas } from './useOutboxMesas'
+import { ordenConOps, ordenParaMesa, tableroConOps } from './overlayMesas'
 import { hayInternet } from '../../../lib/conexion'
 import type { QueuedCobro } from './useOfflineMesasCobro'
 import { api } from '../../../lib/api'
@@ -432,11 +432,10 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
       .catch((e: { response?: { status?: number } }) => { if (e?.response?.status === 404) return null; throw e }),
     refetchInterval: 4_000,
   })
-  const opsMesa = useMemo(() => opsTodas.filter(o => o.mesa_id === mesa.id), [opsTodas, mesa.id])
   const orden = useMemo(
-    // Sin dato propio de la cuenta aún (p. ej. abierta sin conexión) se parte del tablero
-    () => ordenConOps(ordenSrv !== undefined ? ordenSrv : (mesa.orden_activa ?? null), opsMesa),
-    [ordenSrv, mesa.orden_activa, opsMesa],
+    // Sin dato propio de la cuenta aún (abierta o trasladada sin conexión) se parte del tablero
+    () => ordenParaMesa(ordenSrv ?? mesa.orden_activa ?? null, opsTodas, mesa.id),
+    [ordenSrv, mesa.orden_activa, opsTodas, mesa.id],
   )
   const loadOrden = loadOrdenSrv && !orden
 
@@ -444,17 +443,9 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
   // que dos toques seguidos no se pisen.
   const ordenFresca = (): Orden | null => {
     const srv = qc.getQueryData<Orden | null>(['mesa-orden', mesa.id])
-    return ordenConOps(srv !== undefined ? srv : (mesa.orden_activa ?? null), opsDeMesa(mesa.id))
+    return ordenParaMesa(srv ?? mesa.orden_activa ?? null, cargarOps(), mesa.id)
   }
   const baseOp = (o: Orden) => ({ mesa_id: mesa.id, mesa_numero: mesa.numero, orden_id: o.id })
-  // Acciones que necesitan al servidor esperan a que se sincronice lo pendiente de esta mesa
-  const hayPendientesSinSync = (): boolean => {
-    if (hayOpsPendientes(orden?.id ?? null, mesa.id)) {
-      toast.error('Esta mesa tiene cambios sin sincronizar. Espera un momento (o a que vuelva la conexión) e inténtalo de nuevo.')
-      return true
-    }
-    return false
-  }
 
   const { data: productos = [] } = useQuery<Producto[]>({
     queryKey: ['productos-mesa'],
@@ -641,16 +632,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
 
   // Estado "Servido" manual (Fase E) — lo marca quien atiende la mesa al entregar el
   // producto al cliente, independiente de "Preparado" (que es cocina/barra terminando
-  // de cocinarlo/servirlo en Comandas). Invalida también ['mesas'] para el badge del tablero.
-  const { mutate: marcarServidoSrv } = useMutation({
-    mutationFn: (itemId: string) => api.patch(`/berlin/mesas/${mesa.id}/orden/items/${itemId}/servido`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['mesa-orden', mesa.id] })
-      qc.invalidateQueries({ queryKey: ['mesas'] })
-    },
-    onError: () => toast.error('Error al marcar servido'),
-  })
-  const marcarServido = (itemId: string) => { if (!hayPendientesSinSync()) marcarServidoSrv(itemId) }
+  // de cocinarlo/servirlo en Comandas). Se guarda como operación local (funciona sin conexión);
+  // el valor es absoluto: si ya estaba servido, este toque lo desmarca (por si fue un error).
+  const marcarServido = (itemId: string) => {
+    const o = ordenFresca()
+    const it = o?.items.find(i => i.id === itemId)
+    if (!o || !it) return
+    if (it.venta_id) { toast.error('Este producto ya fue cobrado.'); return }
+    encolarOp(nuevaOp('servido', baseOp(o), { item_id: itemId, servido: !it.servido_at }))
+  }
 
   const enviando = false
   const enviarPedido = () => {
@@ -858,36 +848,28 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     setCobrarKey(crypto.randomUUID())
   }
 
-  const { mutate: cancelarSrv } = useMutation({
-    mutationFn: () => api.post(`/berlin/mesas/${mesa.id}/cancelar-orden`),
-    onSuccess: () => { toast('Orden cancelada'); qc.invalidateQueries({ queryKey: ['mesas'] }); onVolver() },
-    onError: (err: unknown) => {
-      const msg = (err as {response?:{data?:{error?:string}}})?.response?.data?.error
-      toast.error(msg || 'Error al cancelar la orden')
-    },
-  })
-  const cancelar = () => { if (!hayPendientesSinSync()) cancelarSrv() }
+  // Cancelar la cuenta y liberar la mesa: operación local (el servidor comprueba quién puede y que
+  // no haya cobros parciales; si la rechaza, queda el aviso rojo con el motivo).
+  const cancelar = () => {
+    const o = ordenFresca()
+    if (!o) return
+    encolarOp(nuevaOp('cancelar', baseOp(o)))
+    toast(hayInternet() ? 'Orden cancelada' : '📶 Orden cancelada — se registrará al reconectar')
+    onVolver()
+  }
 
   // Cambiar el pedido a otra mesa libre — el backend solo cambia la mesa de la orden; ítems,
-  // estados (enviado/servido/cobrado), mesero y total viajan intactos. Requiere conexión.
-  const { mutate: trasladarSrv, isPending: trasladando } = useMutation({
-    mutationFn: async (destino: Mesa) => {
-      const r = await api.post(`/berlin/mesas/${mesa.id}/trasladar`, { destino_id: destino.id })
-      return { ordenId: r.data.orden_id as string, destino }
-    },
-    onSuccess: ({ ordenId, destino }) => {
-      toast.success(`Pedido trasladado a ${destino.nombre ? `${destino.numero} — ${destino.nombre}` : `Mesa ${destino.numero}`}`)
-      setShowTrasladar(false)
-      onTrasladada(destino, ordenId, mesa.id)
-    },
-    onError: (err: unknown) => {
-      const e = err as { response?: { data?: { error?: string } } }
-      toast.error(e.response?.data?.error
-        || 'No se pudo trasladar el pedido. Se necesita conexión — revisa la red e inténtalo de nuevo.')
-      qc.invalidateQueries({ queryKey: ['mesas'] })
-    },
-  })
-  const trasladar = (destino: Mesa) => { if (!hayPendientesSinSync()) trasladarSrv(destino) }
+  // estados (enviado/servido/cobrado), mesero y total viajan intactos. Funciona sin conexión.
+  const trasladando = false
+  const trasladar = (destino: Mesa) => {
+    const o = ordenFresca()
+    if (!o) return
+    encolarOp(nuevaOp('trasladar', baseOp(o), { destino_id: destino.id, destino_numero: destino.numero }))
+    toast.success(`Pedido trasladado a ${destino.nombre ? `${destino.numero} — ${destino.nombre}` : `Mesa ${destino.numero}`}`
+      + (hayInternet() ? '' : ' (se registrará al reconectar)'))
+    setShowTrasladar(false)
+    onTrasladada(destino, o.id, mesa.id)
+  }
 
   // Cobro parcial: `items` = solo lo PENDIENTE de cobro; lo ya cobrado (venta_id) va aparte.
   // Cobros guardados de ESTE pedido: por orden_id (sobreviven a un traslado de mesa) y, los
@@ -2393,7 +2375,7 @@ export default function MesasPage() {
           syncNow: syncOpsNow, retry: reintentarOp, discard: descartarOp } = useOutboxMesas(refrescarTrasSync)
 
   // El tablero = lo que dice el servidor + las operaciones de este equipo aún sin sincronizar
-  const superponerOps = useCallback((data: Mesa[]) => data.map(m => mesaConOps(m, opsMesas)), [opsMesas])
+  const superponerOps = useCallback((data: Mesa[]) => tableroConOps(data, opsMesas), [opsMesas])
   const { data: mesas = [], isLoading } = useQuery<Mesa[]>({
     queryKey: ['mesas'],
     queryFn:  () => api.get('/berlin/mesas').then(r => r.data),
@@ -2531,6 +2513,9 @@ export default function MesasPage() {
                 : o.tipo === 'cantidad' ? 'cambiar una cantidad'
                 : o.tipo === 'quitar'   ? 'quitar un producto'
                 : o.tipo === 'enviar'   ? 'enviar el pedido a cocina'
+                : o.tipo === 'servido'  ? 'marcar un producto como servido'
+                : o.tipo === 'cancelar' ? 'cancelar la cuenta'
+                : o.tipo === 'trasladar' ? `pasar la cuenta a la Mesa ${o.destino_numero ?? ''}`
                 : 'abrir la mesa'}
             </p>
             <p>{o.error}</p>

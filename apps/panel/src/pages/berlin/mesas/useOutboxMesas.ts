@@ -5,8 +5,8 @@ import { SYNC_TIMEOUT_MS, leerLocal, guardarLocal } from '../../../lib/offline'
 import { hayInternet } from '../../../lib/conexion'
 
 // ── Cola de operaciones de Mesas (outbox) ──────────────────────────────────
-// Tomar mesa, agregar / quitar / cambiar cantidad de productos y enviar el pedido a las
-// estaciones se guardan aquí y se aplican AL INSTANTE en pantalla (ver overlayMesas.ts); se
+// Tomar mesa, agregar / quitar / cambiar cantidad de productos, enviar el pedido a las estaciones,
+// marcar servido, cancelar la cuenta y trasladarla a otra mesa se guardan aquí y se aplican AL INSTANTE en pantalla (ver overlayMesas.ts); se
 // sincronizan solas con el servidor en lote (POST /berlin/mesas/sync). Funciona igual con o sin
 // internet: sin conexión las operaciones esperan en el equipo, sobreviven a un cierre brusco del
 // navegador o del equipo, y se envían al volver.
@@ -15,7 +15,7 @@ import { hayInternet } from '../../../lib/conexion'
 // dos veces. Los ids de la cuenta y de sus líneas también se generan aquí, así se pueden encadenar
 // operaciones (tomar → agregar → enviar → cobrar) sin haber hablado con el servidor.
 
-export type OpTipo = 'tomar' | 'agregar' | 'cantidad' | 'quitar' | 'enviar'
+export type OpTipo = 'tomar' | 'agregar' | 'cantidad' | 'quitar' | 'enviar' | 'servido' | 'cancelar' | 'trasladar'
 
 export interface ProductoSnap {
   id: string; nombre: string; imagen_url?: string; precio_venta: number; unidad_venta: string
@@ -40,6 +40,11 @@ export interface OpMesa {
   cantidad_final?: number
   // enviar
   item_ids?: string[]
+  // servido: valor ABSOLUTO (true = servido, false = quitar la marca), no un cambio de estado
+  servido?: boolean
+  // trasladar
+  destino_id?:     string
+  destino_numero?: number
   // Solo para mostrar en pantalla mientras no se sincroniza (no se envían)
   producto?: ProductoSnap
   mesero?:   { id: string; nombre: string; color: string; usuario_id?: string | null }
