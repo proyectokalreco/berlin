@@ -92,7 +92,13 @@ async function calcularPosicionHasta(hastaFechaCol) {
   const hastaUTC = hastaFechaCol ? rangoDiaColombia(hastaFechaCol).hasta : null;
   const todos = await obtenerMovimientosUnificados(null, hastaUTC);
 
-  const ingresos = todos.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto), 0);
+  // El abono a una venta a crédito NO es ingreso nuevo: la venta ya se contó como ingreso
+  // (categoria='venta') el día que se hizo. Contar también el abono duplicaría esa venta en
+  // Ingresos/Gran Bolsa e inflaría para siempre el bolsillo CxC (nunca bajaba al pagarse).
+  const abonoCredito = todos.filter(m => m.tipo === 'ingreso' && m.categoria === 'abono_credito')
+    .reduce((s, m) => s + parseFloat(m.monto), 0);
+
+  const ingresos = todos.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto), 0) - abonoCredito;
   const compras  = todos.filter(m => CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
   const gastos   = todos.filter(m => m.tipo === 'egreso' && !CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
   const saldo    = siTotal + ingresos - compras - gastos;
@@ -108,7 +114,7 @@ async function calcularPosicionHasta(hastaFechaCol) {
   const electronicoTotal = siElectronico + ingElectronico - egrElectronico;
 
   const ingCxc = todos.filter(m => m.tipo === 'ingreso' && m.metodo_pago === 'credito').reduce((s, m) => s + parseFloat(m.monto), 0);
-  const cxcTotal = siCxc + ingCxc;
+  const cxcTotal = siCxc + ingCxc - abonoCredito;
 
   const gastosOp = todos.filter(m => m.tipo === 'egreso' && m.categoria === 'gasto').reduce((s, m) => s + parseFloat(m.monto), 0);
   const utilidadBruta = ingresos * (pctUtilidad / 100);
@@ -239,7 +245,11 @@ const resumen = async (req, res, next) => {
     const hastaUTC = rangoDiaColombia(hasta).hasta
     const movs = await obtenerMovimientosUnificados(desdeUTC, hastaUTC);
 
-    const ingresos = movs.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto), 0);
+    // Mismo criterio que calcularPosicionHasta(): el abono a una venta a crédito no es
+    // ingreso nuevo, ya se contó como venta el día que se hizo.
+    const abonoCredito = movs.filter(m => m.tipo === 'ingreso' && m.categoria === 'abono_credito')
+      .reduce((s, m) => s + parseFloat(m.monto), 0);
+    const ingresos = movs.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto), 0) - abonoCredito;
     const compras  = movs.filter(m => CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
     const gastos   = movs.filter(m => m.tipo === 'egreso' && !CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
     const egresos  = gastos + compras;

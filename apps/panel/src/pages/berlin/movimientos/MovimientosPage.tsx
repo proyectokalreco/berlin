@@ -36,9 +36,14 @@ function filtrarBolsillo(movs: any[], bolsillo: BolsilloTipo): any[] {
   if (bolsillo === 'electronico') {
     return base.filter(m => (m.tipo === 'ingreso' || m.tipo === 'egreso') && esElectronico(m.metodo_pago))
   }
-  // cxc: ventas a crédito (no hay cobros de financiadora en Berlín, a diferencia de Esquina)
-  return base.filter(m => m.tipo === 'ingreso' && m.metodo_pago === 'credito')
+  // cxc: ventas a crédito (suben el saldo) + abonos a esas ventas (lo bajan) — el abono no es
+  // ingreso nuevo, es la misma plata de la venta que ya se contó, cobrada después.
+  return base.filter(m => (m.tipo === 'ingreso' && m.metodo_pago === 'credito') || m.categoria === 'abono_credito')
 }
+
+// Dentro del bolsillo CxC, un abono resta (ya se cobró) aunque en la BD sea tipo='ingreso'
+// (es un ingreso real, solo que para el bolsillo Efectivo/Electrónico, no para CxC).
+const esAumentoCxc = (m: any) => m.categoria !== 'abono_credito'
 
 const fmt2 = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -54,7 +59,7 @@ function BolsilloModal({ bolsillo, movimientos, saldoInicial, onClose }: {
   const isCxc = bolsillo === 'cxc'
 
   const total = isCxc
-    ? filas.reduce((s, m) => s + parseFloat(m.monto), 0)
+    ? saldoInicial + filas.reduce((s, m) => s + (esAumentoCxc(m) ? parseFloat(m.monto) : -parseFloat(m.monto)), 0)
     : saldoInicial + filas.reduce((s, m) => s + (m.tipo === 'ingreso' ? parseFloat(m.monto) : -parseFloat(m.monto)), 0)
 
   return (
@@ -69,7 +74,7 @@ function BolsilloModal({ bolsillo, movimientos, saldoInicial, onClose }: {
         </div>
 
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-          {!isCxc && saldoInicial > 0 && (
+          {saldoInicial > 0 && (
             <div className="flex items-center gap-3 px-5 py-3 bg-violet-50/60">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-500 italic">Saldo inicial</p>
@@ -83,7 +88,7 @@ function BolsilloModal({ bolsillo, movimientos, saldoInicial, onClose }: {
             <p className="text-center py-10 text-sm text-slate-400">Sin movimientos en este bolsillo</p>
           ) : filas.map((m: any, i: number) => {
             const monto = parseFloat(m.monto)
-            const esIng = m.tipo === 'ingreso'
+            const esIng = isCxc ? esAumentoCxc(m) : m.tipo === 'ingreso'
             return (
               <div key={m.id ?? i} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
                 <div className="flex-1 min-w-0">

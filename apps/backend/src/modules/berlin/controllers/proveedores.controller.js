@@ -320,10 +320,10 @@ const listarCuentasPorCobrar = async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from('br_ventas')
-      .select('id, created_at, total, saldo_pendiente, metodo_pago, cliente:cliente_id(id, nombre, telefono)')
+      .select('id, fecha, total, saldo_pendiente, metodo_pago, cliente:cliente_id(id, nombre, telefono)')
       .eq('metodo_pago', 'credito')
       .gt('saldo_pendiente', 0)
-      .order('created_at', { ascending: true });
+      .order('fecha', { ascending: true });
     if (error) throw error;
     res.json(data || []);
   } catch (err) { next(err); }

@@ -8,7 +8,7 @@ const fmt = (n: number) =>
 
 interface VentaCredito {
   id: string
-  created_at: string
+  fecha: string
   total: number
   saldo_pendiente: number
   cliente?: { id: string; nombre: string; telefono?: string }
@@ -86,7 +86,7 @@ export default function CuentasPorCobrarPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{v.cliente?.nombre ?? 'Sin cliente'}</p>
                   <p className="text-[10px] text-gray-500 mt-0.5">
-                    Venta: {new Date(v.created_at).toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' })}
+                    Venta: {new Date(v.fecha).toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' })}
                     {' · '}Total: {fmt(v.total)}
                   </p>
                   {v.cliente?.telefono && (

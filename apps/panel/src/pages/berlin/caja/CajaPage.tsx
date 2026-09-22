@@ -88,7 +88,7 @@ function htmlDespachoPorArea(lista: DesgloseArea[] | undefined, totalVentas: num
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS Y POS</p>
 ${lista.map(e => `
-<div class="row b sm" style="margin-top:3px"><span>${e.nombre}${e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span><span class="amt">${fmt(e.total)}</span></div>
+<div class="row b" style="margin-top:5px;font-size:15px;text-transform:uppercase"><span>${e.nombre}${e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span><span class="amt" style="font-size:15px">${fmt(e.total)}</span></div>
 ${e.items.map(it => `<div class="row sm"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}
 `).join('')}
 ${Math.abs(ajuste) >= 1 ? `<div class="row sm" style="margin-top:3px"><span>Redondeo y ajustes</span><span class="amt">${ajuste >= 0 ? '' : '-'}${fmt(Math.abs(ajuste))}</span></div>` : ''}
