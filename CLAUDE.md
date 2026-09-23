@@ -116,7 +116,7 @@ cd /opt/berlin/infra && docker compose up -d --build
 Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los valores reales de
 `kalreco/infra/.env`, mismo Supabase).
 
-## 📦 Estado de fases (actualizado 2026-09-20)
+## 📦 Estado de fases (actualizado 2026-09-23)
 
 - ✅ **Fase 0** — BD: 38 tablas `br_*`, 71 FKs, 10 funciones, aplicado en producción.
 - ✅ **Fase 1** — Backend: 24 controllers clonados de Tulio, login aislado, verificado con curl.
@@ -140,6 +140,10 @@ Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los val
 - ✅ **2026-09-20** — Modo sin conexión completo (ventas, arranque tras cierre brusco, Mesas 100% offline,
   migración 112), celulares/tablets, hallazgos de las pruebas y **reportes de cierre con detalle por cajero
   y por área (también al reimprimir)** — ver incidentes 33-35. ⏳ Pruebas completas del usuario pendientes.
+- ✅ **2026-09-22/23** — Encabezado de área en mayúscula/negrilla en el cierre, fix CxC (Cuentas por
+  Cobrar estaba roto sin avisar, CxC del Libro Diario inflado por no restar abonos) y **comanda local
+  impresa en la estación del mesero cuando Mesas está sin conexión** — ver incidentes 36-37. El 37
+  confirmado en producción con captura; el 36 desplegado, sin confirmación explícita todavía.
 - ⏳ **Pendiente**: fotos reales del local (las actuales son de un generador de imágenes,
   placeholder de Google Stitch).
 
@@ -1343,6 +1347,94 @@ reales muestra "VENTAS POR CAJERO — POS / MESAS" (MARIVEL 42: POS 1 $36.000 + 
 21: Mesas $1.167.800) y "DESPACHO POR AREA — MESAS Y POS" con **"Bebidas y Barra — Luisa $1.700.200"** y su
 detalle (8x HUERTA, 20x TRAGO RON CALDAS, 10x SODA CEREZA…). ⏳ Falta su confirmación explícita del resto
 (reimprimir 17/09 y 14/09, cierre parcial de hoy, cierre final) y de que Cocina aparece con ISABELA.
+
+### 36. Encabezados de área en negrilla/mayúscula + CxC Cuentas por Cobrar roto + CxC del Libro Diario inflado (2026-09-22, commit `936d375`)
+
+Tres pedidos del cliente en un solo mensaje, con capturas: (1) que "COCINA — ISABELA" y
+"BEBIDAS Y BARRA — LUISA" resalten más en el cierre (mayúscula + negrilla, "esto con el
+objetivo que resalte más y sea más fácil encontrarlo") y (2) verificar que Clientes y Cuentas
+por Cobrar estén sincronizados y que el Libro Diario registre todo como CxC.
+
+**1) Encabezado de área (`CajaPage.tsx`, helper `htmlDespachoPorArea` del incidente 35).**
+La fila del área (nombre + responsable + total) ya estaba en negrilla (`.row.b`), pero al
+mismo tamaño que las líneas de producto (13px) — por eso no resaltaba. Fix: esa fila sube a
+15px y el nombre/responsable se fuerza a MAYÚSCULA con `text-transform:uppercase` (sin tocar
+el dato guardado — "Luisa" sigue así en `br_empleados`, solo la impresión la muestra en
+mayúscula). Aplica a los 3 tipos de cierre (parcial, final, reimpresión histórica) porque los
+3 usan el mismo helper.
+
+**2) Bug real — `/berlin/cuentas-por-cobrar` fallaba SIEMPRE, sin avisar (`proveedores.controller.js`).**
+`listarCuentasPorCobrar()` pedía `br_ventas.select('id, created_at, ...')` y ordenaba por
+`created_at` — columna que **`br_ventas` nunca tuvo** (solo `fecha`, confirmado contra el
+`CREATE TABLE` real de la migración 083). Mismo "PATRÓN RECURRENTE" ya documentado varias
+veces en `kalreco/CLAUDE.md` (el código pide algo que la BD no tiene) — aquí ya estaba
+advertido en un comentario de `movimientos.controller.js` ("br_ventas NO tiene columna
+created_at"), pero nadie lo cruzó contra este segundo archivo. Cada llamada tiraba `42703`;
+`CuentasPorCobrarPage.tsx` no distingue error de vacío (`data: ventas = []` por defecto), así
+que el módulo **mostraba "Sin cuentas pendientes por cobrar" aunque sí las hubiera** — roto
+desde que existe, sin que nadie lo notara. Fix: `created_at` → `fecha` en el select, el
+`order()` y el campo que lee `CuentasPorCobrarPage.tsx` para la fecha de cada venta.
+
+**3) El bolsillo CxC del Libro Diario nunca bajaba al pagarse — doble conteo en Ingresos.**
+`obtenerMovimientosUnificados()` (`movimientos.controller.js`) mete cada venta a crédito como
+`ingreso/venta` (correcto: se reconoce como ingreso al vender) y cada abono
+(`clientes.controller.js → abonar()`) como OTRO `ingreso/abono_credito` en el método real de
+pago (correcto para el bolsillo Efectivo/Electrónico: es plata real entrando). El bug: el
+bolsillo **CxC** (`ingCxc`, filtrado por `metodo_pago==='credito'`) solo sumaba las ventas y
+**nunca restaba los abonos** — quedaba inflado para siempre, aunque Clientes/Cuentas por
+Cobrar (que sí usan `saldo_pendiente`, decrementado en cada abono) mostraran el saldo real
+correctamente. Además el total de **Ingresos** (y con él la Gran Bolsa y la Utilidad Bruta)
+contaba la venta Y el abono como dos ingresos separados — una venta de $12.000 con abono de
+$5.000 aparecía como $17.000 de ingreso.
+
+**Fix** (`movimientos.controller.js`, `calcularPosicionHasta()` y `resumen()`):
+`abonoCredito = suma de ingresos con categoria='abono_credito'`; `ingresos -= abonoCredito`;
+`cxcTotal = siCxc + ingCxc - abonoCredito`. El abono sigue contando en el bolsillo Efectivo/
+Electrónico (ahí sí es dinero nuevo entrando a esa caja) — solo deja de duplicarse en el total
+general y de inflar CxC. Verificado con una simulación (venta crédito $12.000 + abono $5.000
+efectivo): CxC baja a $7.000, Efectivo sube $5.000, Gran Bolsa queda en $12.000 (no $17.000).
+Frontend (`MovimientosPage.tsx`): el modal del bolsillo CxC ahora también resta los abonos
+(mostrados como línea roja "-", aunque en BD sean `tipo='ingreso'` — son un ingreso para
+Efectivo/Electrónico, no para CxC) y suma el saldo inicial de CxC al total (antes lo omitía,
+inconsistente con la tarjeta de arriba).
+
+Sin migración. `node -c` y `tsc --noEmit` limpios. **✅ Desplegado (backend + panel), sin
+confirmación explícita del cliente todavía** (el mensaje siguiente del cliente fue sobre el
+incidente 37, no volvió sobre estos tres puntos con captura).
+
+### 37. Mesas — comanda local impresa en la estación del mesero cuando está sin conexión (2026-09-22/23, commit `6609666`)
+
+**Pedido del cliente**, con capturas del panel de Comandas mostrando "Sin conexión" y "6
+cambios de mesas pendientes de sincronizar": *"si estoy fuera de línea, habilita que se pueda
+imprimir la comanda en la estación local donde se genera el pedido fuera de línea."*
+
+**Límite real que esto resuelve** (ya documentado en el incidente 33): Mesas es 100% offline
+desde la migración 112, pero cocina y barra corren en dispositivos **físicamente distintos**
+del mesero — no hay red local entre ellos, solo el servidor en la nube. Antes de este cambio,
+si el mesero enviaba un pedido sin conexión, **nadie se enteraba** hasta que su equipo
+sincronizara: ni un papel, ni una alerta, nada — el pedido quedaba invisible para cocina/barra
+un tiempo indefinido.
+
+**Solución — comanda de respaldo, impresa en el propio equipo del mesero (`MesasPage.tsx`,
+solo frontend, sin backend ni migración).** `enviarPedido()` ya guardaba el pedido como
+operación local (outbox); ahora, si `!hayInternet()` en ese momento, además imprime de una vez
+una comanda física (`imprimirComandaLocal`, mismo patrón `window.open` + `onload="window.print()"`
+que ya usa `ComandasPanel.tsx` para la comanda real):
+- Agrupada por **área** (COCINA / BEBIDAS Y BARRA / Sin estación) — mapa `producto_id →
+  nombre de estación` construido en el propio `MesasPage.tsx` desde `productos` (ya trae
+  `categoria_id`) y `categorias` (ya trae `estacion:estacion_id(nombre)`, el mismo join que ya
+  usa el backend de Comandas) — sin llamada nueva al servidor.
+- Encabezado "COMANDA — SIN CONEXIÓN" + nota explícita: *"Impresa en la estación del mesero —
+  no hay conexión con Cocina/Barra todavía. Entregar este papel físicamente."*
+- Mismo formato 80mm sin precios que la comanda real — el mesero la usa como papel físico de
+  respaldo, no reemplaza la comanda digital que sí llegará a cocina/barra al sincronizar.
+- Si el navegador bloquea la ventana emergente, el toast lo avisa explícitamente ("no se pudo
+  abrir la ventana de impresión") en vez de fallar en silencio.
+
+`tsc --noEmit` limpio. **✅ Desplegado y CONFIRMADO por el usuario en producción (2026-09-23)**
+con captura real: comanda "3 — MESA 3" impresa con "BEBIDAS Y BARRA" (1x AGUILA ORIGINAL) y
+"COCINA" (1x BURRO PULLED PORK, 1x DESECHABLE) correctamente agrupados, badge "Sin conexión"
+visible en el header. **Caso cerrado.**
 
 ## 📄 Documentación relacionada
 
