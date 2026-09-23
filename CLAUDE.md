@@ -142,8 +142,8 @@ Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los val
   y por área (también al reimprimir)** — ver incidentes 33-35. ⏳ Pruebas completas del usuario pendientes.
 - ✅ **2026-09-22/23** — Encabezado de área en mayúscula/negrilla en el cierre, fix CxC (Cuentas por
   Cobrar estaba roto sin avisar, CxC del Libro Diario inflado por no restar abonos) y **comanda local
-  impresa en la estación del mesero cuando Mesas está sin conexión** — ver incidentes 36-37. El 37
-  confirmado en producción con captura; el 36 desplegado, sin confirmación explícita todavía.
+  impresa en la estación del mesero cuando Mesas está sin conexión** — ver incidentes 36-37. Ambos
+  ✅ CONFIRMADOS por el usuario en producción.
 - ⏳ **Pendiente**: fotos reales del local (las actuales son de un generador de imágenes,
   placeholder de Google Stitch).
 
@@ -1398,9 +1398,9 @@ Frontend (`MovimientosPage.tsx`): el modal del bolsillo CxC ahora también resta
 Efectivo/Electrónico, no para CxC) y suma el saldo inicial de CxC al total (antes lo omitía,
 inconsistente con la tarjeta de arriba).
 
-Sin migración. `node -c` y `tsc --noEmit` limpios. **✅ Desplegado (backend + panel), sin
-confirmación explícita del cliente todavía** (el mensaje siguiente del cliente fue sobre el
-incidente 37, no volvió sobre estos tres puntos con captura).
+Sin migración. `node -c` y `tsc --noEmit` limpios. **✅ Desplegado y CONFIRMADO por el usuario
+en producción (2026-09-23):** "Ya probé el cierre parcial, los encabezados y el CxC quedaron
+bien." **Caso cerrado.**
 
 ### 37. Mesas — comanda local impresa en la estación del mesero cuando está sin conexión (2026-09-22/23, commit `6609666`)
 
