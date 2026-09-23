@@ -178,6 +178,61 @@ ${datos.efectivo_recibido && datos.metodo_pago === 'efectivo' ? `
   }
 }
 
+// ── Comanda local sin conexión ─────────────────────────────────
+// Cuando no hay internet, cocina/barra no ven el pedido en su propio ComandasPanel hasta que
+// este equipo sincronice (no hay red local entre dispositivos). Mientras tanto, se imprime acá
+// mismo — en la estación del mesero — una comanda de respaldo, agrupada por área (Cocina /
+// Bebidas y Barra) igual que la comanda real, para que el mesero la lleve físicamente.
+function imprimirComandaLocal(
+  mesa: { numero: number; nombre?: string | null },
+  items: { producto?: { id: string; nombre: string }; cantidad: number; notas?: string | null }[],
+  estacionPorProducto: Map<string, string | undefined>,
+) {
+  const mesaNom = mesa.nombre ? `${mesa.numero} — ${mesa.nombre}` : `Mesa ${mesa.numero}`
+  const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const grupos = new Map<string, typeof items>()
+  for (const it of items) {
+    const area = (it.producto?.id ? estacionPorProducto.get(it.producto.id) : undefined) ?? 'Sin estación'
+    if (!grupos.has(area)) grupos.set(area, [])
+    grupos.get(area)!.push(it)
+  }
+
+  const seccionesHtml = Array.from(grupos.entries()).map(([area, filas]) => `
+    <p class="b" style="font-size:14px;margin-top:8px">${esc(area).toUpperCase()}</p>
+    <div class="sep"></div>
+    <table>${filas.map(i => `
+      <tr>
+        <td style="padding:3px 0;font-size:15px;font-weight:700">${i.cantidad}x</td>
+        <td style="padding:3px 0 3px 6px;font-size:15px">${esc(i.producto?.nombre ?? 'Producto')}${i.notas ? `<br><span style="font-size:12px;font-weight:400">${esc(i.notas)}</span>` : ''}</td>
+      </tr>`).join('')}</table>`).join('')
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comanda ${mesaNom} (local)</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}@page{margin:4mm;size:80mm auto}
+  body{font-family:Arial,sans-serif;font-weight:600;font-size:14px;color:#000}
+  .c{text-align:center}.b{font-weight:800}.sep{border-top:1px dashed #000;margin:4px 0}
+  table{width:100%;border-collapse:collapse}
+  </style></head>
+  <body onload="window.print()">
+    <p class="c b" style="font-size:17px">COMANDA — SIN CONEXIÓN</p>
+    <p class="c b" style="font-size:16px">${mesaNom}</p>
+    <p class="c" style="font-size:12px">${hora}</p>
+    <div class="sep"></div>
+    <p class="c" style="font-size:11px">Impresa en la estación del mesero — no hay conexión con
+    Cocina/Barra todavía. Entregar este papel físicamente.</p>
+    ${seccionesHtml}
+    <div class="sep"></div>
+    <p class="c" style="font-size:11px">Sin precios — solo control de preparación</p>
+  </body></html>`
+
+  const w = window.open('', '_blank', 'width=380,height=600')
+  if (!w) { return false }
+  w.document.write(html)
+  w.document.close()
+  return true
+}
+
 // ── Tipos ─────────────────────────────────────────────────────
 export interface Mesero  { id: string; nombre: string; color: string; usuario_id?: string | null }
 export interface OrdenItem {
@@ -467,6 +522,16 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
     queryFn:  () => api.get('/berlin/categorias').then(r => r.data),
   })
 
+  // producto_id → nombre del área (Cocina / Bebidas y Barra) — para agrupar la comanda impresa
+  // localmente cuando no hay conexión (imprimirComandaLocal).
+  const estacionPorProducto = useMemo(() => {
+    const catEst = new Map<string, string | undefined>()
+    categorias.forEach(c => catEst.set(c.id, c.estacion?.nombre ?? undefined))
+    const m = new Map<string, string | undefined>()
+    productos.forEach(p => m.set(p.id, catEst.get(p.categoria_id ?? '')))
+    return m
+  }, [categorias, productos])
+
   const { data: clientesTodos = [] } = useQuery<{id:string;nombre:string}[]>({
     queryKey: ['clientes-mesa'],
     queryFn:  () => api.get('/berlin/clientes', { params: { limit: 2000 } }).then(r => r.data),
@@ -660,9 +725,15 @@ function VistaOrden({ mesa, cajaId, onVolver, onEnqueueCobro, onDequeueCobro, on
       return
     }
     encolarOp(nuevaOp('enviar', baseOp(o), { item_ids: nuevos.map(i => i.id) }))
-    toast.success(hayInternet()
-      ? '✅ Pedido enviado al cajero'
-      : '📶 Pedido guardado — llegará a cocina cuando vuelva la conexión', { duration: 6000 })
+    if (hayInternet()) {
+      toast.success('✅ Pedido enviado al cajero')
+    } else {
+      const impresa = imprimirComandaLocal(mesa, nuevos, estacionPorProducto)
+      toast(impresa
+        ? '📶 Sin conexión: comanda impresa acá mismo — llévala a la estación. Llegará a cocina/barra al sincronizar.'
+        : '📶 Pedido guardado — llegará a cocina cuando vuelva la conexión (no se pudo abrir la ventana de impresión)',
+        { duration: 8000 })
+    }
     onVolver()
   }
 
