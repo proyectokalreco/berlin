@@ -140,6 +140,9 @@ Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los val
 - ✅ **2026-09-20** — Modo sin conexión completo (ventas, arranque tras cierre brusco, Mesas 100% offline,
   migración 112), celulares/tablets, hallazgos de las pruebas y **reportes de cierre con detalle por cajero
   y por área (también al reimprimir)** — ver incidentes 33-35. ⏳ Pruebas completas del usuario pendientes.
+- ✅ **2026-09-29** — **Layout móvil completo:** POS con scroll vertical, tarjetas KPI responsivas
+  (grid-cols-2 en móvil), `BerlinShell` root `h-dvh` para scroll correcto en todos los módulos —
+  ver incidente 38. ✅ CONFIRMADO por el usuario en producción.
 - ✅ **2026-09-22/23** — Encabezado de área en mayúscula/negrilla en el cierre, fix CxC (Cuentas por
   Cobrar estaba roto sin avisar, CxC del Libro Diario inflado por no restar abonos) y **comanda local
   impresa en la estación del mesero cuando Mesas está sin conexión** — ver incidentes 36-37. Ambos
@@ -1435,6 +1438,51 @@ que ya usa `ComandasPanel.tsx` para la comanda real):
 con captura real: comanda "3 — MESA 3" impresa con "BEBIDAS Y BARRA" (1x AGUILA ORIGINAL) y
 "COCINA" (1x BURRO PULLED PORK, 1x DESECHABLE) correctamente agrupados, badge "Sin conexión"
 visible en el header. **Caso cerrado.**
+
+### 38. Layout móvil — POS sin scroll + tarjetas KPI desbordadas + página congelada (2026-09-29, commits `3722392`→`425d13b`)
+
+**Reporte del cliente (captura de pantalla en 375 px):** (1) módulo POS mostraba el catálogo
+pero completamente congelado — imposible hacer scroll ni seleccionar producto; (2) tarjetas
+KPI de Caja, Facturación, Reportes, CxP y Proveedores desbordaban el ancho en móvil; (3) tras
+el primer deploy, la aplicación entera quedó estática — ningún módulo permitía desplazarse.
+
+**Diagnóstico:**
+
+**Bug 1 — POS congelado en móvil (`BerlinShell.tsx` + `POS.tsx`).**
+Raíz: el content wrapper del shell era un div bloque (`flex-1 p-4 sm:p-6`), no un flex column.
+`POS.tsx` en móvil usa `flex flex-col flex-1 overflow-hidden` — `flex-1` necesita un flex
+parent con altura definida para funcionar. Sin él, el POS tenía 0 px de alto real y no podía
+scrollear. Fix: `flex-1 p-4 sm:p-6` → `flex-1 flex flex-col overflow-y-auto p-4 sm:p-6`.
+Además `POS.tsx` desktop: `h-[calc(100vh-160px)]` → `h-[calc(100dvh-160px)]` (dvh descuenta
+la barra de dirección del navegador móvil).
+
+**Bug 2 — Grillas de 3/4 columnas desbordaban a 375 px.**
+`$3.309.700` en `text-lg` necesita ~100 px; una columna de grid-cols-3 solo da ~74 px → texto
+cortado/desbordado. Archivos corregidos (commit `3722392`):
+- `CajaPage.tsx` líneas 561 y 585: `grid-cols-3` → `grid-cols-2 sm:grid-cols-3`
+- `FacturacionPage.tsx` línea 416: `grid-cols-3` → `grid-cols-2 sm:grid-cols-3`
+- `ProveedoresPage.tsx` línea 465: `grid-cols-4` → `grid-cols-2 sm:grid-cols-4`
+- `ProveedoresPage.tsx` línea 1830: `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+- `ReportesPage.tsx` línea 704: `grid-cols-3` → `grid-cols-2 sm:grid-cols-3`
+- `CuentasPorPagarPage.tsx` línea 64: `grid-cols-3` → `grid-cols-2 sm:grid-cols-3`
+- `BerlinShell.tsx`: content wrapper → `flex-1 flex flex-col overflow-y-auto p-4 sm:p-6`
+- `POS.tsx`: `100vh` → `100dvh` en altura desktop
+
+**Bug 3 — Página entera congelada tras el primer deploy (commit `425d13b`).**
+Raíz del bug 3: `BerlinShell.tsx` root era `flex flex-col min-h-screen` (puede crecer sin límite).
+El content div con `overflow-y-auto` creaba un scroll container, pero como el root no tenía
+altura fija, el div crecía con su contenido → `overflow-y-auto` nunca activaba. En móvil táctil,
+el div "consumía" los eventos de touch sin scrollear nada — pantalla 100% congelada. El document
+tampoco scrolleaba. Fix: `min-h-screen` → `h-dvh` en el root. Con el root fijo al viewport, el
+content div (flex-1) queda height-constrained y `overflow-y-auto` scrollea correctamente. El
+POS con su propia altura interna `h-[calc(100dvh-...)]` sigue intacto.
+
+`FacturacionPage.tsx` línea 614 (`grid-cols-4` en preview de ítems de factura) quedó pendiente:
+el auto-mode bloqueó el edit dos veces. Si el cliente reporta que los ítems de factura se ven
+cortados en móvil, la fix es cambiar ese div a flex.
+
+`tsc --noEmit` limpio en ambos commits. **✅ DESPLEGADO y CONFIRMADO por el usuario en producción
+(2026-09-29):** "ya probé la aplicación y todo quedó muy bien."
 
 ## 📄 Documentación relacionada
 
