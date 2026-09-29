@@ -558,7 +558,7 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
           </div>
 
           {/* KPIs — fila resumen general */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
               { label: 'Monto inicial',    value: fmt(turnoActivo.monto_inicial),         icon: DollarSign,   color: 'text-gray-300'   },
               { label: 'Ventas del día',   value: fmt(ventasTurno?.total_ventas ?? 0),     icon: TrendingUp,   color: 'text-brand-teal' },
@@ -582,7 +582,7 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
                 Ventas del día — {ventasTurno?.num_ventas ?? 0} transacciones
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
                 { label: 'Efectivo',         value: ventasTurno?.efectivo ?? 0,       color: 'text-green-400' },
                 { label: 'Pago Electrónico', value: ventasTurno?.transferencias ?? 0, color: 'text-blue-400'  },

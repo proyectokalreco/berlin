@@ -462,7 +462,7 @@ function ItemCompraRow({ item, index, canRemove, onPatch, onRemove }:
       )}
 
       {/* Cant. | P.Compra/u | P.Venta/u | V.Total */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
         <div>
           <p className="text-[9px] text-gray-500 mb-1 uppercase tracking-wide">Cant.</p>
           <input type="number" min="0.01" step="0.01" value={item.cantidad}
@@ -1827,7 +1827,7 @@ export default function ProveedoresPage() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
               {/* Encabezado factura — N° Factura | Fecha | Proveedor */}
-              <div className="grid grid-cols-3 gap-3 bg-brand-dark/60 rounded-xl border border-white/8 p-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-brand-dark/60 rounded-xl border border-white/8 p-3">
                 <div>
                   <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1.5">N° Factura</label>
                   <input value={formFac.numero_factura}

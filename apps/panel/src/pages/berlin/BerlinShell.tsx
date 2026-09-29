@@ -183,7 +183,7 @@ export default function BerlinShell() {
       </div>
 
       {/* ── Contenido de la sección activa ── */}
-      <div className="flex-1 p-4 sm:p-6">
+      <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6">
         <Outlet />
       </div>
 

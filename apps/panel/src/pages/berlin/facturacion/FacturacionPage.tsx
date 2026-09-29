@@ -413,7 +413,7 @@ export default function FacturacionPage() {
         </div>
 
         {/* KPIs principales */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <div className="bg-brand-dark rounded-lg p-3 flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center flex-shrink-0">
               <TrendingUp size={14} className="text-violet-400"/>

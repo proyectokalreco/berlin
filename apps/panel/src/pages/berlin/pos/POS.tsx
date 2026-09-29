@@ -1234,7 +1234,7 @@ export default function POS() {
       'gap-0 rounded-xl overflow-hidden border border-white/5',
       isMobile
         ? 'flex flex-col flex-1 overflow-hidden'
-        : 'flex h-[calc(100vh-160px)] min-h-[600px]',
+        : 'flex h-[calc(100dvh-160px)] min-h-[600px]',
     )}>
 
       {/* ═══════════════════════════════════════

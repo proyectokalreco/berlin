@@ -701,7 +701,7 @@ export default function ReportesPage() {
       </div>
 
       {/* KPIs rápidos mes actual */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
           { label:'Ingresos mes', value: movResumen?.ingresos??0, color:'text-green-400', icon: TrendingUp },
           { label:'Egresos mes',  value: movResumen?.egresos??0,  color:'text-red-400',   icon: TrendingDown },

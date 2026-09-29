@@ -61,7 +61,7 @@ export default function CuentasPorPagarPage() {
       </div>
 
       {/* Resumen */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="bg-brand-navy rounded-xl p-3 border border-white/5 text-center">
           <p className="text-xs text-gray-500 mb-1">Total pendiente</p>
           <p className="text-sm font-bold text-amber-400">{fmt(total)}</p>
