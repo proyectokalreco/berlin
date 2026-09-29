@@ -82,7 +82,7 @@ export default function BerlinShell() {
   const isOnline = useHayInternet()
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: BG_DARK }}>
+    <div className="flex flex-col h-dvh" style={{ background: BG_DARK }}>
 
       {/* ── Encabezado — sticky: siempre visible al hacer scroll ── */}
       <div
