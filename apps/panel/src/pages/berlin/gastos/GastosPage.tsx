@@ -33,7 +33,7 @@ const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 const METODO_LABEL: Record<string, string> = {
-  efectivo: 'Efectivo', transferencia: 'Pago Electrónico', tarjeta: 'Tarjeta',
+  efectivo: 'Efectivo', transferencia: 'Pago Electrónico',
 }
 
 // Comprobante de egreso — tiquete térmico 80mm. Mismas reglas que el resto de tiquetes de Berlín:
@@ -266,7 +266,6 @@ export default function GastosPage() {
                                focus:outline-none focus:border-orange-500/50 min-h-[48px]">
                     <option value="efectivo">Efectivo</option>
                     <option value="transferencia">Pago Electrónico</option>
-                    <option value="tarjeta">Tarjeta</option>
                   </select>
                 </div>
               </div>

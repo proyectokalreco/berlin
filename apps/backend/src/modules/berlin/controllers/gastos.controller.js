@@ -38,6 +38,11 @@ const resumen = async (req, res, next) => {
 const crear = async (req, res, next) => {
   try {
     const { categoria, concepto, monto, metodo_pago = 'efectivo', notas } = req.body;
+    // Medios de pago válidos en Berlín: efectivo o pago electrónico ('transferencia' en BD).
+    // Cualquier otro valor (p. ej. 'tarjeta') quedaría mal repartido entre los bolsillos del Libro Diario.
+    if (!['efectivo', 'transferencia'].includes(metodo_pago)) {
+      return res.status(400).json({ error: 'Método de pago no válido. Usa Efectivo o Pago Electrónico.' });
+    }
     const hoy = fechaColombia();
 
     // Turno activo = el único turno abierto del negocio, sin filtrar por fecha: el negocio
