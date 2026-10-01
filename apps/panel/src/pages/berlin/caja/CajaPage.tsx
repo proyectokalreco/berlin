@@ -258,7 +258,7 @@ export default function CajaPage() {
   // ── Ventas de hoy — caja compartida, todo el negocio (un solo turno por día)
   const { data: ventasTurno } = useQuery<{
     total_ventas: number; num_ventas: number; efectivo: number;
-    transferencias: number; credito: number; ticket_promedio: number
+    transferencias: number; credito: number; gastos_efectivo?: number; ticket_promedio: number
     desglose_vendedores?: DesgloseVendedor[]
   }>({
     queryKey: ['ventas-turno-actual'],
@@ -370,8 +370,10 @@ export default function CajaPage() {
   const puedeCerrar    = esAdminNegocio || (abrioUnCajero && esQuienAbrio)
 
   // Efectivo esperado en vivo — para el cierre parcial y el arqueo
+  // = base + ventas en efectivo − gastos pagados en efectivo (los gastos salen del cajón)
+  const gastosEfectivoVivo = ventasTurno?.gastos_efectivo ?? 0
   const efectivoEsperadoVivo =
-    (turnoActivo?.monto_inicial ?? 0) + (ventasTurno?.efectivo ?? 0)
+    (turnoActivo?.monto_inicial ?? 0) + (ventasTurno?.efectivo ?? 0) - gastosEfectivoVivo
 
   // ── Cierre parcial: tiquete informativo, la caja NO se cierra ──
   const imprimirParcial = () => {
@@ -423,6 +425,7 @@ ${htmlVentasPorCajero(t?.desglose_vendedores)}
 <p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
 <div class="row"><span>+ Ventas efectivo:</span><span class="amt">${fmt(t?.efectivo ?? 0)}</span></div>
+<div class="row"><span>- Gastos pagados:</span><span class="amt">${fmt(gastosEfectivoVivo)}</span></div>
 <div class="row b"><span>Efectivo esperado:</span><span class="amt">${fmt(efectivoEsperadoVivo)}</span></div>
 ${contado > 0 ? `<div class="row"><span>Efectivo contado:</span><span class="amt">${fmt(contado)}</span></div>` : ''}
 ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;border-top:2px solid #000"><span>Diferencia:</span><span class="amt">${dif >= 0 ? '+' : ''}${fmt(dif)}</span></div>` : ''}
@@ -562,7 +565,7 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
             {[
               { label: 'Monto inicial',    value: fmt(turnoActivo.monto_inicial),         icon: DollarSign,   color: 'text-gray-300'   },
               { label: 'Ventas del día',   value: fmt(ventasTurno?.total_ventas ?? 0),     icon: TrendingUp,   color: 'text-brand-teal' },
-              { label: 'Efectivo en caja', value: fmt(turnoActivo.monto_inicial + (ventasTurno?.efectivo ?? 0)), icon: Banknote, color: 'text-green-400' },
+              { label: 'Efectivo en caja', value: fmt(efectivoEsperadoVivo), icon: Banknote, color: 'text-green-400' },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-brand-navy rounded-xl border border-white/5 p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -831,10 +834,14 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
                   <span className="text-gray-400">+ Ventas efectivo:</span>
                   <span className="text-green-400 font-mono">{fmt(ventasTurno?.efectivo ?? 0)}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">− Gastos pagados:</span>
+                  <span className="text-red-400 font-mono">{fmt(gastosEfectivoVivo)}</span>
+                </div>
                 <div className="flex justify-between text-sm border-t border-white/5 pt-2 font-bold">
                   <span className="text-gray-300">Efectivo esperado:</span>
                   <span className="text-white font-mono">
-                    {fmt(turnoActivo.monto_inicial + (ventasTurno?.efectivo ?? 0))}
+                    {fmt(efectivoEsperadoVivo)}
                   </span>
                 </div>
               </div>
@@ -856,7 +863,7 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
                   />
                 </div>
                 {montoCierre && (() => {
-                  const esperado = turnoActivo.monto_inicial + (ventasTurno?.efectivo ?? 0)
+                  const esperado = efectivoEsperadoVivo
                   const contado  = parseInt(montoCierre) || 0
                   const diff     = contado - esperado
                   return (
@@ -1022,6 +1029,7 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
               <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Efectivo</span><span className="text-green-400 font-mono">{fmt(ventasTurno?.efectivo ?? 0)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Pago Electrónico</span><span className="text-blue-400 font-mono">{fmt(ventasTurno?.transferencias ?? 0)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Crédito</span><span className="text-pink-400 font-mono">{fmt(ventasTurno?.credito ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">− Gastos pagados (efectivo)</span><span className="text-red-400 font-mono">{fmt(gastosEfectivoVivo)}</span></div>
               <div className="flex justify-between border-t border-white/5 pt-1.5 mt-1 font-bold">
                 <span className="text-gray-300">Efectivo esperado</span>
                 <span className="text-white font-mono">{fmt(efectivoEsperadoVivo)}</span>

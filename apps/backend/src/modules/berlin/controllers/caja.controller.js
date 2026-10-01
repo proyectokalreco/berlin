@@ -106,6 +106,19 @@ const construirDesgloseVendedores = (ventas) => {
   return Array.from(map.values()).sort((a, b) => b.total - a.total)
 }
 
+// Gastos del turno que salen del EFECTIVO de la caja. Un gasto pagado por transferencia/QR no
+// saca plata del cajón, así que no se resta del efectivo esperado (mismo criterio que Esquina).
+const gastosEfectivoDeTurno = async (turnoId) => {
+  const { data, error } = await supabase
+    .from('br_gastos')
+    .select('monto, metodo_pago')
+    .eq('turno_id', turnoId);
+  if (error) throw error;
+  return (data || [])
+    .filter(g => !g.metodo_pago || g.metodo_pago === 'efectivo')
+    .reduce((s, g) => s + parseFloat(g.monto), 0);
+};
+
 const obtenerTurnoAbierto = async (select) => {
   const { data, error } = await supabase
     .from('br_turnos_caja')
@@ -292,13 +305,8 @@ const cerrarCaja = async (req, res, next) => {
     // qué y desde dónde al cerrar el día.
     const desglosePorVendedor = construirDesgloseVendedores(ventas);
 
-    // Gastos del turno
-    const { data: gastosData } = await supabase
-      .from('br_gastos')
-      .select('monto')
-      .eq('turno_id', turno.id);
-
-    const totalGastos = (gastosData || []).reduce((s, g) => s + parseFloat(g.monto), 0);
+    // Gastos en efectivo del turno (salen del cajón)
+    const totalGastos = await gastosEfectivoDeTurno(turno.id);
 
     const montoFinal = parseFloat(monto_final_real) || 0;
     const efectivoEsperado = parseFloat(turno.monto_inicial) + totalEfectivo - totalGastos;
@@ -401,9 +409,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
       + ventas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_transferencia) || 0), 0);
     const totalCredito       = ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0);
 
-    const { data: gastosData } = await supabase
-      .from('br_gastos').select('monto').eq('turno_id', turno.id);
-    const totalGastos = (gastosData || []).reduce((s, g) => s + parseFloat(g.monto), 0);
+    const totalGastos = await gastosEfectivoDeTurno(turno.id);
 
     const montoFinal        = parseFloat(monto_final_real) || 0;
     const efectivoEsperado  = parseFloat(turno.monto_inicial) + totalEfectivo - totalGastos;
@@ -492,10 +498,11 @@ const turnoNegocioActivo = async (req, res, next) => {
 // las del usuario que consulta.
 const ventasTurno = async (req, res, next) => {
   try {
-    const turno = await obtenerTurnoAbierto('apertura_at');
+    const turno = await obtenerTurnoAbierto('id, apertura_at');
     if (!turno) {
-      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, ticket_promedio: 0, desglose_vendedores: [] });
+      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, gastos_efectivo: 0, ticket_promedio: 0, desglose_vendedores: [] });
     }
+    const gastosEfectivo = await gastosEfectivoDeTurno(turno.id);
 
     const { data } = await supabase
       .from('br_ventas')
@@ -518,6 +525,7 @@ const ventasTurno = async (req, res, next) => {
       efectivo,
       transferencias,
       credito:        ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
+      gastos_efectivo: gastosEfectivo,
       ticket_promedio: ventas.length > 0 ? totalVentas / ventas.length : 0,
       desglose_vendedores: construirDesgloseVendedores(ventas),
     });

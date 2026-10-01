@@ -44,12 +44,20 @@ export default function GastosPage() {
     refetchInterval: 30_000,
   })
 
+  // Un gasto cambia el efectivo de la caja y el Libro Diario: refrescar esas pantallas al instante
+  // (si no, con el staleTime/polling muestran el valor anterior hasta por un minuto).
+  const refrescarCajaYLibro = () => {
+    ;['ventas-turno-actual', 'pan-gran-bolsa', 'pan-libro-diario', 'pan-movimientos-resumen', 'pan-movimientos-todos']
+      .forEach(k => qc.invalidateQueries({ queryKey: [k] }))
+  }
+
   const { mutate: crear, isPending } = useMutation({
     mutationFn: () => api.post('/berlin/gastos', { ...form, monto: parseFloat(form.monto) }),
     onSuccess: () => {
       toast.success('Gasto registrado')
       qc.invalidateQueries({ queryKey: ['gastos'] })
       qc.invalidateQueries({ queryKey: ['gastos-resumen'] })
+      refrescarCajaYLibro()
       setShowModal(false)
       setForm({ concepto:'', categoria:'general', monto:'', metodo_pago:'efectivo', notas:'' })
     },
@@ -62,6 +70,7 @@ export default function GastosPage() {
       toast.success('Gasto eliminado')
       qc.invalidateQueries({ queryKey: ['gastos'] })
       qc.invalidateQueries({ queryKey: ['gastos-resumen'] })
+      refrescarCajaYLibro()
     },
   })
 
