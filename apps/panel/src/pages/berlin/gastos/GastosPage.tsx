@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../../lib/api'
 import { fmtDinero, soloDigitos } from '../../../lib/dinero'
 import toast from 'react-hot-toast'
-import { Receipt, Plus, Trash2, X, TrendingDown, Calendar, Tag } from 'lucide-react'
+import { Receipt, Plus, Trash2, X, TrendingDown, Calendar, Tag, Printer } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
 const fmt = (n: number) =>
@@ -24,6 +24,70 @@ const CATS = [
 interface Gasto {
   id: string; fecha: string; concepto: string; categoria: string
   monto: number; metodo_pago: string; notas?: string
+  created_at?: string
+  registrado_por_user?: { id: string; nombre: string } | null
+}
+
+// El concepto y las notas los escribe el cajero y se meten en el HTML de la ventana de impresión
+const esc = (s: unknown) =>
+  String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+const METODO_LABEL: Record<string, string> = {
+  efectivo: 'Efectivo', transferencia: 'Pago Electrónico', tarjeta: 'Tarjeta',
+}
+
+// Comprobante de egreso — tiquete térmico 80mm. Mismas reglas que el resto de tiquetes de Berlín:
+// Arial en negrita, letra de 13px o más y todo en negro (la térmica no imprime grises ni colores).
+function imprimirGasto(g: Gasto) {
+  const win = window.open('', '_blank', 'width=440,height=640')
+  if (!win) { toast.error('El navegador bloqueó la ventana de impresión'); return }
+  const origin  = window.location.origin
+  const cat     = CATS.find(c => c.value === g.categoria)?.label ?? g.categoria
+  const fecha   = new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const hora    = g.created_at
+    ? new Date(g.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : fecha
+  const metodo  = METODO_LABEL[g.metodo_pago] ?? g.metodo_pago
+  const quien   = g.registrado_por_user?.nombre
+
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comprobante de gasto</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box }
+  @page { margin:5mm; size:80mm auto }
+  body { font-family:Arial,sans-serif; font-weight:600; font-size:14px; width:100%; color:#000 }
+  .c { text-align:center } .b { font-weight:bold } .sm { font-size:13px }
+  .sep  { border-top:1px dashed #000; margin:6px 0 }
+  .sep2 { border-top:2px solid #000; margin:6px 0 }
+  .row { display:flex; justify-content:space-between; gap:4px; padding:2px 0 }
+  .row span:last-child { flex-shrink:0; text-align:right; font-weight:bold }
+  .total { font-size:17px }
+  img.logo { display:block; margin:4px auto; max-width:60mm; height:auto; max-height:20mm; object-fit:contain }
+</style></head><body onload="window.print();setTimeout(function(){window.close()},800)">
+<img class="logo" src="${origin}/logos/berlin.png" alt="Berlín Café Bar" />
+<div class="c" style="margin-bottom:4px">
+  <p class="b">*Café Bar Berlín*</p>
+  <p class="sm">NIT: 1035424712-4</p>
+  <p class="sm">Calle 28 #30-19 · Don Matías, Antioquia</p>
+  <p class="sm">Tel: 3215994825</p>
+</div>
+<div class="sep2"></div>
+<div class="c"><p class="b" style="font-size:16px">COMPROBANTE DE GASTO</p></div>
+<div class="sep2"></div>
+<div class="row sm"><span>Fecha:</span><span>${esc(hora)}</span></div>
+<div class="row sm"><span>Ref:</span><span>${esc(g.id.slice(0, 8).toUpperCase())}</span></div>
+<div class="sep"></div>
+<p class="sm">Concepto:</p>
+<p class="b" style="margin-bottom:4px">${esc(g.concepto)}</p>
+<div class="row sm"><span>Categoría:</span><span>${esc(cat)}</span></div>
+<div class="row sm"><span>Método de pago:</span><span>${esc(metodo)}</span></div>
+${g.notas ? `<p class="sm" style="margin-top:3px">Notas: ${esc(g.notas)}</p>` : ''}
+<div class="sep2"></div>
+<div class="row total b"><span>TOTAL EGRESO:</span><span>${esc(fmt(Number(g.monto)))}</span></div>
+<div class="sep2"></div>
+${quien ? `<div class="row sm"><span>Registrado por:</span><span>${esc(quien)}</span></div>` : ''}
+<div class="c sm" style="margin-top:6px"><p>Sistema Kalreco v1.0</p></div>
+</body></html>`)
+  win.document.close()
 }
 
 export default function GastosPage() {
@@ -150,6 +214,11 @@ export default function GastosPage() {
                     </p>
                   </div>
                   <p className="text-sm font-bold text-red-400 tabular-nums flex-shrink-0">{fmt(g.monto)}</p>
+                  <button onClick={() => imprimirGasto(g)} title="Imprimir comprobante"
+                    className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-orange-400
+                               hover:bg-orange-500/10 rounded-lg transition-colors flex-shrink-0">
+                    <Printer size={14} />
+                  </button>
                   <button onClick={() => { if (confirm('¿Eliminar este gasto?')) eliminar(g.id) }}
                     className="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-red-400
                                hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0">
