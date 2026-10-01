@@ -116,7 +116,12 @@ cd /opt/berlin/infra && docker compose up -d --build
 Requiere `infra/.env` (no commiteado, copiar de `infra/.env.example` con los valores reales de
 `kalreco/infra/.env`, mismo Supabase).
 
-## 📦 Estado de fases (actualizado 2026-09-23)
+## 📦 Estado de fases (actualizado 2026-10-01)
+
+- 🚀 **2026-10-01 — INICIO DE PRODUCCIÓN REAL (día cero).** Datos de prueba borrados (solo `br_*`), saldo
+  inicial 2.196.600 (efectivo 1.823.600 · electrónico 373.000 · CxC 0). Después del arranque: gastos
+  descuentan del efectivo de la caja, tarjeta de Gastos en Caja, comprobante de gasto imprimible y
+  medio de pago "Tarjeta" retirado — ver incidente 39 (A–E). Todo ✅ confirmado salvo el tiquete físico.
 
 - ✅ **Fase 0** — BD: 38 tablas `br_*`, 71 FKs, 10 funciones, aplicado en producción.
 - ✅ **Fase 1** — Backend: 24 controllers clonados de Tulio, login aislado, verificado con curl.
@@ -1520,9 +1525,40 @@ restar los 10.000). Revisado el código antes de tocar nada — 4 fallos:
 Verificación: SQL de solo lectura confirmó que el gasto de limones SÍ había quedado enlazado al turno
 (`con_turno = t`), así que no hubo datos que corregir; `node -c` + `tsc --noEmit` limpios; backend
 probado con Supabase simulado (11 comprobaciones: enlace al turno, transferencia no resta, eliminar
-limpia movimiento y total, 404). **⏳ Pendiente de desplegar y confirmar por el usuario** (backend +
-panel, sin migración). Tulio (origen del código) probablemente tiene los mismos fallos — no se tocó,
-decisión explícita del cliente.
+limpia movimiento y total, 404). **✅ DESPLEGADO y CONFIRMADO por el usuario en producción
+(2026-10-01)** (backend + panel, sin migración): el cierre parcial muestra "− Gastos pagados (efectivo)"
+y Caja marca $1.152.800 = base 1.100.000 + ventas 62.800 − gasto 10.000. Tulio (origen del código)
+probablemente tiene los mismos fallos — no se tocó, decisión explícita del cliente.
+
+**C) Tarjeta de Gastos en Caja (commit `6401092`, solo panel):** a pedido del cliente, la fila superior de
+`CajaPage.tsx` pasó de 3 a 4 tarjetas — Monto inicial · Ventas del día · **Gastos (efectivo)** ·
+Efectivo en caja (`grid-cols-2 sm:grid-cols-4`). Muestra `gastos_efectivo` de `ventasTurno`: un gasto por
+transferencia no aparece ahí (no sale del cajón); sigue en el módulo Gastos y en el Libro Diario.
+✅ Confirmado con captura.
+
+**D) Comprobante de gasto imprimible (commit `b483568`, solo panel):** botón de impresora por gasto en
+`GastosPage.tsx` (`imprimirGasto`) — tiquete térmico 80mm con logo, datos del negocio, concepto,
+categoría, método de pago, notas, **TOTAL EGRESO**, fecha y hora reales (`created_at`, hora Colombia),
+ref (8 primeros caracteres del id) y quién lo registró. Mismas reglas térmicas de siempre (incidente 10):
+Arial en negrita, letra ≥ 13px, todo en `#000`. Concepto y notas se **escapan** (`esc()`) porque los
+escribe el cajero y van al HTML de impresión (ver incidente 32). Imprime solo con `onload` de la ventana.
+⏳ Falta ver un tiquete real en la impresora física.
+
+**E) Medio de pago "Tarjeta" retirado de todo el sistema (commit `49f26e4`):** el cliente lo vio en el
+selector de Gastos y pidió quitarlo "de todo el Sistema". Auditado en panel, backend y migraciones: solo
+existía en `GastosPage.tsx` (selector y etiqueta del recibo); POS, Mesas, Caja, Facturación y Clientes ya
+usaban solo Efectivo / Pago Electrónico (`transferencia` en BD) / Crédito / Mixto, y la BD no tiene
+CHECK ni datos con ese valor. Era un hueco real: el Libro Diario (`esElectronico`) no lo reconocía como
+electrónico, así que un gasto "Tarjeta" se contaba en **Efectivo**. Fix en las dos capas
+([[feedback_bypass_dos_capas]]): se quita del selector y del recibo, y `gastos.crear` responde **400** si
+`metodo_pago` no es `efectivo` o `transferencia`. ✅ Confirmado con captura (el selector muestra solo
+Efectivo y Pago Electrónico). Si un día se quiere aceptar tarjeta/datáfono, hay que sumarlo a
+`esElectronico()` de `movimientos.controller.js` Y a la validación de `gastos.crear`, no solo al selector.
+
+**Lección general (3ª vez):** la búsqueda del "turno activo" estaba copiada en varios controllers y al
+arreglarla en `caja.controller.js` (incidente 22) quedaron copias viejas con `fecha = hoy` en
+`mesas.controller.js` (incidente 25) y ahora en `gastos.controller.js`. Al corregir lógica de turno/fecha,
+`grep` `br_turnos_caja` en TODOS los controllers antes de dar el caso por cerrado.
 
 ## 📄 Documentación relacionada
 
