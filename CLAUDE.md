@@ -1484,6 +1484,46 @@ cortados en móvil, la fix es cambiar ese div a flex.
 `tsc --noEmit` limpio en ambos commits. **✅ DESPLEGADO y CONFIRMADO por el usuario en producción
 (2026-09-29):** "ya probé la aplicación y todo quedó muy bien."
 
+### 39. Día cero de producción + gastos que no descontaban del efectivo de la caja (2026-10-01, commits `073478f`; script `1850e4f` en repo `kalreco`)
+
+**A) Día cero (2026-10-01):** el negocio pasó de pruebas a producción real. Se borraron los datos de
+prueba solo de `br_*` con `kalreco/database/scripts/berlin_dia_cero_limpieza.sql` (NO es migración, se
+corre a mano una vez, con backup previo): 472 ventas/1.256 ítems, 502 movimientos, 16 turnos, 6 gastos,
+12 facturas proveedor, 5 abonos, 568 órdenes de mesa, `br_ops_log`, notificaciones. Intactos: productos
+(309), clientes (2), proveedores, stock; Esquina/Hogar/Tulio verificados con conteos antes=después.
+Saldo inicial: efectivo 1.823.600 · electrónico 373.000 · CxC 0 · total 2.196.600 · fecha 2026-10-01.
+⚠️ La Gran Bolsa suma TODOS los movimientos sin filtrar por `saldo_inicial_fecha`
+(`movimientos.controller.js`, `calcularPosicionHasta`): para "empezar de cero" hay que **borrar el
+historial**, poner solo el saldo inicial no basta. Orden de borrado por FKs: `br_orden_mesa_items`
+(apunta a `br_ventas`) → … → ventas → turnos al final.
+
+**B) Reporte del cliente (captura del primer gasto real, "limones" $10.000):** el gasto salía del
+efectivo pero Caja seguía mostrando "Efectivo en caja $1.146.000" (base 1.100.000 + ventas 46.000, sin
+restar los 10.000). Revisado el código antes de tocar nada — 4 fallos:
+1. `gastos.crear` buscaba el turno con `fecha = new Date().toISOString()` (UTC). Con el horario 1pm–5am,
+   pasadas las 7pm Colombia la fecha UTC cambia de día, no encontraba el turno y el gasto quedaba sin
+   `turno_id` → **el cierre no lo descontaba**. Mismo patrón de los incidentes 22 y 25 (`tomarMesa`):
+   nunca se corrigió este tercer lugar. Fix: turno activo = el único `estado='abierto'` (sin fecha) y
+   `fechaColombia()`; también en `resumen` ("Gastos hoy").
+2. `CajaPage.tsx` calculaba "Efectivo en caja" y el efectivo esperado en vivo (arqueo, cierre parcial)
+   como `monto_inicial + ventas efectivo`, sin gastos, y `ventasTurno` no devolvía gastos. Fix:
+   `ventasTurno` devuelve `gastos_efectivo`; la pantalla lo resta y muestra la línea "Gastos pagados".
+3. `cerrarCaja`/`cerrarTurnoHistorico` restaban TODOS los gastos del turno, incluidos los de
+   transferencia (no salen del cajón). Fix: helper `gastosEfectivoDeTurno()` suma solo `metodo_pago`
+   efectivo/nulo — decisión del cliente, mismo criterio que Esquina.
+4. `gastos.eliminar` solo borraba `br_gastos`: el egreso en `br_movimientos_contables` y el
+   `total_gastos` del turno quedaban, y el Libro Diario seguía restando un gasto inexistente. Fix: borra
+   también el movimiento (`referencia_tipo='gasto'`) y descuenta el total del turno si sigue abierto
+   (en un turno cerrado no se reescribe lo ya impreso); 404 si no existe.
+`GastosPage` además invalida las queries de Caja y Libro Diario al registrar/eliminar.
+
+Verificación: SQL de solo lectura confirmó que el gasto de limones SÍ había quedado enlazado al turno
+(`con_turno = t`), así que no hubo datos que corregir; `node -c` + `tsc --noEmit` limpios; backend
+probado con Supabase simulado (11 comprobaciones: enlace al turno, transferencia no resta, eliminar
+limpia movimiento y total, 404). **⏳ Pendiente de desplegar y confirmar por el usuario** (backend +
+panel, sin migración). Tulio (origen del código) probablemente tiene los mismos fallos — no se tocó,
+decisión explícita del cliente.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
