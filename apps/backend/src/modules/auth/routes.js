@@ -203,7 +203,16 @@ router.get('/me', authenticate, async (req, res) => {
     negocio = data;
   }
 
-  res.json({ user: { ...user, negocio } });
+  let vigente_hasta = null;
+  if (user?.negocio_id) {
+    const { data: gc } = await supabase
+      .from('gestion_clientes')
+      .select('vigente_hasta')
+      .eq('negocio_id', user.negocio_id)
+      .maybeSingle();
+    vigente_hasta = gc?.vigente_hasta ?? null;
+  }
+  res.json({ user: { ...user, negocio, vigente_hasta } });
 });
 
 module.exports = router;

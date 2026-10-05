@@ -15,6 +15,7 @@ import PerfilModal from '../../components/PerfilModal'
 import ComandasPanel from '../../components/ComandasPanel'
 import { useSincronizacionColas } from './useSincronizacionColas'
 import { useHayInternet } from '../../lib/conexion'
+import { useBerlinVigencia } from '../../hooks/useBerlinVigencia'
 
 // ── Paleta Berlín Café Bar (tomada del logo) ───────────────────
 const GOLD  = '#D9A652'
@@ -80,6 +81,7 @@ export default function BerlinShell() {
   const [showPerfil, setShowPerfil] = useState(false)
   // Conexión REAL con el servidor (no solo "conectado al Wi-Fi"): ver lib/conexion.ts
   const isOnline = useHayInternet()
+  const vigencia = useBerlinVigencia()
 
   return (
     <div className="flex flex-col h-dvh" style={{ background: BG_DARK }}>
@@ -144,6 +146,17 @@ export default function BerlinShell() {
               {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
               <span className="hidden sm:inline">{isOnline ? 'En línea' : 'Sin conexión'}</span>
             </div>
+
+            {vigencia && (
+              <div title="Vigencia del plan" className={cn(
+                'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border select-none',
+                vigencia.color === 'green'  && 'text-green-400 border-green-500/25 bg-green-500/10',
+                vigencia.color === 'yellow' && 'text-yellow-400 border-yellow-500/25 bg-yellow-500/10',
+                vigencia.color === 'red'    && 'text-red-400 border-red-500/25 bg-red-500/10 animate-pulse',
+              )}>
+                <span className="hidden sm:inline">{vigencia.texto}</span>
+              </div>
+            )}
 
             <ComandasPanel />
             <button
