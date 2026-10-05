@@ -205,12 +205,21 @@ router.get('/me', authenticate, async (req, res) => {
 
   let vigente_hasta = null;
   if (user?.negocio_id) {
+    // La vigencia es el fin del plan activo (gestion_planes.fecha_fin) del cliente enlazado al negocio
     const { data: gc } = await supabase
       .from('gestion_clientes')
-      .select('vigente_hasta')
+      .select('id')
       .eq('negocio_id', user.negocio_id)
       .maybeSingle();
-    vigente_hasta = gc?.vigente_hasta ?? null;
+    if (gc?.id) {
+      const { data: plan } = await supabase
+        .from('gestion_planes')
+        .select('fecha_fin')
+        .eq('cliente_id', gc.id)
+        .eq('estado', 'activo')
+        .maybeSingle();
+      vigente_hasta = plan?.fecha_fin ?? null;
+    }
   }
   res.json({ user: { ...user, negocio, vigente_hasta } });
 });
