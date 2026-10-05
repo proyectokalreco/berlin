@@ -1560,6 +1560,20 @@ arreglarla en `caja.controller.js` (incidente 22) quedaron copias viejas con `fe
 `mesas.controller.js` (incidente 25) y ahora en `gastos.controller.js`. Al corregir lógica de turno/fecha,
 `grep` `br_turnos_caja` en TODOS los controllers antes de dar el caso por cerrado.
 
+### 40. Widget de vigencia del plan en el header (2026-10-05, commits `34035bf`→`c641c01`→`b3353eb`, sin migración)
+
+Badge en `BerlinShell.tsx` (entre el indicador de red y `ComandasPanel`) con los días que quedan del plan y la
+fecha de vencimiento: verde >30 d, amarillo ≤30 d, rojo parpadeante "Vencido". **Solo `admin_berlin`**
+(oculto para `cajero`/`vendedor`/`mesero`/`panadero` y en demo). Hook `hooks/useBerlinVigencia.ts`: consulta
+`GET /auth/me` en un `useEffect` y lee `user.vigente_hasta`. Backend (`auth/routes.js`, `/me`): cliente en
+`gestion_clientes` por `negocio_id` → plan activo en `gestion_planes` → `fecha_fin` (hoy 2027-09-30).
+
+**Dos bugs al desplegar:** (1) el panel no vuelve a pedir `/me` tras el login, el usuario del store sale de la
+respuesta del login → el hook lo consulta; (2) `gestion_clientes` no tiene `vigente_hasta` (la fecha está en
+`gestion_planes.fecha_fin`), y el error de Supabase se tragaba en silencio → siempre `null`. Detalle en
+`kalreco/CLAUDE.md` (checkpoint 2026-10-05). Para probarlo hay que entrar como **admin** (un cajero no lo ve).
+**✅ Desplegado y confirmado por el usuario en producción (2026-10-05).**
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
