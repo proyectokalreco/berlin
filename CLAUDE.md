@@ -1574,6 +1574,28 @@ respuesta del login → el hook lo consulta; (2) `gestion_clientes` no tiene `vi
 `kalreco/CLAUDE.md` (checkpoint 2026-10-05). Para probarlo hay que entrar como **admin** (un cajero no lo ve).
 **✅ Desplegado y confirmado por el usuario en producción (2026-10-05).**
 
+### 41. Ticket de cierre corto + Reportes "Ventas por fecha" (2026-11-24, commits `0fc1656`→`3834061`, sin migración)
+
+**Pedido del cliente:** el cierre de caja (con el detalle por cajero y por producto) salía muy largo. Debe imprimir solo
+encabezado, ventas del turno, **despacho por área con total y responsable (sin productos)** y arqueo. El detalle completo
+se consulta en Reportes → Ventas del día, ahora con filtro por fechas.
+
+**Cambios:**
+- `CajaPage.tsx`: cierre final, cierre parcial y reimpresión del Historial salen idénticos y cortos. Se quitó
+  "Ventas por cajero"; "Despacho por área" quedó solo con total + responsable (helper `htmlDespachoPorArea`, con línea
+  "Redondeo y ajustes"). La reimpresión consulta `GET /berlin/caja/turnos/:id/desglose` solo para el despacho.
+  El panel en pantalla "Resultado del cierre" conserva el detalle por cajero.
+- `GET /berlin/reportes/ventas-detalle?desde&hasta` (`caja.controller.js → reporteVentasDetalle`, **solo admin**):
+  consulta **por turno** (turnos cuya fecha de apertura cae en el rango; ventas de apertura a cierre, así el horario
+  1pm–5am no se parte a medianoche). Devuelve transacciones, desglose por cajero y por área con productos.
+- `ReportesPage.tsx`: "Ventas del día" → modal con atajos (Hoy/Ayer/7 días/Este mes), Desde/Hasta, pestañas
+  Transacciones · Por cajero · Por área y productos, Excel de 3 hojas e "Imprimir resumen" 80mm. `reporteDia` ya no se usa
+  desde el panel (sigue en el backend).
+
+**Límite:** una venta fuera de todo turno no aparece en la consulta por fecha. Sin tocar dinero ni arqueo.
+**✅ Desplegado y confirmado por el usuario en producción (2026-11-24)** con el cierre del 23/11 (Bebidas y Barra — Luisa
+$317.000, Cocina — Isabela $297.500). Caso cerrado.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
