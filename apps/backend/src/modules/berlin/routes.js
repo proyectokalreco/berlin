@@ -180,6 +180,7 @@ router.get('/movimientos/libro-diario', movimientosCtrl.libroDiario);
 
 // ── REPORTES
 router.get('/reportes/ventas-dia',          ventasCtrl.reporteDia);
+router.get('/reportes/ventas-detalle',      cajaCtrl.reporteVentasDetalle);
 router.get('/reportes/ventas-dia-productos', ventasCtrl.reporteDiaProductos);
 router.get('/reportes/ventas-mes',       ventasCtrl.reporteMes);
 router.get('/reportes/productos-top',    productosCtrl.topProductos);

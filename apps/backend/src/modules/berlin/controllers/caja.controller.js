@@ -611,7 +611,98 @@ const desgloseEstacionesTurno = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET /berlin/reportes/ventas-detalle?desde=YYYY-MM-DD&hasta=YYYY-MM-DD   (solo administrador)
+// Consulta por TURNO: toma los turnos cuya fecha de apertura cae en el rango y, de cada uno, sus
+// ventas desde la apertura hasta el cierre (o hasta ahora si sigue abierto). Así un turno nocturno
+// (1pm–5am) no se parte en dos días. Devuelve transacciones, ventas por cajero y despacho por área
+// con productos — el detalle que ya no se imprime en el ticket de cierre.
+const reporteVentasDetalle = async (req, res, next) => {
+  try {
+    if (!esAdminRol(req.user.rol)) {
+      return res.status(403).json({ error: 'Solo el administrador puede ver este reporte' });
+    }
+    const hoy   = fechaColombia();
+    const desde = req.query.desde || hoy;
+    const hasta = req.query.hasta || desde;
+    if (desde > hasta) return res.status(400).json({ error: 'La fecha inicial es mayor que la final' });
+
+    const { data: turnos, error: eT } = await supabase
+      .from('br_turnos_caja')
+      .select('id, fecha, apertura_at, cierre_at, estado, monto_inicial, total_ventas, num_ventas, usuario_apertura:usuario_apertura_id(nombre)')
+      .gte('fecha', desde).lte('fecha', hasta)
+      .order('apertura_at', { ascending: true });
+    if (eT) throw eT;
+
+    const ventasMap = new Map();
+    const estMap    = new Map();
+    for (const t of turnos || []) {
+      const ini = t.apertura_at;
+      const fin = t.cierre_at || new Date().toISOString();
+      const { data: vs, error: eV } = await supabase
+        .from('br_ventas')
+        .select(`
+          id, numero_venta, fecha, total, metodo_pago, estado, saldo_pendiente, vendedor_id, origen,
+          cliente:cliente_id(id, nombre),
+          vendedor:vendedor_id(id, nombre),
+          items:br_venta_items(cantidad, precio_unitario, subtotal, producto:producto_id(nombre))
+        `)
+        .eq('estado', 'completada')
+        .gte('fecha', ini).lte('fecha', fin)
+        .order('fecha', { ascending: false });
+      if (eV) throw eV;
+      for (const v of vs || []) ventasMap.set(v.id, { ...v, turno_fecha: t.fecha });
+
+      // Despacho por área del turno, sumado al acumulado del rango
+      for (const e of await obtenerDesgloseEstaciones(ini, fin)) {
+        const acc = estMap.get(e.id) || { ...e, total: 0, pos: 0, mesa: 0, items: new Map() };
+        acc.total += e.total; acc.pos += e.pos; acc.mesa += e.mesa;
+        for (const it of e.items) {
+          const a = acc.items.get(it.nombre) || { nombre: it.nombre, cantidad: 0, valor: 0 };
+          a.cantidad += it.cantidad; a.valor += it.valor;
+          acc.items.set(it.nombre, a);
+        }
+        estMap.set(e.id, acc);
+      }
+    }
+
+    const ventas = Array.from(ventasMap.values());
+    const estaciones = Array.from(estMap.values())
+      .map(e => ({ ...e, items: Array.from(e.items.values()).sort((x, y) => y.valor - x.valor) }))
+      .sort((x, y) => y.total - x.total);
+
+    // Encargos / separes entregados y anticipos (movimientos contables), por fecha del rango
+    const { data: contables } = await supabase
+      .from('br_movimientos_contables')
+      .select('id, fecha, concepto, monto, categoria, created_at, registrado_por:usuarios(id, nombre)')
+      .gte('fecha', desde).lte('fecha', hasta)
+      .in('categoria', ['encargo_entregado', 'anticipo_encargo', 'separe_entregado', 'anticipo_separe']);
+    const extras = (contables || []).map(c => ({
+      id: c.id, numero_venta: c.concepto || c.categoria, fecha: c.created_at, total: c.monto,
+      metodo_pago: c.categoria.includes('separe') ? 'separe' : 'encargo', estado: 'completada',
+      saldo_pendiente: 0, cliente: null, vendedor: c.registrado_por, items: [],
+      _source: 'contable', _categoria: c.categoria,
+    }));
+
+    const transacciones = [...ventas, ...extras]
+      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+    res.json({
+      desde, hasta,
+      num_turnos: (turnos || []).length,
+      turnos: (turnos || []).map(t => ({
+        id: t.id, fecha: t.fecha, apertura_at: t.apertura_at, cierre_at: t.cierre_at,
+        estado: t.estado, cajero: t.usuario_apertura?.nombre ?? '',
+      })),
+      total_ventas: ventas.reduce((s, v) => s + parseFloat(v.total), 0),
+      num_ventas:   ventas.length,
+      transacciones,
+      desglose_vendedores: construirDesgloseVendedores(ventas),
+      desglose_estaciones: estaciones,
+    });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   turnoActivo, turnoPendiente, turnoNegocioActivo, obtenerCajaHoy, abrirCaja,
-  cerrarCaja, cerrarTurnoHistorico, historial, ventasTurno, desgloseEstacionesTurno, desgloseTurno,
+  cerrarCaja, cerrarTurnoHistorico, historial, ventasTurno, desgloseEstacionesTurno, desgloseTurno, reporteVentasDetalle,
 };

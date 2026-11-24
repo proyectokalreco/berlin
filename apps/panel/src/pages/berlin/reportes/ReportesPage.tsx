@@ -31,6 +31,24 @@ interface VentaDia {
   _categoria?: string
 }
 
+interface DesgloseVendedor {
+  vendedor_id: string | null; nombre: string; total: number; num_ventas: number
+  pos:  { total: number; num_ventas: number }
+  mesa: { total: number; num_ventas: number }
+}
+interface DesgloseArea {
+  id: string; nombre: string; total: number; pos: number; mesa: number
+  responsables?: string[]
+  items: { nombre: string; cantidad: number; valor: number }[]
+}
+interface DetalleVentas {
+  desde: string; hasta: string; num_turnos: number
+  total_ventas: number; num_ventas: number
+  transacciones: VentaDia[]
+  desglose_vendedores: DesgloseVendedor[]
+  desglose_estaciones: DesgloseArea[]
+}
+
 // ── Badge método de pago ───────────────────────────────────────
 const METODO_BADGE: Record<string, { label: string; cls: string }> = {
   efectivo:      { label: 'Efectivo',      cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
@@ -189,7 +207,36 @@ function PreviewModal({
 
 // ── Modal Ventas Día — transacciones individuales ─────────────
 type SortCol = 'ticket'|'monto'|'metodo'|'cliente'|'vendedor'
-function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () => void }) {
+const hoyCol = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+const sumarDias = (f: string, n: number) => {
+  const [y, m, d] = f.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().split('T')[0]
+}
+const fmtFecha = (f: string) => {
+  const [y, m, d] = f.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function ModalVentasDia({ onClose }: { onClose: () => void }) {
+  const [desde, setDesde] = useState(hoyCol())
+  const [hasta, setHasta] = useState(hoyCol())
+  const [tab, setTab] = useState<'trans' | 'cajero' | 'area'>('trans')
+  const rangoValido = !!desde && !!hasta && desde <= hasta
+
+  const { data: detalle, isLoading, isError } = useQuery<DetalleVentas>({
+    queryKey: ['rep-ventas-detalle', desde, hasta],
+    queryFn:  () => api.get('/berlin/reportes/ventas-detalle', { params: { desde, hasta } }).then(r => r.data),
+    enabled:  rangoValido,
+  })
+  const ventas = detalle?.transacciones ?? []
+  const etiquetaRango = desde === hasta ? fmtFecha(desde) : `${fmtFecha(desde)} – ${fmtFecha(hasta)}`
+  const hoy = hoyCol()
+  const atajos: [string, string, string][] = [
+    ['Hoy', hoy, hoy],
+    ['Ayer', sumarDias(hoy, -1), sumarDias(hoy, -1)],
+    ['7 días', sumarDias(hoy, -6), hoy],
+    ['Este mes', `${hoy.substring(0, 7)}-01`, hoy],
+  ]
   const totalVentas  = ventas.reduce((s, v) => s + v.total, 0)
   const totalCredito = ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + v.total, 0)
 
@@ -290,10 +337,60 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
       'Vendedor':  v.vendedor?.nombre ?? '—',
       'Saldo':     v.saldo_pendiente ?? 0,
     }))
-    const ws = XLSX.utils.json_to_sheet(datos)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Ventas del Día')
-    XLSX.writeFile(wb, `Ventas_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Transacciones')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((detalle?.desglose_vendedores ?? []).map(d => ({
+      Cajero: d.nombre, 'No. ventas': d.num_ventas, Total: d.total,
+      'POS ventas': d.pos.num_ventas, 'POS total': d.pos.total,
+      'Mesas ventas': d.mesa.num_ventas, 'Mesas total': d.mesa.total,
+    }))), 'Por cajero')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((detalle?.desglose_estaciones ?? []).flatMap(e =>
+      e.items.map(it => ({
+        Área: e.nombre, Responsable: (e.responsables ?? []).join(' / '),
+        Producto: it.nombre, Cantidad: it.cantidad, Valor: it.valor,
+      })))), 'Por área')
+    XLSX.writeFile(wb, `Ventas_${desde}_a_${hasta}.xlsx`)
+  }
+
+  // Resumen 80mm: totales por cajero y por área con productos (lo que ya no sale en el cierre)
+  const imprimirResumen = () => {
+    const origin = window.location.origin
+    const cajeros = (detalle?.desglose_vendedores ?? []).map(d => `
+<div class="row b"><span>${d.nombre} (${d.num_ventas})</span><span class="amt">${fmt(d.total)}</span></div>
+${d.pos.num_ventas > 0 ? `<div class="row"><span>&nbsp;&nbsp;POS (${d.pos.num_ventas})</span><span class="amt">${fmt(d.pos.total)}</span></div>` : ''}
+${d.mesa.num_ventas > 0 ? `<div class="row"><span>&nbsp;&nbsp;Mesas (${d.mesa.num_ventas})</span><span class="amt">${fmt(d.mesa.total)}</span></div>` : ''}`).join('')
+    const areas = (detalle?.desglose_estaciones ?? []).map(e => `
+<div class="row b" style="margin-top:5px;font-size:15px;text-transform:uppercase"><span>${e.nombre}${e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span><span class="amt">${fmt(e.total)}</span></div>
+${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nombre}</span><span class="amt">${fmt(it.valor)}</span></div>`).join('')}`).join('')
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Ventas ${desde} a ${hasta}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @page{margin:5mm;size:80mm auto}
+  body{font-family:Arial,sans-serif;font-weight:600;font-size:13px;color:#000}
+  .c{text-align:center}.b{font-weight:bold}
+  .sep{border-top:1px dashed #000;margin:5px 0}.sep2{border-top:2px solid #000;margin:5px 0}
+  .row{display:flex;justify-content:space-between;gap:6px;margin:2px 0}
+  .row>span:first-child{flex:1;min-width:0}
+  .amt{flex-shrink:0;text-align:right;white-space:nowrap;font-weight:700}
+  img.logo{display:block;margin:4px auto;max-width:60mm;height:auto;max-height:20mm}
+</style></head><body>
+<img class="logo" src="${origin}/logos/berlin.png" alt=""/>
+<div class="c b">*Café Bar Berlín*</div>
+<div class="sep2"></div>
+<div class="c b" style="font-size:14px">RESUMEN DE VENTAS</div>
+<div class="c">${etiquetaRango}</div>
+<div class="c">${detalle?.num_turnos ?? 0} turno(s) · ${ventas.length} transacciones</div>
+<div class="sep2"></div>
+<div class="row b"><span>Total ventas</span><span class="amt">${fmt(detalle?.total_ventas ?? 0)}</span></div>
+<div class="sep"></div>
+<p class="b">VENTAS POR CAJERO — POS / MESAS</p>${cajeros}
+<div class="sep"></div>
+<p class="b">DESPACHO POR AREA</p>${areas}
+<div class="sep"></div>
+<div class="c">Sistema Kalreco v1.0</div>
+</body></html>`
+    const w = window.open('', '_blank', 'width=440,height=760')
+    if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { w.print(); setTimeout(() => w.close(), 800) }, 400) }
   }
 
   return (
@@ -302,10 +399,10 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
           <div>
-            <h3 className="text-white font-bold">Ventas del Día</h3>
+            <h3 className="text-white font-bold">Ventas por fecha</h3>
             <p className="text-[11px] text-gray-500 mt-0.5">
-              {new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
-              {' · '}{ventas.length} transacciones · Total: {fmt(totalVentas)}
+              {etiquetaRango}
+              {' · '}{detalle?.num_turnos ?? 0} turno(s) · {ventas.length} transacciones · Total: {fmt(totalVentas)}
               {totalCredito > 0 && <span className="text-blue-400 ml-2">· Crédito: {fmt(totalCredito)}</span>}
             </p>
           </div>
@@ -315,12 +412,82 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
           </button>
         </div>
 
-        {/* Tabla transacciones */}
+        {/* Rango de fechas — filtra por la fecha de APERTURA del turno */}
+        <div className="px-5 py-3 border-b border-white/10 flex flex-wrap items-center gap-2 flex-shrink-0">
+          {atajos.map(([lbl, d, h]) => (
+            <button key={lbl} onClick={() => { setDesde(d); setHasta(h) }}
+              className={`text-xs px-3 py-1.5 rounded-lg border min-h-[34px] ${desde === d && hasta === h
+                ? 'bg-brand-teal/20 border-brand-teal/40 text-brand-teal'
+                : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'}`}>{lbl}</button>
+          ))}
+          <label className="text-[11px] text-gray-500 ml-1">Desde
+            <input type="date" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)}
+              className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white [color-scheme:dark]"/>
+          </label>
+          <label className="text-[11px] text-gray-500">Hasta
+            <input type="date" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)}
+              className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white [color-scheme:dark]"/>
+          </label>
+        </div>
+        <div className="px-5 pt-2 flex gap-1 border-b border-white/10 flex-shrink-0">
+          {([['trans', 'Transacciones'], ['cajero', 'Por cajero'], ['area', 'Por área y productos']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)}
+              className={`px-4 py-2 text-xs font-semibold rounded-t-lg border-b-2 ${tab === k
+                ? 'text-brand-teal border-brand-teal' : 'text-gray-500 border-transparent hover:text-white'}`}>{l}</button>
+          ))}
+        </div>
+
+        {!rangoValido ? (
+          <div className="flex-1 flex items-center justify-center py-16 text-sm text-gray-500">Elige un rango de fechas válido (Desde ≤ Hasta)</div>
+        ) : isLoading ? (
+          <div className="flex-1 flex items-center justify-center py-16 text-sm text-gray-500">Cargando…</div>
+        ) : isError ? (
+          <div className="flex-1 flex items-center justify-center py-16 text-sm text-red-400">No se pudo cargar el reporte</div>
+        ) : tab === 'cajero' ? (
+          <div className="flex-1 overflow-auto p-4 space-y-2">
+            {(detalle?.desglose_vendedores ?? []).length === 0 && <p className="text-sm text-gray-600 text-center py-12">Sin ventas en este rango</p>}
+            {(detalle?.desglose_vendedores ?? []).map(d => (
+              <div key={d.vendedor_id ?? 'sin'} className="bg-brand-dark rounded-xl p-3 border border-white/5">
+                <div className="flex justify-between font-bold text-sm">
+                  <span className="text-white">{d.nombre} <span className="text-gray-500 font-normal">({d.num_ventas})</span></span>
+                  <span className="text-brand-teal font-mono">{fmt(d.total)}</span>
+                </div>
+                {d.pos.num_ventas > 0 && <div className="flex justify-between text-xs pl-2 mt-1"><span className="text-gray-500">POS ({d.pos.num_ventas})</span><span className="text-gray-300 font-mono">{fmt(d.pos.total)}</span></div>}
+                {d.mesa.num_ventas > 0 && <div className="flex justify-between text-xs pl-2"><span className="text-gray-500">Mesas ({d.mesa.num_ventas})</span><span className="text-gray-300 font-mono">{fmt(d.mesa.total)}</span></div>}
+              </div>
+            ))}
+          </div>
+        ) : tab === 'area' ? (
+          <div className="flex-1 overflow-auto p-4 space-y-3">
+            {(detalle?.desglose_estaciones ?? []).length === 0 && <p className="text-sm text-gray-600 text-center py-12">Sin ventas en este rango</p>}
+            {(detalle?.desglose_estaciones ?? []).map(e => (
+              <div key={e.id} className="bg-brand-dark rounded-xl p-3 border border-white/5">
+                <div className="flex justify-between font-bold text-sm uppercase">
+                  <span className="text-white">{e.nombre}{e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span>
+                  <span className="text-brand-teal font-mono">{fmt(e.total)}</span>
+                </div>
+                <div className="mt-1 divide-y divide-white/5">
+                  {e.items.map(it => (
+                    <div key={it.nombre} className="flex justify-between text-xs py-1 pl-2">
+                      <span className="text-gray-300">{it.cantidad}x {it.nombre}</span>
+                      <span className="text-gray-400 font-mono">{fmt(it.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {(() => {
+              const aj = (detalle?.total_ventas ?? 0) - (detalle?.desglose_estaciones ?? []).reduce((s, e) => s + e.total, 0)
+              return Math.abs(aj) >= 1 ? <p className="text-[11px] text-gray-500 text-right">Redondeo y ajustes: {aj < 0 ? '-' : ''}{fmt(Math.abs(aj))}</p> : null
+            })()}
+          </div>
+        ) : (
+        /* Tabla transacciones */
         <div className="flex-1 overflow-auto">
           {ventas.length === 0 ? (
             <div className="flex flex-col items-center py-16 gap-3 text-gray-600">
               <ShoppingCart size={36} className="opacity-20"/>
-              <p className="text-sm">Sin ventas registradas hoy</p>
+              <p className="text-sm">Sin ventas registradas en este rango</p>
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -435,6 +602,7 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
             </table>
           )}
         </div>
+        )}
 
         {/* Acciones */}
         <div className="px-5 pb-5 pt-3 border-t border-white/10 flex gap-3 flex-shrink-0 flex-wrap">
@@ -442,6 +610,11 @@ function ModalVentasDia({ ventas, onClose }: { ventas: VentaDia[]; onClose: () =
             className="flex items-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-400
                        border border-green-500/30 px-4 py-2.5 rounded-xl text-sm font-medium min-h-[44px] transition-colors">
             <FileSpreadsheet size={15}/> Exportar Excel
+          </button>
+          <button onClick={imprimirResumen}
+            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400
+                       border border-red-500/30 px-4 py-2.5 rounded-xl text-sm font-medium min-h-[44px] transition-colors">
+            <Printer size={15}/> Imprimir resumen
           </button>
           <button onClick={onClose}
             className="ml-auto px-4 py-2.5 rounded-xl border border-white/10 text-gray-400 text-sm hover:bg-white/5 min-h-[44px]">
@@ -464,11 +637,6 @@ export default function ReportesPage() {
   const hoy  = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const mes  = hoy.substring(0,7)
   const mes1 = `${mes}-01`
-
-  const { data: ventasDia = [] } = useQuery<VentaDia[]>({
-    queryKey: ['rep-ventas-dia', hoy],
-    queryFn:  () => api.get('/berlin/reportes/ventas-dia', { params: { fecha: hoy } }).then(r => r.data).catch(fallbackSiNoRed([])),
-  })
 
   const { data: topProd = [] } = useQuery<{nombre:string;cantidad:number;total:number}[]>({
     queryKey: ['rep-top'],
@@ -509,7 +677,7 @@ export default function ReportesPage() {
   const REPORTES = [
     {
       label: 'Ventas del día',
-      sub:   'Transacciones individuales — ticket, monto, método, cliente',
+      sub:   'Consulta por día o rango · transacciones, por cajero y por área con productos',
       icon:  FileText, color: '#10B981',
       abrir: () => setShowVentasDia(true),
     },
@@ -726,7 +894,7 @@ export default function ReportesPage() {
 
       {/* Modal ventas día — transacciones individuales */}
       {showVentasDia && (
-        <ModalVentasDia ventas={ventasDia} onClose={() => setShowVentasDia(false)} />
+        <ModalVentasDia onClose={() => setShowVentasDia(false)} />
       )}
 
       {/* Modal previa genérico */}
