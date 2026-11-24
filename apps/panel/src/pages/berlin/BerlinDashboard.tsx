@@ -441,7 +441,7 @@ export default function BerlinDashboard() {
 
   // ── Ventas y caja ──────────────────────────────────────────
   const { data: ventasRes } = useQuery<{
-    total_ventas: number; num_ventas: number; ticket_promedio: number
+    total_ventas: number; num_ventas: number; ticket_promedio: number; cobrado?: number; credito?: number
   }>({
     queryKey: ['ventas-resumen-hoy'],
     queryFn:  () => {
@@ -502,6 +502,9 @@ export default function BerlinDashboard() {
         }`}>
           {mostrarKpiVentas && (
             <KpiCard icon={TrendingUp}  iconColor={FUCHSIA}    label="Ventas del día"  value={fmt(ventasRes?.total_ventas ?? 0)} />
+          )}
+          {mostrarKpiVentas && (ventasRes?.credito ?? 0) > 0 && (
+            <KpiCard icon={Banknote}    iconColor="#D99439"    label="Cobrado hoy (sin crédito)" value={fmt(ventasRes?.cobrado ?? 0)} />
           )}
           {mostrarKpiVentas && (
             <KpiCard icon={CheckCircle} iconColor="#4ADE80"    label="Transacciones"   value={ventasRes?.num_ventas ?? 0} />

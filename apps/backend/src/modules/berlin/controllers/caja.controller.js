@@ -119,6 +119,20 @@ const gastosEfectivoDeTurno = async (turnoId) => {
     .reduce((s, g) => s + parseFloat(g.monto), 0);
 };
 
+// Abonos a crédito recibidos en EFECTIVO dentro del rango: entran al cajón, así que suman al
+// efectivo esperado del turno en que se recibieron (2026-11-24). br_abonos.created_at es TIMESTAMPTZ.
+const abonosEfectivoEnRango = async (desde, hasta) => {
+  const { data, error } = await supabase
+    .from('br_abonos')
+    .select('monto, metodo_pago')
+    .gte('created_at', desde)
+    .lte('created_at', hasta);
+  if (error) throw error;
+  return (data || [])
+    .filter(a => !a.metodo_pago || a.metodo_pago === 'efectivo')
+    .reduce((s, a) => s + parseFloat(a.monto), 0);
+};
+
 const obtenerTurnoAbierto = async (select) => {
   const { data, error } = await supabase
     .from('br_turnos_caja')
@@ -309,7 +323,8 @@ const cerrarCaja = async (req, res, next) => {
     const totalGastos = await gastosEfectivoDeTurno(turno.id);
 
     const montoFinal = parseFloat(monto_final_real) || 0;
-    const efectivoEsperado = parseFloat(turno.monto_inicial) + totalEfectivo - totalGastos;
+    const abonosEfectivo = await abonosEfectivoEnRango(desde, hasta);
+    const efectivoEsperado = parseFloat(turno.monto_inicial) + totalEfectivo + abonosEfectivo - totalGastos;
     const diferencia = montoFinal - efectivoEsperado;
 
     const { data: turnoCerrado, error } = await supabase
@@ -349,7 +364,7 @@ const cerrarCaja = async (req, res, next) => {
 
     const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta)
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_vendedores: desglosePorVendedor, desglose_estaciones });
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, abonos_efectivo: abonosEfectivo, desglose_vendedores: desglosePorVendedor, desglose_estaciones });
   } catch (err) { next(err); }
 };
 
@@ -412,7 +427,8 @@ const cerrarTurnoHistorico = async (req, res, next) => {
     const totalGastos = await gastosEfectivoDeTurno(turno.id);
 
     const montoFinal        = parseFloat(monto_final_real) || 0;
-    const efectivoEsperado  = parseFloat(turno.monto_inicial) + totalEfectivo - totalGastos;
+    const abonosEfectivo    = await abonosEfectivoEnRango(desde, hasta);
+    const efectivoEsperado  = parseFloat(turno.monto_inicial) + totalEfectivo + abonosEfectivo - totalGastos;
     const diferencia        = montoFinal - efectivoEsperado;
 
     const { data: turnoCerrado, error } = await supabase
@@ -453,7 +469,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
     const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta);
     const desglose_vendedores = construirDesgloseVendedores(ventas);
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, desglose_estaciones, desglose_vendedores });
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, abonos_efectivo: abonosEfectivo, desglose_estaciones, desglose_vendedores });
   } catch (err) { next(err); }
 };
 
@@ -503,6 +519,7 @@ const ventasTurno = async (req, res, next) => {
       return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, gastos_efectivo: 0, ticket_promedio: 0, desglose_vendedores: [] });
     }
     const gastosEfectivo = await gastosEfectivoDeTurno(turno.id);
+    const abonosEfectivo = await abonosEfectivoEnRango(turno.apertura_at, new Date().toISOString());
 
     const { data } = await supabase
       .from('br_ventas')
@@ -526,6 +543,7 @@ const ventasTurno = async (req, res, next) => {
       transferencias,
       credito:        ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
       gastos_efectivo: gastosEfectivo,
+      abonos_efectivo: abonosEfectivo,
       ticket_promedio: ventas.length > 0 ? totalVentas / ventas.length : 0,
       desglose_vendedores: construirDesgloseVendedores(ventas),
     });
@@ -593,6 +611,7 @@ const desgloseTurno = async (req, res, next) => {
       num_reconstruido:     usado.ventas.length,
       desglose_vendedores:  construirDesgloseVendedores(usado.ventas),
       desglose_estaciones:  await obtenerDesgloseEstaciones(usado.desde, usado.hasta),
+      abonos_efectivo:      await abonosEfectivoEnRango(usado.desde, usado.hasta),
     });
   } catch (err) { next(err); }
 };

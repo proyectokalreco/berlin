@@ -44,6 +44,7 @@ interface TurnoCaja {
   usuario_cierre?: { id: string; nombre: string }
   desglose_vendedores?: DesgloseVendedor[]
   desglose_estaciones?: DesgloseArea[]
+  abonos_efectivo?: number     // abonos a crédito recibidos en efectivo durante el turno (suman al arqueo)
   // Reimpresión de un cierre histórico cuyo detalle no cuadra con lo guardado al cerrarlo (ver reimprimirCierreHistorico)
   nota_reconstruccion?: string
 }
@@ -81,7 +82,7 @@ async function reimprimirCierreHistorico(t: TurnoCaja) {
   const cajero = t.usuario_cierre?.nombre ?? ''
   try {
     const { data } = await api.get(`/berlin/caja/turnos/${t.id}/desglose`)
-    imprimirCierre({ ...t, desglose_estaciones: data.desglose_estaciones }, cajero)
+    imprimirCierre({ ...t, desglose_estaciones: data.desglose_estaciones, abonos_efectivo: data.abonos_efectivo }, cajero)
   } catch {
     toast.error('No se pudo calcular el despacho por área; se imprime el cierre sin él')
     imprimirCierre(t, cajero)
@@ -97,7 +98,7 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
   const horaApertura = new Date(turno.apertura_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
   const horaCierre   = turno.cierre_at ? new Date(turno.cierre_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '—'
 
-  const efectivoEsperado = turno.monto_inicial + turno.total_ventas_efectivo - turno.total_gastos
+  const efectivoEsperado = turno.monto_inicial + turno.total_ventas_efectivo + (turno.abonos_efectivo ?? 0) - turno.total_gastos
   const diferencia = (turno.monto_final_real ?? 0) - efectivoEsperado
 
   const html = `<!DOCTYPE html>
@@ -154,6 +155,7 @@ ${htmlDespachoPorArea(turno.desglose_estaciones, turno.total_ventas)}
 <p class="b sm" style="margin-bottom:3px">ARQUEO DE CAJA</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turno.monto_inicial)}</span></div>
 <div class="row"><span>+ Ventas efectivo:</span><span class="amt">${fmt(turno.total_ventas_efectivo)}</span></div>
+${(turno.abonos_efectivo ?? 0) > 0 ? `<div class="row"><span>+ Abonos crédito (efectivo):</span><span class="amt">${fmt(turno.abonos_efectivo ?? 0)}</span></div>` : ''}
 <div class="row"><span>- Gastos pagados:</span><span class="amt">${fmt(turno.total_gastos)}</span></div>
 <div class="sep"></div>
 <div class="row b"><span>Efectivo esperado:</span><span class="amt">${fmt(efectivoEsperado)}</span></div>
@@ -228,7 +230,7 @@ export default function CajaPage() {
   // ── Ventas de hoy — caja compartida, todo el negocio (un solo turno por día)
   const { data: ventasTurno } = useQuery<{
     total_ventas: number; num_ventas: number; efectivo: number;
-    transferencias: number; credito: number; gastos_efectivo?: number; ticket_promedio: number
+    transferencias: number; credito: number; gastos_efectivo?: number; abonos_efectivo?: number; ticket_promedio: number
     desglose_vendedores?: DesgloseVendedor[]
   }>({
     queryKey: ['ventas-turno-actual'],
@@ -343,7 +345,7 @@ export default function CajaPage() {
   // = base + ventas en efectivo − gastos pagados en efectivo (los gastos salen del cajón)
   const gastosEfectivoVivo = ventasTurno?.gastos_efectivo ?? 0
   const efectivoEsperadoVivo =
-    (turnoActivo?.monto_inicial ?? 0) + (ventasTurno?.efectivo ?? 0) - gastosEfectivoVivo
+    (turnoActivo?.monto_inicial ?? 0) + (ventasTurno?.efectivo ?? 0) + (ventasTurno?.abonos_efectivo ?? 0) - gastosEfectivoVivo
 
   // ── Cierre parcial: tiquete informativo, la caja NO se cierra ──
   const imprimirParcial = () => {
@@ -396,6 +398,7 @@ ${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
 <p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
 <div class="row"><span>+ Ventas efectivo:</span><span class="amt">${fmt(t?.efectivo ?? 0)}</span></div>
+${(ventasTurno?.abonos_efectivo ?? 0) > 0 ? `<div class="row"><span>+ Abonos crédito (efectivo):</span><span class="amt">${fmt(ventasTurno?.abonos_efectivo ?? 0)}</span></div>` : ''}
 <div class="row"><span>- Gastos pagados:</span><span class="amt">${fmt(gastosEfectivoVivo)}</span></div>
 <div class="row b"><span>Efectivo esperado:</span><span class="amt">${fmt(efectivoEsperadoVivo)}</span></div>
 ${contado > 0 ? `<div class="row"><span>Efectivo contado:</span><span class="amt">${fmt(contado)}</span></div>` : ''}
@@ -805,6 +808,12 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                   <span className="text-gray-400">+ Ventas efectivo:</span>
                   <span className="text-green-400 font-mono">{fmt(ventasTurno?.efectivo ?? 0)}</span>
                 </div>
+                {(ventasTurno?.abonos_efectivo ?? 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">+ Abonos crédito (efectivo):</span>
+                    <span className="text-green-400 font-mono">{fmt(ventasTurno?.abonos_efectivo ?? 0)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">− Gastos pagados:</span>
                   <span className="text-red-400 font-mono">{fmt(gastosEfectivoVivo)}</span>

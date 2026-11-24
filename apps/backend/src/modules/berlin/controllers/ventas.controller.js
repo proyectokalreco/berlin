@@ -295,8 +295,16 @@ const resumenDia = async (req, res, next) => {
 
     const completadas = (data || []).filter(v => v.estado === 'completada');
     const totalVentas = completadas.reduce((s, v) => s + parseFloat(v.total), 0);
+    const totalCredito = completadas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0);
+    // Abonos/pagos de crédito recibidos ese día (cualquier método): es lo que entra a la
+    // contabilidad por crédito. Cobrado = lo vendido de contado + abonos (el crédito aún no cuenta).
+    const { data: abonosDia } = await supabase
+      .from('br_abonos').select('monto').gte('created_at', desde).lte('created_at', hasta);
+    const abonos = (abonosDia || []).reduce((s, a) => s + parseFloat(a.monto), 0);
     const resumen = {
       total_ventas:       totalVentas,
+      abonos,
+      cobrado:            totalVentas - totalCredito + abonos,
       num_ventas:         completadas.length,
       efectivo:           completadas.filter(v => v.metodo_pago === 'efectivo').reduce((s, v) => s + parseFloat(v.total), 0)
                             + completadas.filter(v => v.metodo_pago === 'mixto').reduce((s, v) => s + (parseFloat(v.monto_efectivo) || 0), 0),

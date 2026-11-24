@@ -16,6 +16,11 @@ const { fechaColombia, rangoDiaColombia } = require('../../../utils/fecha');
 const EXCLUIR_KPI = ['apertura_caja', 'cierre_caja', 'anulacion_venta', 'produccion', 'venta_mesa'];
 const CAT_COMPRAS = ['compra_proveedor'];
 
+// Ingreso realmente cobrado: excluye ventas a crédito (aún no pagadas).
+function esIngresoCobrado(m) {
+  return m.tipo === 'ingreso' && m.metodo_pago !== 'credito';
+}
+
 function esElectronico(metodoPago) {
   return metodoPago === 'transferencia' || (metodoPago || '').includes('qr') || metodoPago === 'pago_electronico';
 }
@@ -92,13 +97,13 @@ async function calcularPosicionHasta(hastaFechaCol) {
   const hastaUTC = hastaFechaCol ? rangoDiaColombia(hastaFechaCol).hasta : null;
   const todos = await obtenerMovimientosUnificados(null, hastaUTC);
 
-  // El abono a una venta a crédito NO es ingreso nuevo: la venta ya se contó como ingreso
-  // (categoria='venta') el día que se hizo. Contar también el abono duplicaría esa venta en
-  // Ingresos/Gran Bolsa e inflaría para siempre el bolsillo CxC (nunca bajaba al pagarse).
+  // Criterio de caja (2026-11-24, reemplaza el del incidente 36): la venta a crédito NO es
+  // ingreso el día que se hace (solo mueve inventario y CxC). El ingreso real es el abono /
+  // pago, el día que se recibe y con su método real.
   const abonoCredito = todos.filter(m => m.tipo === 'ingreso' && m.categoria === 'abono_credito')
     .reduce((s, m) => s + parseFloat(m.monto), 0);
 
-  const ingresos = todos.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto), 0) - abonoCredito;
+  const ingresos = todos.filter(esIngresoCobrado).reduce((s, m) => s + parseFloat(m.monto), 0);
   const compras  = todos.filter(m => CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
   const gastos   = todos.filter(m => m.tipo === 'egreso' && !CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
   const saldo    = siTotal + ingresos - compras - gastos;
@@ -169,7 +174,7 @@ const libroDiario = async (req, res, next) => {
       const previos = await obtenerMovimientosUnificados(null, null, desdeUTC);
       previos.forEach(m => {
         const monto = parseFloat(m.monto);
-        if (m.tipo === 'ingreso') saldoBase += monto;
+        if (m.tipo === 'ingreso') { if (m.metodo_pago !== 'credito') saldoBase += monto; }
         else saldoBase -= monto;
       });
     }
@@ -181,11 +186,13 @@ const libroDiario = async (req, res, next) => {
     const filas = filasRaw.slice(0, 2000).map(m => {
       const monto = parseFloat(m.monto);
       const esCompra = CAT_COMPRAS.includes(m.categoria);
-      const ingreso  = m.tipo === 'ingreso' ? monto : 0;
+      // Venta a crédito: fila informativa, no suma al saldo hasta que se abone/pague.
+      const esCredito = m.tipo === 'ingreso' && m.metodo_pago === 'credito';
+      const ingreso  = m.tipo === 'ingreso' && !esCredito ? monto : 0;
       const egreso   = m.tipo === 'egreso' && !esCompra ? monto : 0;
       const compra   = esCompra ? monto : 0;
       saldoAcum += ingreso - egreso - compra;
-      return { ...m, ingreso, egreso, compra, saldo: saldoAcum };
+      return { ...m, ingreso, egreso, compra, saldo: saldoAcum, es_credito: esCredito };
     });
 
     res.json({ saldo_base: saldoBase, filas });
@@ -245,21 +252,22 @@ const resumen = async (req, res, next) => {
     const hastaUTC = rangoDiaColombia(hasta).hasta
     const movs = await obtenerMovimientosUnificados(desdeUTC, hastaUTC);
 
-    // Mismo criterio que calcularPosicionHasta(): el abono a una venta a crédito no es
-    // ingreso nuevo, ya se contó como venta el día que se hizo.
-    const abonoCredito = movs.filter(m => m.tipo === 'ingreso' && m.categoria === 'abono_credito')
+    // Mismo criterio que calcularPosicionHasta(): ingreso = lo cobrado (ventas de contado +
+    // abonos). La venta a crédito se informa aparte en credito_vendido.
+    const creditoVendido = movs.filter(m => m.tipo === 'ingreso' && m.metodo_pago === 'credito')
       .reduce((s, m) => s + parseFloat(m.monto), 0);
-    const ingresos = movs.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto), 0) - abonoCredito;
+    const ingresos = movs.filter(esIngresoCobrado).reduce((s, m) => s + parseFloat(m.monto), 0);
     const compras  = movs.filter(m => CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
     const gastos   = movs.filter(m => m.tipo === 'egreso' && !CAT_COMPRAS.includes(m.categoria)).reduce((s, m) => s + parseFloat(m.monto), 0);
     const egresos  = gastos + compras;
 
     const porCategoria = {};
     movs.forEach(m => {
+      if (m.tipo === 'ingreso' && m.metodo_pago === 'credito') return;
       if (!porCategoria[m.categoria]) porCategoria[m.categoria] = { ingreso: 0, egreso: 0 };
       porCategoria[m.categoria][m.tipo] += parseFloat(m.monto);
     });
-    res.json({ ingresos, gastos, compras, egresos, utilidad: ingresos - egresos, porCategoria, periodo, desde, hasta });
+    res.json({ ingresos, gastos, compras, egresos, utilidad: ingresos - egresos, credito_vendido: creditoVendido, porCategoria, periodo, desde, hasta });
   } catch (err) { next(err); }
 };
 

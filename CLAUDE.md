@@ -1596,6 +1596,21 @@ se consulta en Reportes → Ventas del día, ahora con filtro por fechas.
 **✅ Desplegado y confirmado por el usuario en producción (2026-11-24)** con el cierre del 23/11 (Bebidas y Barra — Luisa
 $317.000, Cocina — Isabela $297.500). Caso cerrado.
 
+### Incidente 42 — Crédito: inventario al vender, dinero al cobrar (2026-11-24)
+**Pedido:** una venta a crédito (POS o Mesas) descuenta inventario al instante (ya lo hacía), pero el dinero solo
+entra a la contabilidad el día que se abona/paga. **Revierte el criterio del incidente 36** (venta a crédito = ingreso).
+
+**Cambios (sin migración):**
+- `movimientos.controller.js`: Ingresos / Gran Bolsa / Utilidad / Libro Diario cuentan solo lo cobrado (contado +
+  abonos con su método real). La venta a crédito no suma; sale como fila informativa (`es_credito`) y en `credito_vendido`
+  del resumen. CxC = ventas a crédito − abonos (sin cambio). Se corrigió el doble conteo venta+abono del `libroDiario`.
+  Se recalcula todo el historial con la regla nueva (aprobado).
+- `caja.controller.js`: `abonosEfectivoEnRango` suma los abonos en efectivo recibidos durante el turno al **efectivo
+  esperado** (cierre, cierre histórico, ventas-turno, desglose). `total_ventas` del cierre sigue incluyendo crédito.
+- `ventas.controller.js → resumenDia`: agrega `abonos` y `cobrado`; Dashboard muestra "Cobrado hoy (sin crédito)" si hay crédito.
+- Ticket de cierre y pantalla de caja muestran la línea "+ Abonos crédito (efectivo)" cuando existe.
+**Pendiente conocido:** el abono no valida tope contra el saldo; "Registrar deuda" sigue creando una fila `DM-` a crédito.
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
