@@ -1609,7 +1609,12 @@ entra a la contabilidad el día que se abona/paga. **Revierte el criterio del in
   esperado** (cierre, cierre histórico, ventas-turno, desglose). `total_ventas` del cierre sigue incluyendo crédito.
 - `ventas.controller.js → resumenDia`: agrega `abonos` y `cobrado`; Dashboard muestra "Cobrado hoy (sin crédito)" si hay crédito.
 - Ticket de cierre y pantalla de caja muestran la línea "+ Abonos crédito (efectivo)" cuando existe.
-**Pendiente conocido:** el abono no valida tope contra el saldo; "Registrar deuda" sigue creando una fila `DM-` a crédito.
+**Pendiente conocido:** el abono no valida tope contra el saldo; "Registrar deuda" sigue creando una fila `DM-` a crédito
+(ambos requieren OK del usuario antes de tocarse). Tampoco hay aviso si falla el descuento de stock al vender.
+**Estado:** commit `6fec946` ✅ DESPLEGADO (2026-11-24). ⏳ Falta la prueba con venta a crédito + abono reales (venta $12.000
+a crédito → stock baja, Ingresos no se mueven, CxC +$12.000; abono $5.000 efectivo → Ingresos/Efectivo +$5.000, CxC $7.000,
+efectivo esperado del turno +$5.000). No dar por cerrado hasta que el usuario lo confirme.
+Doc: `docs/CAMBIOS_2026-11-24.md`.
 
 ### Incidente 43 — Reportes e Informes: fechas en todos los reportes (2026-11-24)
 **Pedido:** la consulta por día/rango debe estar en todas las opciones de Reportes e Informes, no solo en Ventas.
@@ -1625,6 +1630,8 @@ entra a la contabilidad el día que se abona/paga. **Revierte el criterio del in
 - Antes `productos-top` devolvía `{producto,total_unidades,total_ventas}` y el panel leía `nombre/cantidad/total` (no coincidían).
 **Límites:** el consumo de insumos por planilla/productos sin control de stock no se guarda con fecha → no sale como salida
 de insumos; las entradas por producción de Mojes (`validar_moje`) no se incluyen. Permisos: sin cambios (solo Ventas del día es admin).
+**✅ Desplegado (`902bcfa`) y confirmado por el usuario en pantalla (2026-11-24):** barra de fechas y los 9 reportes visibles; los
+KPIs del 23/11 cargaron (Ingresos cobrados $614.500, Egresos $169.800, Utilidad $444.700). Doc: `docs/CAMBIOS_2026-11-24.md`.
 
 ## 📄 Documentación relacionada
 
