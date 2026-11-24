@@ -62,6 +62,32 @@ interface DesgloseVendedor {
   mesa: { total: number; num_ventas: number }
 }
 
+// Despacho por área: SOLO total por área y su responsable (sin detalle de productos).
+// El detalle por producto/cajero se consulta en Reportes → Ventas del día.
+function htmlDespachoPorArea(lista: DesgloseArea[] | undefined, totalVentas: number): string {
+  if (!lista || lista.length === 0) return ''
+  const ajuste = totalVentas - lista.reduce((s, e) => s + e.total, 0)
+  return `
+<div class="sep"></div>
+<p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS Y POS</p>
+${lista.map(e => `<div class="row b" style="margin-top:4px;font-size:15px;text-transform:uppercase"><span>${e.nombre}${e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span><span class="amt" style="font-size:15px">${fmt(e.total)}</span></div>`).join('')}
+${Math.abs(ajuste) >= 1 ? `<div class="row sm" style="margin-top:3px"><span>Redondeo y ajustes</span><span class="amt">${ajuste >= 0 ? '' : '-'}${fmt(Math.abs(ajuste))}</span></div>` : ''}
+`
+}
+
+// Reimpresión de un cierre del Historial: pide al servidor el despacho por área del turno
+// (no se guarda al cerrar) y lo imprime con el mismo formato del cierre.
+async function reimprimirCierreHistorico(t: TurnoCaja) {
+  const cajero = t.usuario_cierre?.nombre ?? ''
+  try {
+    const { data } = await api.get(`/berlin/caja/turnos/${t.id}/desglose`)
+    imprimirCierre({ ...t, desglose_estaciones: data.desglose_estaciones }, cajero)
+  } catch {
+    toast.error('No se pudo calcular el despacho por área; se imprime el cierre sin él')
+    imprimirCierre(t, cajero)
+  }
+}
+
 // ── Imprimir reporte de cierre de caja ───────────────────────────
 function imprimirCierre(turno: TurnoCaja, cajero: string) {
   const origin = window.location.origin
@@ -122,6 +148,7 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(turno.total_ventas_transferencia)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(turno.total_credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${turno.num_ventas}</span></div>
+${htmlDespachoPorArea(turno.desglose_estaciones, turno.total_ventas)}
 
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO DE CAJA</p>
@@ -206,6 +233,14 @@ export default function CajaPage() {
   }>({
     queryKey: ['ventas-turno-actual'],
     queryFn:  () => api.get('/berlin/caja/ventas-turno').then(r => r.data),
+    refetchInterval: 30_000,
+    enabled: !!turnoActivo,
+  })
+
+  // ── Despacho por área del turno en curso — para el cierre parcial
+  const { data: estacionesTurno = [] } = useQuery<NonNullable<TurnoCaja['desglose_estaciones']>>({
+    queryKey: ['desglose-estaciones-turno'],
+    queryFn:  () => api.get('/berlin/caja/desglose-estaciones').then(r => r.data),
     refetchInterval: 30_000,
     enabled: !!turnoActivo,
   })
@@ -355,6 +390,8 @@ export default function CajaPage() {
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(t?.transferencias ?? 0)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(t?.credito ?? 0)}</span></div>
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${t?.num_ventas ?? 0}</span></div>
+<div class="sep"></div>
+${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
@@ -697,7 +734,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                     <td className="px-3 py-3 text-center">
                       {t.estado === 'cerrado' ? (
                         <button
-                          onClick={() => imprimirCierre(t, t.usuario_cierre?.nombre ?? '')}
+                          onClick={() => { void reimprimirCierreHistorico(t) }}
                           className="text-gray-500 hover:text-brand-teal transition-colors p-1"
                           title="Imprimir reporte"
                         >
