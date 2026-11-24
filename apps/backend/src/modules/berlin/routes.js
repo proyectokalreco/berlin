@@ -8,6 +8,7 @@ const ventasCtrl     = require('./controllers/ventas.controller');
 const pedidosCtrl    = require('./controllers/pedidos.controller');
 const produccionCtrl = require('./controllers/produccion.controller');
 const cajaCtrl        = require('./controllers/caja.controller');
+const reportesRangoCtrl = require('./controllers/reportes-rango.controller');
 const domiciliosCtrl  = require('./controllers/domicilios.controller');
 const clientesCtrl    = require('./controllers/clientes.controller');
 const mojsCtrl        = require('./controllers/mojes.controller');
@@ -184,6 +185,8 @@ router.get('/reportes/ventas-detalle',      cajaCtrl.reporteVentasDetalle);
 router.get('/reportes/ventas-dia-productos', ventasCtrl.reporteDiaProductos);
 router.get('/reportes/ventas-mes',       ventasCtrl.reporteMes);
 router.get('/reportes/productos-top',    productosCtrl.topProductos);
+router.get('/reportes/productos-vendidos',     reportesRangoCtrl.productosVendidos);
+router.get('/reportes/movimiento-inventario',  reportesRangoCtrl.movimientoInventario);
 router.get('/reportes/rentabilidad',     productosCtrl.rentabilidad);
 router.get('/reportes/mermas',           produccionCtrl.reporteMermas);
 

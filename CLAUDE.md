@@ -1611,6 +1611,21 @@ entra a la contabilidad el día que se abona/paga. **Revierte el criterio del in
 - Ticket de cierre y pantalla de caja muestran la línea "+ Abonos crédito (efectivo)" cuando existe.
 **Pendiente conocido:** el abono no valida tope contra el saldo; "Registrar deuda" sigue creando una fila `DM-` a crédito.
 
+### Incidente 43 — Reportes e Informes: fechas en todos los reportes (2026-11-24)
+**Pedido:** la consulta por día/rango debe estar en todas las opciones de Reportes e Informes, no solo en Ventas.
+
+**Cambios (sin migración, solo lectura):**
+- `ReportesPage.tsx`: barra de fechas compartida (Hoy/Ayer/7 días/Este mes/Mes anterior + Desde/Hasta, por defecto el mes).
+  Rige Utilidades (`/movimientos/resumen?periodo=rango`), Gastos (`/gastos?desde&hasta&limit=5000`), Productos vendidos,
+  Libro de movimientos (ahora = `/movimientos/libro-diario`, con ventas, abonos, gastos y compras), los 3 KPIs y los botones
+  Excel/PDF. Ventas del día abre con el mismo rango. Inventario valorizado, Rentabilidad y DIAN quedan "Corte a hoy".
+- `reportes-rango.controller.js` (nuevo): `GET /berlin/reportes/productos-vendidos` (lista completa, ventas completadas,
+  crédito aparte; el panel muestra Top 10/20/Todos) y `GET /berlin/reportes/movimiento-inventario` (entradas/salidas de
+  productos e insumos; Excel con hoja Detalle). Fuentes: facturas de proveedor, planilla, ventas, mermas, `br_movimientos_insumos`.
+- Antes `productos-top` devolvía `{producto,total_unidades,total_ventas}` y el panel leía `nombre/cantidad/total` (no coincidían).
+**Límites:** el consumo de insumos por planilla/productos sin control de stock no se guarda con fecha → no sale como salida
+de insumos; las entradas por producción de Mojes (`validar_moje`) no se incluyen. Permisos: sin cambios (solo Ventas del día es admin).
+
 ## 📄 Documentación relacionada
 
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.

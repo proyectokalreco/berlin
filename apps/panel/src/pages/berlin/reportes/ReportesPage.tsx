@@ -72,15 +72,20 @@ function MetodoBadge({ metodo }: { metodo: string }) {
 }
 
 // ── Exportar Excel genérico ────────────────────────────────────
-function exportarExcel(nombre: string, datos: Record<string, unknown>[]) {
+function exportarExcel(
+  nombre: string, datos: Record<string, unknown>[], sufijo?: string,
+  hojaExtra?: { nombre: string; datos: Record<string, unknown>[] },
+) {
   const ws = XLSX.utils.json_to_sheet(datos)
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, nombre)
-  XLSX.writeFile(wb, `${nombre}_${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.utils.book_append_sheet(wb, ws, nombre.slice(0, 31))
+  if (hojaExtra) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaExtra.datos), hojaExtra.nombre.slice(0, 31))
+  const fecha = sufijo || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+  XLSX.writeFile(wb, `${nombre.replace(/\s+/g, '_')}_${fecha}.xlsx`)
 }
 
 // ── Imprimir reporte en ventana 80mm ──────────────────────────
-function imprimirReporte(titulo: string, filas: string[][], columnas: string[]) {
+function imprimirReporte(titulo: string, filas: string[][], columnas: string[], subtitulo?: string) {
   const origin = window.location.origin
   const thead = `<tr>${columnas.map(c => `<th>${c}</th>`).join('')}</tr>`
   const tbody = filas.map(f => `<tr>${f.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')
@@ -105,7 +110,7 @@ function imprimirReporte(titulo: string, filas: string[][], columnas: string[]) 
 <div class="c b" style="font-size:13px;margin:3px 0">*Café Bar Berlín*</div>
 <div class="sep2"></div>
 <div class="c b">${titulo.toUpperCase()}</div>
-<div class="c" style="font-size:12px">${new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
+<div class="c" style="font-size:12px">${subtitulo ?? new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</div>
 <div class="sep"></div>
 <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
 <div class="sep"></div>
@@ -137,8 +142,12 @@ function ReporteCard({
 
 // ── Modal de previa ───────────────────────────────────────────
 function PreviewModal({
-  titulo, columnas, filas, datos, onClose
-}: { titulo: string; columnas: string[]; filas: string[][]; datos: Record<string,unknown>[]; onClose: () => void }) {
+  titulo, subtitulo, columnas, filas, datos, hojaExtra, sufijoArchivo, controles, onClose
+}: {
+  titulo: string; subtitulo?: string; columnas: string[]; filas: string[][]; datos: Record<string,unknown>[]
+  hojaExtra?: { nombre: string; datos: Record<string,unknown>[] }; sufijoArchivo?: string
+  controles?: React.ReactNode; onClose: () => void
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="bg-[#2C2925] rounded-2xl w-full max-w-2xl border border-white/10 shadow-2xl max-h-[85vh] flex flex-col">
@@ -146,7 +155,7 @@ function PreviewModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
           <div>
             <h3 className="text-white font-bold">{titulo}</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">{new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{subtitulo ?? new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})}</p>
           </div>
           <button onClick={onClose}
             className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-xl">
@@ -156,6 +165,7 @@ function PreviewModal({
 
         {/* Tabla preview */}
         <div className="flex-1 overflow-auto p-4">
+          {controles}
           {filas.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3 text-gray-600">
               <PieChart size={36} className="opacity-20"/>
@@ -185,12 +195,12 @@ function PreviewModal({
 
         {/* Acciones */}
         <div className="px-5 pb-5 pt-3 border-t border-white/10 flex gap-3 flex-shrink-0 flex-wrap">
-          <button onClick={() => exportarExcel(titulo, datos)}
+          <button onClick={() => exportarExcel(titulo, datos, sufijoArchivo, hojaExtra)}
             className="flex items-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-400
                        border border-green-500/30 px-4 py-2.5 rounded-xl text-sm font-medium min-h-[44px] transition-colors">
             <FileSpreadsheet size={15}/> Exportar Excel
           </button>
-          <button onClick={() => imprimirReporte(titulo, filas, columnas)}
+          <button onClick={() => imprimirReporte(titulo, filas, columnas, subtitulo)}
             className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400
                        border border-red-500/30 px-4 py-2.5 rounded-xl text-sm font-medium min-h-[44px] transition-colors">
             <Printer size={15}/> Imprimir / PDF
@@ -217,9 +227,9 @@ const fmtFecha = (f: string) => {
   return new Date(y, m - 1, d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function ModalVentasDia({ onClose }: { onClose: () => void }) {
-  const [desde, setDesde] = useState(hoyCol())
-  const [hasta, setHasta] = useState(hoyCol())
+function ModalVentasDia({ onClose, desdeInicial, hastaInicial }: { onClose: () => void; desdeInicial?: string; hastaInicial?: string }) {
+  const [desde, setDesde] = useState(desdeInicial || hoyCol())
+  const [hasta, setHasta] = useState(hastaInicial || hoyCol())
   const [tab, setTab] = useState<'trans' | 'cajero' | 'area'>('trans')
   const rangoValido = !!desde && !!hasta && desde <= hasta
 
@@ -626,36 +636,94 @@ ${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nom
   )
 }
 
+// ── Barra de fechas compartida por todos los reportes ─────────
+function BarraFechas({ desde, hasta, setRango }: { desde: string; hasta: string; setRango: (d: string, h: string) => void }) {
+  const hoy = hoyCol()
+  const mesAnt = (() => {
+    const [y, m] = hoy.split('-').map(Number)
+    const ini = new Date(Date.UTC(y, m - 2, 1)).toISOString().split('T')[0]
+    const fin = new Date(Date.UTC(y, m - 1, 0)).toISOString().split('T')[0]
+    return [ini, fin] as const
+  })()
+  const atajos: [string, string, string][] = [
+    ['Hoy', hoy, hoy],
+    ['Ayer', sumarDias(hoy, -1), sumarDias(hoy, -1)],
+    ['7 días', sumarDias(hoy, -6), hoy],
+    ['Este mes', `${hoy.substring(0, 7)}-01`, hoy],
+    ['Mes anterior', mesAnt[0], mesAnt[1]],
+  ]
+  return (
+    <div className="bg-brand-navy rounded-xl border border-white/5 p-3 flex flex-wrap items-center gap-2">
+      <span className="text-[11px] text-gray-500 mr-1">Período de los reportes:</span>
+      {atajos.map(([lbl, d, h]) => (
+        <button key={lbl} onClick={() => setRango(d, h)}
+          className={`text-xs px-3 py-1.5 rounded-lg border min-h-[34px] ${desde === d && hasta === h
+            ? 'bg-brand-teal/20 border-brand-teal/40 text-brand-teal'
+            : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'}`}>{lbl}</button>
+      ))}
+      <label className="text-[11px] text-gray-500 ml-1">Desde
+        <input type="date" value={desde} max={hasta || undefined} onChange={e => e.target.value && setRango(e.target.value, hasta)}
+          className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white [color-scheme:dark]"/>
+      </label>
+      <label className="text-[11px] text-gray-500">Hasta
+        <input type="date" value={hasta} min={desde || undefined} onChange={e => e.target.value && setRango(desde, e.target.value)}
+          className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white [color-scheme:dark]"/>
+      </label>
+    </div>
+  )
+}
+
+type ModalCfg = {
+  titulo: string; subtitulo: string; columnas: string[]; filas: string[][]
+  datos: Record<string, unknown>[]; hojaExtra?: { nombre: string; datos: Record<string, unknown>[] }
+  controles?: React.ReactNode
+}
+
 // ── Componente principal ──────────────────────────────────────
 export default function ReportesPage() {
-  const [modal, setModal] = useState<null | {
-    titulo: string; columnas: string[]; filas: string[][]; datos: Record<string,unknown>[]
-  }>(null)
+  const [modalKey, setModalKey] = useState<string | null>(null)
   const [showVentasDia, setShowVentasDia] = useState(false)
+  const [topN, setTopN] = useState<10 | 20 | 0>(10)   // 0 = todos
 
   // Fecha en zona Colombia (UTC-5) para que los queries coincidan con los datos almacenados
-  const hoy  = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
-  const mes  = hoy.substring(0,7)
-  const mes1 = `${mes}-01`
+  const hoy  = hoyCol()
+  const [desde, setDesde] = useState(`${hoy.substring(0, 7)}-01`)
+  const [hasta, setHasta] = useState(hoy)
+  const setRango = (d: string, h: string) => { setDesde(d); setHasta(h) }
+  const rangoOk = !!desde && !!hasta && desde <= hasta
+  const etiqueta = desde === hasta ? fmtFecha(desde) : `${fmtFecha(desde)} – ${fmtFecha(hasta)}`
+  const sufijoArchivo = desde === hasta ? desde : `${desde}_a_${hasta}`
 
-  const { data: topProd = [] } = useQuery<{nombre:string;cantidad:number;total:number}[]>({
-    queryKey: ['rep-top'],
-    queryFn:  () => api.get('/berlin/reportes/productos-top').then(r => r.data).catch(fallbackSiNoRed([])),
+  const { data: topProd = [] } = useQuery<{producto_id:string;nombre:string;cantidad:number;total:number;total_credito:number}[]>({
+    queryKey: ['rep-vendidos', desde, hasta],
+    queryFn:  () => api.get('/berlin/reportes/productos-vendidos', { params: { desde, hasta } }).then(r => r.data).catch(fallbackSiNoRed([])),
+    enabled:  rangoOk,
   })
 
   const { data: gastos = [] } = useQuery<{categoria:string;monto:number}[]>({
-    queryKey: ['rep-gastos'],
-    queryFn:  () => api.get('/berlin/gastos', { params: { desde: mes1, hasta: hoy } }).then(r => r.data).catch(fallbackSiNoRed([])),
+    queryKey: ['rep-gastos', desde, hasta],
+    queryFn:  () => api.get('/berlin/gastos', { params: { desde, hasta, limit: 5000 } }).then(r => r.data).catch(fallbackSiNoRed([])),
+    enabled:  rangoOk,
   })
 
-  const { data: movResumen } = useQuery<Resumen>({
-    queryKey: ['rep-mov-mes'],
-    queryFn:  () => api.get('/berlin/movimientos/resumen', { params: { periodo: 'mes' } }).then(r => r.data).catch(fallbackSiNoRed(({ ingresos:0,egresos:0,utilidad:0 }))),
+  const { data: movResumen } = useQuery<Resumen & { credito_vendido?: number }>({
+    queryKey: ['rep-mov-resumen', desde, hasta],
+    queryFn:  () => api.get('/berlin/movimientos/resumen', { params: { periodo: 'rango', desde, hasta } }).then(r => r.data).catch(fallbackSiNoRed(({ ingresos:0,egresos:0,utilidad:0 }))),
+    enabled:  rangoOk,
   })
 
-  const { data: movimientos = [] } = useQuery<{fecha:string;tipo:string;categoria:string;concepto:string;monto:number}[]>({
-    queryKey: ['rep-movimientos-mes'],
-    queryFn:  () => api.get('/berlin/movimientos', { params: { desde: mes1, hasta: hoy } }).then(r => r.data).catch(fallbackSiNoRed([])),
+  // Libro de movimientos = mismo origen que el Libro Diario (ventas, abonos, gastos y compras)
+  const { data: libro } = useQuery<{ saldo_base: number; filas: any[] }>({
+    queryKey: ['rep-libro', desde, hasta],
+    queryFn:  () => api.get('/berlin/movimientos/libro-diario', { params: { desde, hasta } }).then(r => r.data).catch(fallbackSiNoRed({ saldo_base: 0, filas: [] })),
+    enabled:  rangoOk,
+  })
+  const libroFilas = libro?.filas ?? []
+
+  const { data: invMov } = useQuery<{ resumen: any[]; filas: any[] }>({
+    queryKey: ['rep-inv-mov', desde, hasta],
+    queryFn:  () => api.get('/berlin/reportes/movimiento-inventario', { params: { desde, hasta } }).then(r => r.data).catch(fallbackSiNoRed({ resumen: [], filas: [] })),
+    enabled:  rangoOk,
   })
 
   const { data: productos = [] } = useQuery<{nombre:string;precio_venta:number;stock_actual:number;tipo_producto:string;reportar_a_dian:boolean;unidad_venta:string}[]>({
@@ -673,8 +741,11 @@ export default function ReportesPage() {
     queryFn:  () => api.get('/berlin/reportes/rentabilidad').then(r => r.data).catch(fallbackSiNoRed([])),
   })
 
+  const fechaCorta = (f: string) => new Date(f).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })
+  const CORTE = 'Corte a hoy (no depende de fechas)'
+
   // ── Reportes disponibles ──────────────────────────────────────
-  const REPORTES = [
+  const REPORTES: { label: string; sub: string; icon: React.ElementType; color: string; abrir?: () => void; armar?: () => ModalCfg }[] = [
     {
       label: 'Ventas del día',
       sub:   'Consulta por día o rango · transacciones, por cajero y por área con productos',
@@ -682,73 +753,119 @@ export default function ReportesPage() {
       abrir: () => setShowVentasDia(true),
     },
     {
-      label: 'Utilidades del mes',
-      sub:   'Ingresos, egresos y ganancia neta',
+      label: 'Utilidades del período',
+      sub:   'Ingresos cobrados, egresos y ganancia neta del rango',
       icon:  PieChart, color: '#6366F1',
-      abrir: () => setModal({
-        titulo:   'Utilidades del Mes',
+      armar: () => ({
+        titulo: 'Utilidades', subtitulo: etiqueta,
         columnas: ['Concepto','Valor'],
-        filas:    [
-          ['Ingresos totales', fmt(movResumen?.ingresos ?? 0)],
-          ['Egresos totales',  fmt(movResumen?.egresos ?? 0)],
-          ['Utilidad neta',   fmt(movResumen?.utilidad ?? 0)],
+        filas: [
+          ['Ingresos cobrados', fmt(movResumen?.ingresos ?? 0)],
+          ['Egresos totales',   fmt(movResumen?.egresos ?? 0)],
+          ['Utilidad neta',     fmt(movResumen?.utilidad ?? 0)],
+          ['Crédito vendido (por cobrar, no incluido)', fmt(movResumen?.credito_vendido ?? 0)],
         ],
         datos: [
-          { Concepto: 'Ingresos totales', Valor: movResumen?.ingresos ?? 0 },
-          { Concepto: 'Egresos totales',  Valor: movResumen?.egresos  ?? 0 },
-          { Concepto: 'Utilidad neta',    Valor: movResumen?.utilidad ?? 0 },
+          { Concepto: 'Ingresos cobrados', Valor: movResumen?.ingresos ?? 0 },
+          { Concepto: 'Egresos totales',   Valor: movResumen?.egresos  ?? 0 },
+          { Concepto: 'Utilidad neta',     Valor: movResumen?.utilidad ?? 0 },
+          { Concepto: 'Crédito vendido (por cobrar, no incluido)', Valor: movResumen?.credito_vendido ?? 0 },
         ],
       }),
     },
     {
       label: 'Gastos del período',
-      sub:   'Desglose por categoría — mes actual',
+      sub:   'Desglose por categoría del rango elegido',
       icon:  FileSpreadsheet, color: '#F97316',
-      abrir: () => {
+      armar: () => {
         const agrup: Record<string,number> = {}
         gastos.forEach((g: any) => { agrup[g.categoria] = (agrup[g.categoria]||0) + parseFloat(g.monto) })
-        const filas = Object.entries(agrup).map(([cat, monto]) => [cat, fmt(monto)])
-        setModal({
-          titulo:   'Gastos del Período',
+        const orden = Object.entries(agrup).sort((a, b) => b[1] - a[1])
+        const total = orden.reduce((s, [, m]) => s + m, 0)
+        return {
+          titulo: 'Gastos', subtitulo: etiqueta,
           columnas: ['Categoría','Total'],
-          filas,
-          datos:    Object.entries(agrup).map(([cat, monto]) => ({ Categoría: cat, Total: monto })),
-        })
+          filas: [...orden.map(([cat, monto]) => [cat, fmt(monto)]), ...(orden.length ? [['TOTAL', fmt(total)]] : [])],
+          datos: orden.map(([cat, monto]) => ({ Categoría: cat, Total: monto })),
+        }
       },
     },
     {
       label: 'Productos más vendidos',
-      sub:   'Top 10 por unidades',
+      sub:   'Lista completa del rango · 10 / 20 / todos',
       icon:  ShoppingCart, color: '#14B8A6',
-      abrir: () => setModal({
-        titulo:   'Productos Más Vendidos',
-        columnas: ['Producto','Unidades','Total'],
-        filas:    topProd.slice(0,10).map((p,i) => [`${i+1}. ${p.nombre}`, String(p.cantidad), fmt(p.total)]),
-        datos:    topProd.slice(0,10).map(p => ({ Producto: p.nombre, Unidades: p.cantidad, Total: p.total })),
-      }),
+      armar: () => {
+        const lista = topN === 0 ? topProd : topProd.slice(0, topN)
+        return {
+          titulo: 'Productos vendidos', subtitulo: etiqueta,
+          columnas: ['Producto','Unidades','Total'],
+          filas: lista.map((p, i) => [`${i+1}. ${p.nombre}`, String(p.cantidad), fmt(p.total)]),
+          datos: lista.map(p => ({ Producto: p.nombre, Unidades: p.cantidad, Total: p.total, 'De los cuales a crédito': p.total_credito })),
+          controles: (
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-[11px] text-gray-500 mr-1">Mostrar:</span>
+              {([[10, 'Top 10'], [20, 'Top 20'], [0, 'Todos']] as const).map(([n, l]) => (
+                <button key={n} onClick={() => setTopN(n)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border ${topN === n
+                    ? 'bg-brand-teal/20 border-brand-teal/40 text-brand-teal'
+                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'}`}>{l}</button>
+              ))}
+              <span className="text-[11px] text-gray-500 ml-2">{topProd.length} productos en el rango</span>
+            </div>
+          ),
+        }
+      },
     },
     {
       label: 'Libro de movimientos',
-      sub:   'Todos los ingresos y egresos del mes',
+      sub:   'Igual al Libro Diario: ventas, abonos, gastos y compras del rango',
       icon:  BarChart3Icon, color: '#8B5CF6',
-      abrir: () => setModal({
-        titulo:   'Libro de Movimientos',
-        columnas: ['Fecha','Tipo','Categoría','Concepto','Monto'],
-        filas:    movimientos.map((m: any) => [
-          new Date(m.fecha).toLocaleDateString('es-CO'),
-          m.tipo, m.categoria, m.concepto, fmt(parseFloat(m.monto)),
+      armar: () => ({
+        titulo: 'Libro de movimientos', subtitulo: etiqueta,
+        columnas: ['Fecha','Concepto','Categoría','Pago','Ingreso','Egreso','Compra','Saldo'],
+        filas: libroFilas.map((m: any) => [
+          fechaCorta(m.fecha), m.concepto, m.categoria, m.metodo_pago || '',
+          m.es_credito ? 'Crédito (no cobrado)' : (m.ingreso > 0 ? fmt(m.ingreso) : '—'),
+          m.egreso > 0 ? fmt(m.egreso) : '—', m.compra > 0 ? fmt(m.compra) : '—', fmt(m.saldo),
         ]),
-        datos: movimientos.map((m: any) => ({
-          Fecha: new Date(m.fecha).toLocaleDateString('es-CO'),
-          Tipo: m.tipo, Categoría: m.categoria, Concepto: m.concepto, Monto: parseFloat(m.monto),
+        datos: libroFilas.map((m: any) => ({
+          Fecha: fechaCorta(m.fecha), Concepto: m.concepto, Categoría: m.categoria, Pago: m.metodo_pago || '',
+          Ingreso: m.ingreso, Egreso: m.egreso, Compra: m.compra, Saldo: m.saldo,
+          Nota: m.es_credito ? 'Venta a crédito: no suma hasta que se abone' : '',
         })),
       }),
     },
     {
+      label: 'Movimiento de inventario',
+      sub:   'Entradas y salidas de productos e insumos del rango',
+      icon:  Package, color: '#0EA5E9',
+      armar: () => {
+        const res = invMov?.resumen ?? []
+        const det = invMov?.filas ?? []
+        const num = (n: number) => (Math.round(n * 100) / 100).toString()
+        return {
+          titulo: 'Movimiento inventario', subtitulo: `${etiqueta} · entradas, salidas y neto por ítem`,
+          columnas: ['Tipo','Ítem','Entradas','Salidas','Neto'],
+          filas: res.map((a: any) => [a.item_tipo, `${a.nombre}${a.unidad ? ` (${a.unidad})` : ''}`, num(a.entradas), num(a.salidas), num(a.neto)]),
+          datos: res.map((a: any) => ({ Tipo: a.item_tipo, Ítem: a.nombre, Unidad: a.unidad, Entradas: a.entradas, Salidas: a.salidas, Neto: a.neto })),
+          hojaExtra: { nombre: 'Detalle', datos: det.map((f: any) => ({
+            Fecha: fechaCorta(f.fecha), Tipo: f.item_tipo, Ítem: f.nombre, Unidad: f.unidad,
+            Entrada: f.entrada, Salida: f.salida, Origen: f.origen, Detalle: f.detalle,
+          })) },
+          controles: (
+            <p className="text-[11px] text-amber-400/80 mb-3">
+              Nota: el consumo de insumos por planilla de producción no queda registrado con fecha, por eso no aparece como salida de insumos.
+              El Excel trae también la hoja "Detalle" con cada movimiento.
+            </p>
+          ),
+        }
+      },
+    },
+    {
       label: 'Inventario valorizado',
-      sub:   'Stock actual + valor en pesos',
+      sub:   `Stock actual + valor en pesos · ${CORTE}`,
       icon:  Package, color: '#3B82F6',
-      abrir: () => {
+      armar: () => {
         const prodRows = productos.map(p => ({
           Tipo:     'Producto terminado',
           Nombre:   p.nombre,
@@ -767,29 +884,29 @@ export default function ReportesPage() {
         }))
         const todos = [...prodRows, ...insRows]
         const totalValor = todos.reduce((s, r) => s + r['Valor total'], 0)
-        setModal({
-          titulo:   'Inventario Valorizado',
+        return {
+          titulo: 'Inventario valorizado', subtitulo: CORTE,
           columnas: ['Tipo','Nombre','Stock','Unidad','Precio','Valor total'],
-          filas:    [
+          filas: [
             ...todos.map(r => [r.Tipo, r.Nombre, String(r.Stock), r.Unidad, fmt(r['Precio unitario']), fmt(r['Valor total'])]),
             ['','','','','TOTAL →', fmt(totalValor)],
           ],
           datos: todos,
-        })
+        }
       },
     },
     {
       label: 'Rentabilidad por producto',
-      sub:   'Costo real vs precio venta · margen %',
+      sub:   `Costo real vs precio venta · margen % · ${CORTE}`,
       icon:  Percent, color: '#F43F5E',
-      abrir: () => {
+      armar: () => {
         const conReceta  = rentabilidadData.filter(p => p.tiene_receta)
         const sinReceta  = rentabilidadData.filter(p => !p.tiene_receta && p.precio_venta > 0)
         const todos      = [...conReceta, ...sinReceta]
-        setModal({
-          titulo:   'Rentabilidad por Producto',
+        return {
+          titulo: 'Rentabilidad por producto', subtitulo: CORTE,
           columnas: ['Producto','Tipo','Costo real','Precio venta','Margen %'],
-          filas:    todos.map(p => [
+          filas: todos.map(p => [
             p.nombre,
             p.tipo === 'receta' ? 'Fabricado' : 'Compra/Venta',
             p.costo_real > 0 ? fmt(p.costo_real) : '—',
@@ -804,19 +921,19 @@ export default function ReportesPage() {
             'Precio venta': p.precio_venta,
             'Margen %':     p.margen_pct ?? '',
           })),
-        })
+        }
       },
     },
     {
       label: 'Reporte tributario DIAN',
-      sub:   'Solo productos marcados para facturar',
+      sub:   `Solo productos marcados para facturar · ${CORTE}`,
       icon:  Scale, color: '#A855F7',
-      abrir: () => {
+      armar: () => {
         const dian = productos.filter(p => p.reportar_a_dian)
-        setModal({
-          titulo:   'Reporte Tributario DIAN',
+        return {
+          titulo: 'Reporte tributario DIAN', subtitulo: CORTE,
           columnas: ['Producto','Tipo','Precio venta','Stock actual'],
-          filas:    dian.map(p => [
+          filas: dian.map(p => [
             p.nombre,
             p.tipo_producto === 'receta' ? 'Fabricado' : 'Compra/Venta',
             fmt(p.precio_venta),
@@ -828,10 +945,12 @@ export default function ReportesPage() {
             'Precio venta': p.precio_venta,
             'Stock actual': p.stock_actual,
           })),
-        })
+        }
       },
     },
   ]
+
+  const modal: ModalCfg | null = modalKey ? (REPORTES.find(r => r.label === modalKey)?.armar?.() ?? null) : null
 
   return (
     <div className="space-y-5">
@@ -843,24 +962,25 @@ export default function ReportesPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportarExcel(`Movimientos_${mes}`, movimientos.map(m => ({
-              Fecha: m.fecha, Tipo: m.tipo, Categoría: m.categoria,
-              Concepto: m.concepto, Monto: m.monto,
-            })))}
+            onClick={() => exportarExcel('Movimientos', libroFilas.map((m: any) => ({
+              Fecha: fechaCorta(m.fecha), Concepto: m.concepto, Categoría: m.categoria, Pago: m.metodo_pago || '',
+              Ingreso: m.ingreso, Egreso: m.egreso, Compra: m.compra, Saldo: m.saldo,
+            })), sufijoArchivo)}
             className="text-xs px-3 py-1.5 rounded-xl bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors flex items-center gap-1.5">
             <FileSpreadsheet size={12}/> Excel
           </button>
           <button
             onClick={() => imprimirReporte(
-              `Movimientos ${mes}`,
+              'Movimientos',
               [
-                ['Ingresos', fmt(movResumen?.ingresos ?? 0)],
+                ['Ingresos cobrados', fmt(movResumen?.ingresos ?? 0)],
                 ['Egresos',  fmt(movResumen?.egresos  ?? 0)],
                 ['Utilidad', fmt(movResumen?.utilidad ?? 0)],
                 ['', ''],
-                ...movimientos.map(m => [m.fecha + ' ' + m.concepto, fmt(m.monto)]),
+                ...libroFilas.map((m: any) => [fechaCorta(m.fecha) + ' ' + m.concepto, m.es_credito ? 'Crédito' : fmt(m.ingreso > 0 ? m.ingreso : -(m.egreso + m.compra))]),
               ],
               ['Concepto', 'Monto'],
+              etiqueta,
             )}
             className="text-xs px-3 py-1.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors flex items-center gap-1.5">
             <Printer size={12}/> PDF / Imprimir
@@ -868,43 +988,55 @@ export default function ReportesPage() {
         </div>
       </div>
 
-      {/* KPIs rápidos mes actual */}
+      {/* Fechas: aplican a todos los reportes de abajo */}
+      <BarraFechas desde={desde} hasta={hasta} setRango={setRango} />
+      {!rangoOk && <p className="text-xs text-red-400">La fecha "Desde" no puede ser mayor que "Hasta".</p>}
+
+      {/* KPIs del período */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
-          { label:'Ingresos mes', value: movResumen?.ingresos??0, color:'text-green-400', icon: TrendingUp },
-          { label:'Egresos mes',  value: movResumen?.egresos??0,  color:'text-red-400',   icon: TrendingDown },
-          { label:'Utilidad',     value: movResumen?.utilidad??0, color: (movResumen?.utilidad??0)>=0?'text-brand-teal':'text-red-400', icon: PieChart },
+          { label:'Ingresos cobrados', value: movResumen?.ingresos??0, color:'text-green-400', icon: TrendingUp },
+          { label:'Egresos',  value: movResumen?.egresos??0,  color:'text-red-400',   icon: TrendingDown },
+          { label:'Utilidad', value: movResumen?.utilidad??0, color: (movResumen?.utilidad??0)>=0?'text-brand-teal':'text-red-400', icon: PieChart },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} className="bg-brand-navy rounded-xl border border-white/5 p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <Icon size={12} className={color}/>
-              <p className="text-[10px] text-gray-500">{label}</p>
+              <p className="text-[10px] text-gray-500">{label} · {etiqueta}</p>
             </div>
             <p className={`text-sm font-bold ${color} tabular-nums`}>{fmt(value)}</p>
           </div>
         ))}
       </div>
+      {(movResumen?.credito_vendido ?? 0) > 0 && (
+        <p className="text-[11px] text-blue-400">Crédito vendido en el período (aún no cobrado, no incluido arriba): {fmt(movResumen?.credito_vendido ?? 0)}</p>
+      )}
 
       {/* Grid de reportes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {REPORTES.map(r => (
-          <ReporteCard key={r.label} label={r.label} sub={r.sub} icon={r.icon} color={r.color} onPreview={r.abrir}/>
+          <ReporteCard key={r.label} label={r.label} sub={r.sub} icon={r.icon} color={r.color}
+            onPreview={() => (r.abrir ? r.abrir() : setModalKey(r.label))}/>
         ))}
       </div>
 
       {/* Modal ventas día — transacciones individuales */}
       {showVentasDia && (
-        <ModalVentasDia onClose={() => setShowVentasDia(false)} />
+        <ModalVentasDia onClose={() => setShowVentasDia(false)} desdeInicial={desde} hastaInicial={hasta} />
       )}
 
       {/* Modal previa genérico */}
       {modal && (
         <PreviewModal
           titulo={modal.titulo}
+          subtitulo={modal.subtitulo}
           columnas={modal.columnas}
           filas={modal.filas}
           datos={modal.datos}
-          onClose={() => setModal(null)}
+          hojaExtra={modal.hojaExtra}
+          sufijoArchivo={modal.subtitulo.includes('Corte') ? undefined : sufijoArchivo}
+          controles={modal.controles}
+          onClose={() => setModalKey(null)}
         />
       )}
     </div>
