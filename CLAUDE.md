@@ -14,6 +14,21 @@ comentarios residuales — es historia, no un negocio distinto.
 
 ---
 
+## 🔖 Estado vigente (2026-11-27) — leer antes de tocar caja, ventas o reportes
+
+- **Crédito:** descuenta inventario al vender; es ingreso solo cuando se paga o abona (incidentes 42 y 44).
+- **"Total ventas"** (cierre, Caja, Dashboard, Reportes) = facturado − crédito + abonos del periodo. Línea aparte
+  "Vendido a crédito (no suma)". `br_turnos_caja.total_ventas` guarda lo **facturado**; la regla se aplica al mostrar.
+- Despacho por área y ventas por cajero incluyen crédito (rotulado). Facturación dice "Total facturado".
+- Abonos en efectivo suman al efectivo esperado del turno.
+- **El turno se fecha por su apertura.** Abrir caja al empezar la jornada, no justo tras cerrar antes de medianoche.
+- Reportes e Informes: filtro de fechas en todos (incidente 43).
+- Pendiente por confirmar: Facturación y Ventas por fecha del 26/11; probar un abono con el ticket nuevo.
+- Requieren OK antes de tocar: tope del abono contra el saldo, "Registrar deuda" (`DM-`) cuenta como venta a crédito,
+  aviso si falla el descuento de stock, botón "Cerrar" del historial para turnos de más de un día.
+
+---
+
 ## 🎯 QUÉ ES ESTE PROYECTO
 
 Sistema de gestión para restaurante/bar/cafetería: POS, Mesas, Inventario (insumos + productos
@@ -1648,26 +1663,28 @@ lo había pedido. **Regla (aprobada):** Total ventas = facturado − crédito + 
 **Verificación:** `node -c`, `tsc`, build y simulación del 25/11 ($882.500; esperado $1.788.000). Sin migración.
 **Estado:** ✅ desplegado y confirmado el 2026-11-27 (cierre 25/11 = $882.500). Falta probar un abono real. Doc: `docs/CAMBIOS_2026-11-27.md`.
 
-### Incidente 45 — "Falta el turno del 26/11" y ajustes del historial (2026-11-27)
+### Incidente 45 — "Falta el turno del 26/11" y ajustes del historial (2026-11-27) ✅ CERRADO en historial
 **No hubo pérdida de datos** (consulta en producción): Luisa cerró el turno del 25 a las 23:47:50 y abrió otro a las 23:48:04,
-cerrado el 27 a las 00:11. Ahí quedaron las 44 ventas del 26 ($1.718.200). El turno se fecha por su **apertura**, por eso hay
-dos filas 25/11 y Reportes → Ventas por fecha muestra el 26 vacío. No se cambió la fecha en la BD. Operación: abrir caja solo
-al empezar la jornada.
-**Cambios (aprobados, sin migración):**
-- `historial`: los abonos se toman entre la apertura y el cierre reales (antes un turno de más de 20 h usaba el día `fecha`).
+cerrado el 27 a las 00:11. Ahí quedaron las 44 ventas del 26 ($1.718.200). El turno se fecha por su **apertura**, por eso
+aparecían dos filas 25/11. Normalmente el turno siguiente se abre después de medianoche y la fecha queda bien.
+**Cambios de código** (`244104a`, sin migración, desplegado):
+- `historial`: los abonos se toman entre la apertura y el cierre reales (antes un turno de más de 20 h usaba el día `fecha`;
+  error introducido ese mismo día en el incidente 44).
 - Historial de Caja: columna "Apertura → cierre" con las horas (y la fecha de cierre si cayó otro día).
 - Facturación: un pago mixto se reparte en Efectivo y Pago Electrónico (`ventas.listar` ahora envía `monto_efectivo` y
-  `monto_transferencia`). La diferencia de $48.000 del 26/11 se atribuye a esto **por el código**; confirmar en pantalla.
-**Corrección de fecha (aprobada 2026-11-27):** script `kalreco/database/scripts/berlin_turno_20261126_corregir_fecha.sql`
-(turno `f4673734…`: fecha 26/11 y apertura 26/11 00:00; la real fue 25/11 23:48:04). Ensayo + `-v confirmar=1`, con respaldo
-previo. ✅ APLICADO 2026-11-27 (respaldo `backup_pre_turno2611_20261127_135032.sql`; ensayo y COMMIT correctos: 25/11 $1.047.500 facturado y 26/11 $1.718.200). Confirmado ya en pantalla: historial con columna "Apertura → cierre".
-
+  `monto_transferencia`). La diferencia de $48.000 del 26/11 se atribuye a esto **por el código**.
+**Corrección de datos** (aprobada y aplicada): `kalreco/database/scripts/berlin_turno_20261126_corregir_fecha.sql`, turno
+`f4673734-acd7-45b9-a3c8-6ef308b1612a`: fecha 26/11 y apertura 26/11 00:00 (**la apertura real fue 25/11 23:48:04**), más la
+fecha y concepto de su movimiento de apertura. Respaldo `backup_pre_turno2611_20261127_135032.sql` (520 K); ensayo y COMMIT
+correctos (`UPDATE 1` + `UPDATE 1`). Rollback en el encabezado del script.
+**Confirmado en pantalla:** historial con 26/11 $1.718.200 (efectivo $1.087.800, electrónico $630.400) y 25/11 $882.500.
+**Sin confirmar en pantalla:** Facturación del 26/11 (Efectivo debe ser $1.087.800) y Reportes → Ventas por fecha del 26/11.
 **Riesgo conocido sin tocar:** el botón "Cerrar" de un turno abierto en el historial (`cerrarTurnoHistorico`) liquida solo el
-día calendario de `fecha`; en un turno como este habría dejado por fuera las ventas del día siguiente.
-**Estado:** ⏳ pendiente de desplegar y confirmar.
+día calendario de `fecha`; en un turno que pase de un día dejaría por fuera las ventas posteriores. Usar "Cerrar turno".
 
 ## 📄 Documentación relacionada
 
+- `docs/CAMBIOS_2026-11-24.md` (incidentes 41-43) y `docs/CAMBIOS_2026-11-27.md` (44-45).
 - `README.md` (este repo) — resumen corto para quien clona el repo por primera vez.
 - `kalreco/CLAUDE.md` — sección "🍺 NEGOCIO — Berlín" con el cross-reference y las migraciones
   de BD (que viven en ese repo porque la base de datos es compartida).
