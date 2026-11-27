@@ -1660,7 +1660,7 @@ al empezar la jornada.
   `monto_transferencia`). La diferencia de $48.000 del 26/11 se atribuye a esto **por el código**; confirmar en pantalla.
 **Corrección de fecha (aprobada 2026-11-27):** script `kalreco/database/scripts/berlin_turno_20261126_corregir_fecha.sql`
 (turno `f4673734…`: fecha 26/11 y apertura 26/11 00:00; la real fue 25/11 23:48:04). Ensayo + `-v confirmar=1`, con respaldo
-previo. ⏳ pendiente de ejecutar. Confirmado ya en pantalla: historial con columna "Apertura → cierre".
+previo. ✅ APLICADO 2026-11-27 (respaldo `backup_pre_turno2611_20261127_135032.sql`; ensayo y COMMIT correctos: 25/11 $1.047.500 facturado y 26/11 $1.718.200). Confirmado ya en pantalla: historial con columna "Apertura → cierre".
 
 **Riesgo conocido sin tocar:** el botón "Cerrar" de un turno abierto en el historial (`cerrarTurnoHistorico`) liquida solo el
 día calendario de `fecha`; en un turno como este habría dejado por fuera las ventas del día siguiente.
