@@ -36,6 +36,8 @@ interface Venta {
   subtotal?: number
   descuento?: number
   metodo_pago: string
+  monto_efectivo?: number | null       // partes de un pago mixto
+  monto_transferencia?: number | null
   estado: string
   notas?: string
   origen?: 'pos' | 'mesa'
@@ -204,11 +206,15 @@ export default function FacturacionPage() {
   const resumen = useMemo(() => {
     const ok  = ventas.filter(v => v.estado === 'completada')
     const sum = (arr: Venta[]) => arr.reduce((s, v) => s + v.total, 0)
+    // Un pago mixto se reparte entre Efectivo y Pago Electrónico (igual que la Caja)
+    const mixtas = ok.filter(v => v.metodo_pago === 'mixto')
+    const mixEfectivo    = mixtas.reduce((s, v) => s + Number(v.monto_efectivo ?? 0), 0)
+    const mixElectronico = mixtas.reduce((s, v) => s + Number(v.monto_transferencia ?? 0), 0)
     return {
       total:         sum(ok),
       count:         ok.length,
-      efectivo:      sum(ok.filter(v => v.metodo_pago === 'efectivo')),
-      transferencia: sum(ok.filter(v => v.metodo_pago === 'transferencia')),
+      efectivo:      sum(ok.filter(v => v.metodo_pago === 'efectivo')) + mixEfectivo,
+      transferencia: sum(ok.filter(v => v.metodo_pago === 'transferencia')) + mixElectronico,
       qr:            sum(ok.filter(v => v.metodo_pago?.includes('qr'))),
       credito:       sum(ok.filter(v => v.metodo_pago === 'credito')),
       anuladas:      ventas.filter(v => v.estado === 'anulada').length,

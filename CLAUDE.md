@@ -1646,7 +1646,21 @@ lo había pedido. **Regla (aprobada):** Total ventas = facturado − crédito + 
   renombrado "Total facturado".
 - `clientes.controller.js`: abonar/pagar todo guardan `fecha: fechaColombia()` en el movimiento contable.
 **Verificación:** `node -c`, `tsc`, build y simulación del 25/11 ($882.500; esperado $1.788.000). Sin migración.
-**Estado:** ⏳ pendiente de desplegar y confirmar en pantalla. Doc: `docs/CAMBIOS_2026-11-27.md`.
+**Estado:** ✅ desplegado y confirmado el 2026-11-27 (cierre 25/11 = $882.500). Falta probar un abono real. Doc: `docs/CAMBIOS_2026-11-27.md`.
+
+### Incidente 45 — "Falta el turno del 26/11" y ajustes del historial (2026-11-27)
+**No hubo pérdida de datos** (consulta en producción): Luisa cerró el turno del 25 a las 23:47:50 y abrió otro a las 23:48:04,
+cerrado el 27 a las 00:11. Ahí quedaron las 44 ventas del 26 ($1.718.200). El turno se fecha por su **apertura**, por eso hay
+dos filas 25/11 y Reportes → Ventas por fecha muestra el 26 vacío. No se cambió la fecha en la BD. Operación: abrir caja solo
+al empezar la jornada.
+**Cambios (aprobados, sin migración):**
+- `historial`: los abonos se toman entre la apertura y el cierre reales (antes un turno de más de 20 h usaba el día `fecha`).
+- Historial de Caja: columna "Apertura → cierre" con las horas (y la fecha de cierre si cayó otro día).
+- Facturación: un pago mixto se reparte en Efectivo y Pago Electrónico (`ventas.listar` ahora envía `monto_efectivo` y
+  `monto_transferencia`). La diferencia de $48.000 del 26/11 se atribuye a esto **por el código**; confirmar en pantalla.
+**Riesgo conocido sin tocar:** el botón "Cerrar" de un turno abierto en el historial (`cerrarTurnoHistorico`) liquida solo el
+día calendario de `fecha`; en un turno como este habría dejado por fuera las ventas del día siguiente.
+**Estado:** ⏳ pendiente de desplegar y confirmar.
 
 ## 📄 Documentación relacionada
 

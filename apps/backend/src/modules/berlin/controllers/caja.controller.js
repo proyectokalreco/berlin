@@ -498,11 +498,8 @@ const historial = async (req, res, next) => {
     const { data, error } = await query;
     if (error) throw error;
     const turnos = await Promise.all((data || []).map(async (t) => {
-      // Un turno olvidado y cerrado días después se liquidó por día calendario (cerrarTurnoHistorico)
-      const fin = t.cierre_at || new Date().toISOString();
-      const olvidado = new Date(fin) - new Date(t.apertura_at) > TURNO_LIMITE_HORAS_OLVIDADO * 60 * 60 * 1000;
-      const rango = t.cierre_at && olvidado ? rangoDiaColombia(t.fecha) : { desde: t.apertura_at, hasta: fin };
-      const abonos = await abonosEnRango(rango.desde, rango.hasta);
+      // Horas reales del turno: un turno puede durar más de un día y nunca se solapa con otro
+      const abonos = await abonosEnRango(t.apertura_at, t.cierre_at || new Date().toISOString());
       return { ...t, abonos_total: abonos.total, abonos_efectivo: abonos.efectivo };
     }));
     res.json(turnos);

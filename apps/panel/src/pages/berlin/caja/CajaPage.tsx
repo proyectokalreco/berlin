@@ -68,6 +68,15 @@ interface DesgloseVendedor {
 // no suma hasta que se pague o abone.
 const totalRecibido = (facturado: number, credito: number, abonos: number) => facturado - credito + abonos
 
+// Historial: horas de apertura y cierre; el cierre lleva fecha si cayó en otro día
+const diaCorto = (iso: string) => new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' })
+const horaCorta = (iso: string) => new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+const rangoTurno = (apertura: string, cierre?: string) => {
+  if (!cierre) return `${horaCorta(apertura)} → abierto`
+  const otroDia = diaCorto(apertura) !== diaCorto(cierre)
+  return `${horaCorta(apertura)} → ${otroDia ? `${diaCorto(cierre)} ` : ''}${horaCorta(cierre)}`
+}
+
 // Despacho por área: SOLO total por área y su responsable (sin detalle de productos).
 // El detalle por producto/cajero se consulta en Reportes → Ventas del día.
 function htmlDespachoPorArea(lista: DesgloseArea[] | undefined, totalVentas: number, credito = 0): string {
@@ -711,7 +720,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-gray-500 text-xs border-b border-white/5 bg-brand-dark/40">
-                  <th className="text-left px-3 py-3">Fecha</th>
+                  <th className="text-left px-3 py-3">Apertura → cierre</th>
                   <th className="text-left px-3 py-3">Cajero</th>
                   <th className="text-right px-3 py-3">Inicial</th>
                   <th className="text-right px-3 py-3">Total</th>
@@ -728,6 +737,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                   <tr key={t.id} className="hover:bg-white/2 transition-colors">
                     <td className="px-3 py-3 text-white font-medium text-xs">
                       {new Date(t.apertura_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      <span className="block text-[10px] font-normal text-gray-500 whitespace-nowrap">{rangoTurno(t.apertura_at, t.cierre_at)}</span>
                     </td>
                     <td className="px-3 py-3 text-gray-400 text-xs">{t.usuario_apertura?.nombre ?? '—'}</td>
                     <td className="px-3 py-3 text-right text-gray-300 font-mono text-xs">{fmt(t.monto_inicial)}</td>
