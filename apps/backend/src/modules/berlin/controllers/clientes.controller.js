@@ -2,6 +2,7 @@
 // clientes.controller.js
 // ============================================================
 const supabase = require('../../../config/supabase')
+const { fechaColombia } = require('../../../utils/fecha')
 
 // ── Listar ────────────────────────────────────────────────────
 const listar = async (req, res, next) => {
@@ -145,6 +146,7 @@ const abonar = async (req, res, next) => {
 
     // Registrar en movimientos contables
     await supabase.from('br_movimientos_contables').insert({
+      fecha:           fechaColombia(),
       tipo:            'ingreso',
       categoria:       'abono_credito',
       concepto:        `Abono crédito cliente — ${tipo}`,
@@ -198,6 +200,7 @@ const pagarTodo = async (req, res, next) => {
 
     // Movimiento contable
     await supabase.from('br_movimientos_contables').insert({
+      fecha:           fechaColombia(),
       tipo:            'ingreso',
       categoria:       'abono_credito',
       concepto:        'Pago total saldo cliente',

@@ -45,6 +45,7 @@ interface TurnoCaja {
   desglose_vendedores?: DesgloseVendedor[]
   desglose_estaciones?: DesgloseArea[]
   abonos_efectivo?: number     // abonos a crédito recibidos en efectivo durante el turno (suman al arqueo)
+  abonos_total?: number        // abonos a crédito recibidos en el turno, cualquier método
   // Reimpresión de un cierre histórico cuyo detalle no cuadra con lo guardado al cerrarlo (ver reimprimirCierreHistorico)
   nota_reconstruccion?: string
 }
@@ -63,14 +64,19 @@ interface DesgloseVendedor {
   mesa: { total: number; num_ventas: number }
 }
 
+// "Total ventas" = dinero de ventas recibido en el turno: contado + abonos. Lo vendido a crédito
+// no suma hasta que se pague o abone.
+const totalRecibido = (facturado: number, credito: number, abonos: number) => facturado - credito + abonos
+
 // Despacho por área: SOLO total por área y su responsable (sin detalle de productos).
 // El detalle por producto/cajero se consulta en Reportes → Ventas del día.
-function htmlDespachoPorArea(lista: DesgloseArea[] | undefined, totalVentas: number): string {
+function htmlDespachoPorArea(lista: DesgloseArea[] | undefined, totalVentas: number, credito = 0): string {
   if (!lista || lista.length === 0) return ''
   const ajuste = totalVentas - lista.reduce((s, e) => s + e.total, 0)
   return `
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">DESPACHO POR AREA — MESAS Y POS</p>
+${credito > 0 ? `<p class="sm">(Incluye ventas a credito)</p>` : ''}
 ${lista.map(e => `<div class="row b" style="margin-top:4px;font-size:15px;text-transform:uppercase"><span>${e.nombre}${e.responsables && e.responsables.length ? ` — ${e.responsables.join(' / ')}` : ''}</span><span class="amt" style="font-size:15px">${fmt(e.total)}</span></div>`).join('')}
 ${Math.abs(ajuste) >= 1 ? `<div class="row sm" style="margin-top:3px"><span>Redondeo y ajustes</span><span class="amt">${ajuste >= 0 ? '' : '-'}${fmt(Math.abs(ajuste))}</span></div>` : ''}
 `
@@ -82,7 +88,7 @@ async function reimprimirCierreHistorico(t: TurnoCaja) {
   const cajero = t.usuario_cierre?.nombre ?? ''
   try {
     const { data } = await api.get(`/berlin/caja/turnos/${t.id}/desglose`)
-    imprimirCierre({ ...t, desglose_estaciones: data.desglose_estaciones, abonos_efectivo: data.abonos_efectivo }, cajero)
+    imprimirCierre({ ...t, desglose_estaciones: data.desglose_estaciones, abonos_efectivo: data.abonos_efectivo, abonos_total: data.abonos_total }, cajero)
   } catch {
     toast.error('No se pudo calcular el despacho por área; se imprime el cierre sin él')
     imprimirCierre(t, cajero)
@@ -144,12 +150,13 @@ function imprimirCierre(turno: TurnoCaja, cajero: string) {
 
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">VENTAS DEL TURNO</p>
-<div class="row"><span>Total ventas:</span><span class="amt">${fmt(turno.total_ventas)}</span></div>
+<div class="row b"><span>Total ventas:</span><span class="amt">${fmt(totalRecibido(turno.total_ventas, turno.total_credito ?? 0, turno.abonos_total ?? 0))}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Efectivo:</span><span class="amt">${fmt(turno.total_ventas_efectivo)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(turno.total_ventas_transferencia)}</span></div>
-<div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(turno.total_credito ?? 0)}</span></div>
+${(turno.abonos_total ?? 0) > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Abonos credito:</span><span class="amt">${fmt(turno.abonos_total ?? 0)}</span></div>` : ''}
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${turno.num_ventas}</span></div>
-${htmlDespachoPorArea(turno.desglose_estaciones, turno.total_ventas)}
+${(turno.total_credito ?? 0) > 0 ? `<div class="sep"></div><div class="row sm"><span>Vendido a credito (no suma):</span><span class="amt">${fmt(turno.total_credito)}</span></div>` : ''}
+${htmlDespachoPorArea(turno.desglose_estaciones, turno.total_ventas, turno.total_credito ?? 0)}
 
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO DE CAJA</p>
@@ -230,7 +237,7 @@ export default function CajaPage() {
   // ── Ventas de hoy — caja compartida, todo el negocio (un solo turno por día)
   const { data: ventasTurno } = useQuery<{
     total_ventas: number; num_ventas: number; efectivo: number;
-    transferencias: number; credito: number; gastos_efectivo?: number; abonos_efectivo?: number; ticket_promedio: number
+    transferencias: number; credito: number; gastos_efectivo?: number; abonos_efectivo?: number; abonos_total?: number; ticket_promedio: number
     desglose_vendedores?: DesgloseVendedor[]
   }>({
     queryKey: ['ventas-turno-actual'],
@@ -347,6 +354,8 @@ export default function CajaPage() {
   const efectivoEsperadoVivo =
     (turnoActivo?.monto_inicial ?? 0) + (ventasTurno?.efectivo ?? 0) + (ventasTurno?.abonos_efectivo ?? 0) - gastosEfectivoVivo
 
+  const recibidoVivo = totalRecibido(ventasTurno?.total_ventas ?? 0, ventasTurno?.credito ?? 0, ventasTurno?.abonos_total ?? 0)
+
   // ── Cierre parcial: tiquete informativo, la caja NO se cierra ──
   const imprimirParcial = () => {
     if (!turnoActivo) return
@@ -387,13 +396,13 @@ export default function CajaPage() {
 <div class="row sm"><span>Cajero corte:</span><span>${user?.nombre ?? 'Admin'}</span></div>
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">VENTAS HASTA AHORA</p>
-<div class="row"><span>Total ventas:</span><span class="amt">${fmt(t?.total_ventas ?? 0)}</span></div>
+<div class="row b"><span>Total ventas:</span><span class="amt">${fmt(recibidoVivo)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Efectivo:</span><span class="amt">${fmt(t?.efectivo ?? 0)}</span></div>
 <div class="row sm"><span>&nbsp;&nbsp;Pago Electronico:</span><span class="amt">${fmt(t?.transferencias ?? 0)}</span></div>
-<div class="row sm"><span>&nbsp;&nbsp;Credito:</span><span class="amt">${fmt(t?.credito ?? 0)}</span></div>
+${(t?.abonos_total ?? 0) > 0 ? `<div class="row sm"><span>&nbsp;&nbsp;Abonos credito:</span><span class="amt">${fmt(t?.abonos_total ?? 0)}</span></div>` : ''}
 <div class="row sm"><span>No. transacciones:</span><span class="amt">${t?.num_ventas ?? 0}</span></div>
-<div class="sep"></div>
-${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0)}
+${(t?.credito ?? 0) > 0 ? `<div class="sep"></div><div class="row sm"><span>Vendido a credito (no suma):</span><span class="amt">${fmt(t?.credito ?? 0)}</span></div>` : ''}
+${htmlDespachoPorArea(estacionesTurno, t?.total_ventas ?? 0, t?.credito ?? 0)}
 <div class="sep"></div>
 <p class="b sm" style="margin-bottom:3px">ARQUEO PARCIAL</p>
 <div class="row"><span>Monto inicial:</span><span class="amt">${fmt(turnoActivo.monto_inicial)}</span></div>
@@ -449,7 +458,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold text-white flex items-center gap-2">
               <FileBarChart2 size={16} className="text-brand-teal" />
-              Resultado del cierre — {ultimoCierre.fecha} · Ventas por cajero (POS/Mesas)
+              Resultado del cierre — {ultimoCierre.fecha} · Ventas por cajero (POS/Mesas){(ultimoCierre.total_credito ?? 0) > 0 ? ' · incluye crédito' : ''}
             </p>
             <button onClick={() => setUltimoCierre(null)} className="text-gray-500 hover:text-white">
               <X size={16} />
@@ -537,7 +546,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Monto inicial',    value: fmt(turnoActivo.monto_inicial),         icon: DollarSign,   color: 'text-gray-300'   },
-              { label: 'Ventas del día',   value: fmt(ventasTurno?.total_ventas ?? 0),     icon: TrendingUp,   color: 'text-brand-teal' },
+              { label: 'Ventas del día',   value: fmt(recibidoVivo),                       icon: TrendingUp,   color: 'text-brand-teal' },
               { label: 'Gastos (efectivo)', value: fmt(gastosEfectivoVivo),                icon: ArrowDownCircle, color: 'text-red-400' },
               { label: 'Efectivo en caja', value: fmt(efectivoEsperadoVivo), icon: Banknote, color: 'text-green-400' },
             ].map(({ label, value, icon: Icon, color }) => (
@@ -559,11 +568,12 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                 Ventas del día — {ventasTurno?.num_ventas ?? 0} transacciones
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Efectivo',         value: ventasTurno?.efectivo ?? 0,       color: 'text-green-400' },
                 { label: 'Pago Electrónico', value: ventasTurno?.transferencias ?? 0, color: 'text-blue-400'  },
-                { label: 'Crédito',          value: ventasTurno?.credito ?? 0,        color: 'text-pink-400'  },
+                { label: 'Abonos crédito',   value: ventasTurno?.abonos_total ?? 0,   color: 'text-amber-400' },
+                { label: 'Vendido a crédito (no suma)', value: ventasTurno?.credito ?? 0, color: 'text-pink-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-brand-dark rounded-lg p-3">
                   <p className="text-[11px] text-gray-500 mb-1">{label}</p>
@@ -707,7 +717,8 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                   <th className="text-right px-3 py-3">Total</th>
                   <th className="text-right px-3 py-3">Efec.</th>
                   <th className="text-right px-3 py-3">Trans.</th>
-                  <th className="text-right px-3 py-3 text-blue-400">Créd.</th>
+                  <th className="text-right px-3 py-3 text-amber-400">Abonos</th>
+                  <th className="text-right px-3 py-3 text-blue-400" title="Vendido a crédito: no suma al total">Créd. (no suma)</th>
                   <th className="text-center px-3 py-3">Estado</th>
                   <th className="text-center px-3 py-3">Acción</th>
                 </tr>
@@ -720,9 +731,10 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                     </td>
                     <td className="px-3 py-3 text-gray-400 text-xs">{t.usuario_apertura?.nombre ?? '—'}</td>
                     <td className="px-3 py-3 text-right text-gray-300 font-mono text-xs">{fmt(t.monto_inicial)}</td>
-                    <td className="px-3 py-3 text-right text-brand-teal font-mono text-xs font-bold">{fmt(t.total_ventas)}</td>
+                    <td className="px-3 py-3 text-right text-brand-teal font-mono text-xs font-bold">{fmt(totalRecibido(t.total_ventas ?? 0, t.total_credito ?? 0, t.abonos_total ?? 0))}</td>
                     <td className="px-3 py-3 text-right text-green-400 font-mono text-xs">{fmt(t.total_ventas_efectivo ?? 0)}</td>
                     <td className="px-3 py-3 text-right text-purple-400 font-mono text-xs">{fmt(t.total_ventas_transferencia ?? 0)}</td>
+                    <td className="px-3 py-3 text-right text-amber-400 font-mono text-xs">{fmt(t.abonos_total ?? 0)}</td>
                     <td className="px-3 py-3 text-right text-blue-400 font-mono text-xs">{fmt(t.total_credito ?? 0)}</td>
                     <td className="px-3 py-3 text-center">
                       <span className={cn(
@@ -793,7 +805,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
                 <div>
                   <p className="font-bold text-white">Cerrar turno de caja</p>
                   <p className="text-xs text-gray-500">
-                    Ventas del turno: <span className="text-white">{fmt(ventasTurno?.total_ventas ?? 0)}</span>
+                    Ventas del turno: <span className="text-white">{fmt(recibidoVivo)}</span>
                     {' '}({ventasTurno?.num_ventas ?? 0} transacciones)
                   </p>
                 </div>
@@ -1005,10 +1017,11 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
             </div>
 
             <div className="bg-brand-dark rounded-xl p-4 space-y-1.5 border border-white/5 text-sm">
-              <div className="flex justify-between"><span className="text-gray-400">Ventas del día</span><span className="text-white font-mono">{fmt(ventasTurno?.total_ventas ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Ventas del día</span><span className="text-white font-mono">{fmt(recibidoVivo)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Efectivo</span><span className="text-green-400 font-mono">{fmt(ventasTurno?.efectivo ?? 0)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Pago Electrónico</span><span className="text-blue-400 font-mono">{fmt(ventasTurno?.transferencias ?? 0)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Crédito</span><span className="text-pink-400 font-mono">{fmt(ventasTurno?.credito ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">&nbsp;&nbsp;Abonos crédito</span><span className="text-amber-400 font-mono">{fmt(ventasTurno?.abonos_total ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Vendido a crédito (no suma)</span><span className="text-pink-400 font-mono">{fmt(ventasTurno?.credito ?? 0)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">− Gastos pagados (efectivo)</span><span className="text-red-400 font-mono">{fmt(gastosEfectivoVivo)}</span></div>
               <div className="flex justify-between border-t border-white/5 pt-1.5 mt-1 font-bold">
                 <span className="text-gray-300">Efectivo esperado</span>
@@ -1018,7 +1031,7 @@ ${dif !== null ? `<div class="row b" style="margin-top:4px;padding-top:4px;borde
 
             {ventasTurno?.desglose_vendedores && ventasTurno.desglose_vendedores.length > 0 && (
               <div className="bg-brand-dark rounded-xl p-4 space-y-2 border border-white/5 text-sm">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Por cajero — POS / Mesas</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Por cajero — POS / Mesas{(ventasTurno.credito ?? 0) > 0 ? ' (incluye crédito)' : ''}</p>
                 {ventasTurno.desglose_vendedores.map(d => (
                   <div key={d.vendedor_id ?? 'sin_asignar'} className="space-y-0.5">
                     <div className="flex justify-between font-bold">

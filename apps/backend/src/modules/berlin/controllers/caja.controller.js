@@ -119,18 +119,23 @@ const gastosEfectivoDeTurno = async (turnoId) => {
     .reduce((s, g) => s + parseFloat(g.monto), 0);
 };
 
-// Abonos a crédito recibidos en EFECTIVO dentro del rango: entran al cajón, así que suman al
-// efectivo esperado del turno en que se recibieron (2026-11-24). br_abonos.created_at es TIMESTAMPTZ.
-const abonosEfectivoEnRango = async (desde, hasta) => {
+// Abonos a crédito recibidos dentro del rango. `total` (cualquier método) cuenta como venta cobrada
+// del periodo; `efectivo` entra al cajón y suma al efectivo esperado del turno (2026-11-24 / 27).
+// Regla de "Total ventas" en panel y tickets: total_ventas − total_credito + abonos_total.
+// total_ventas guardado en el turno sigue siendo lo FACTURADO (desgloseTurno lo usa para cuadrar).
+// br_abonos.created_at es TIMESTAMPTZ.
+const abonosEnRango = async (desde, hasta) => {
   const { data, error } = await supabase
     .from('br_abonos')
     .select('monto, metodo_pago')
     .gte('created_at', desde)
     .lte('created_at', hasta);
   if (error) throw error;
-  return (data || [])
-    .filter(a => !a.metodo_pago || a.metodo_pago === 'efectivo')
-    .reduce((s, a) => s + parseFloat(a.monto), 0);
+  const sumar = (lista) => lista.reduce((s, a) => s + parseFloat(a.monto), 0);
+  return {
+    total:    sumar(data || []),
+    efectivo: sumar((data || []).filter(a => !a.metodo_pago || a.metodo_pago === 'efectivo')),
+  };
 };
 
 const obtenerTurnoAbierto = async (select) => {
@@ -323,8 +328,8 @@ const cerrarCaja = async (req, res, next) => {
     const totalGastos = await gastosEfectivoDeTurno(turno.id);
 
     const montoFinal = parseFloat(monto_final_real) || 0;
-    const abonosEfectivo = await abonosEfectivoEnRango(desde, hasta);
-    const efectivoEsperado = parseFloat(turno.monto_inicial) + totalEfectivo + abonosEfectivo - totalGastos;
+    const abonos = await abonosEnRango(desde, hasta);
+    const efectivoEsperado = parseFloat(turno.monto_inicial) + totalEfectivo + abonos.efectivo - totalGastos;
     const diferencia = montoFinal - efectivoEsperado;
 
     const { data: turnoCerrado, error } = await supabase
@@ -353,7 +358,7 @@ const cerrarCaja = async (req, res, next) => {
       fecha:           hoy,
       tipo:            'egreso',
       categoria:       'cierre_caja',
-      concepto:        `Cierre de caja — ${hoy} — Total ventas: $${totalVentas.toLocaleString('es-CO')}`,
+      concepto:        `Cierre de caja — ${hoy} — Total ventas: $${(totalVentas - totalCredito + abonos.total).toLocaleString('es-CO')}`,
       monto:           0,
       metodo_pago:     'efectivo',
       referencia_tipo: 'turno',
@@ -364,7 +369,7 @@ const cerrarCaja = async (req, res, next) => {
 
     const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta)
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, abonos_efectivo: abonosEfectivo, desglose_vendedores: desglosePorVendedor, desglose_estaciones });
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, abonos_efectivo: abonos.efectivo, abonos_total: abonos.total, desglose_vendedores: desglosePorVendedor, desglose_estaciones });
   } catch (err) { next(err); }
 };
 
@@ -427,8 +432,8 @@ const cerrarTurnoHistorico = async (req, res, next) => {
     const totalGastos = await gastosEfectivoDeTurno(turno.id);
 
     const montoFinal        = parseFloat(monto_final_real) || 0;
-    const abonosEfectivo    = await abonosEfectivoEnRango(desde, hasta);
-    const efectivoEsperado  = parseFloat(turno.monto_inicial) + totalEfectivo + abonosEfectivo - totalGastos;
+    const abonos            = await abonosEnRango(desde, hasta);
+    const efectivoEsperado  = parseFloat(turno.monto_inicial) + totalEfectivo + abonos.efectivo - totalGastos;
     const diferencia        = montoFinal - efectivoEsperado;
 
     const { data: turnoCerrado, error } = await supabase
@@ -457,7 +462,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
       fecha:           turno.fecha,
       tipo:            'egreso',
       categoria:       'cierre_caja',
-      concepto:        `Cierre de caja — ${turno.fecha} — Total ventas: $${totalVentas.toLocaleString('es-CO')}`,
+      concepto:        `Cierre de caja — ${turno.fecha} — Total ventas: $${(totalVentas - totalCredito + abonos.total).toLocaleString('es-CO')}`,
       monto:           0,
       metodo_pago:     'efectivo',
       referencia_tipo: 'turno',
@@ -469,7 +474,7 @@ const cerrarTurnoHistorico = async (req, res, next) => {
     const desglose_estaciones = await obtenerDesgloseEstaciones(desde, hasta);
     const desglose_vendedores = construirDesgloseVendedores(ventas);
 
-    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, abonos_efectivo: abonosEfectivo, desglose_estaciones, desglose_vendedores });
+    res.json({ ...turnoCerrado, diferencia, efectivo_esperado: efectivoEsperado, abonos_efectivo: abonos.efectivo, abonos_total: abonos.total, desglose_estaciones, desglose_vendedores });
   } catch (err) { next(err); }
 };
 
@@ -492,7 +497,15 @@ const historial = async (req, res, next) => {
 
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data || []);
+    const turnos = await Promise.all((data || []).map(async (t) => {
+      // Un turno olvidado y cerrado días después se liquidó por día calendario (cerrarTurnoHistorico)
+      const fin = t.cierre_at || new Date().toISOString();
+      const olvidado = new Date(fin) - new Date(t.apertura_at) > TURNO_LIMITE_HORAS_OLVIDADO * 60 * 60 * 1000;
+      const rango = t.cierre_at && olvidado ? rangoDiaColombia(t.fecha) : { desde: t.apertura_at, hasta: fin };
+      const abonos = await abonosEnRango(rango.desde, rango.hasta);
+      return { ...t, abonos_total: abonos.total, abonos_efectivo: abonos.efectivo };
+    }));
+    res.json(turnos);
   } catch (err) { next(err); }
 };
 
@@ -516,10 +529,10 @@ const ventasTurno = async (req, res, next) => {
   try {
     const turno = await obtenerTurnoAbierto('id, apertura_at');
     if (!turno) {
-      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, gastos_efectivo: 0, ticket_promedio: 0, desglose_vendedores: [] });
+      return res.json({ total_ventas: 0, num_ventas: 0, efectivo: 0, transferencias: 0, credito: 0, gastos_efectivo: 0, abonos_efectivo: 0, abonos_total: 0, ticket_promedio: 0, desglose_vendedores: [] });
     }
     const gastosEfectivo = await gastosEfectivoDeTurno(turno.id);
-    const abonosEfectivo = await abonosEfectivoEnRango(turno.apertura_at, new Date().toISOString());
+    const abonos = await abonosEnRango(turno.apertura_at, new Date().toISOString());
 
     const { data } = await supabase
       .from('br_ventas')
@@ -543,7 +556,8 @@ const ventasTurno = async (req, res, next) => {
       transferencias,
       credito:        ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
       gastos_efectivo: gastosEfectivo,
-      abonos_efectivo: abonosEfectivo,
+      abonos_efectivo: abonos.efectivo,
+      abonos_total:    abonos.total,
       ticket_promedio: ventas.length > 0 ? totalVentas / ventas.length : 0,
       desglose_vendedores: construirDesgloseVendedores(ventas),
     });
@@ -601,6 +615,7 @@ const desgloseTurno = async (req, res, next) => {
       if (coincide) { elegido = r; break; }
     }
     const usado = elegido || primero;
+    const abonos = await abonosEnRango(usado.desde, usado.hasta);
 
     res.json({
       exacto:               !!elegido,
@@ -611,7 +626,8 @@ const desgloseTurno = async (req, res, next) => {
       num_reconstruido:     usado.ventas.length,
       desglose_vendedores:  construirDesgloseVendedores(usado.ventas),
       desglose_estaciones:  await obtenerDesgloseEstaciones(usado.desde, usado.hasta),
-      abonos_efectivo:      await abonosEfectivoEnRango(usado.desde, usado.hasta),
+      abonos_efectivo:      abonos.efectivo,
+      abonos_total:         abonos.total,
     });
   } catch (err) { next(err); }
 };
@@ -654,6 +670,7 @@ const reporteVentasDetalle = async (req, res, next) => {
 
     const ventasMap = new Map();
     const estMap    = new Map();
+    let abonosTotal = 0;
     for (const t of turnos || []) {
       const ini = t.apertura_at;
       const fin = t.cierre_at || new Date().toISOString();
@@ -670,6 +687,8 @@ const reporteVentasDetalle = async (req, res, next) => {
         .order('fecha', { ascending: false });
       if (eV) throw eV;
       for (const v of vs || []) ventasMap.set(v.id, { ...v, turno_fecha: t.fecha });
+
+      abonosTotal += (await abonosEnRango(ini, fin)).total;
 
       // Despacho por área del turno, sumado al acumulado del rango
       for (const e of await obtenerDesgloseEstaciones(ini, fin)) {
@@ -713,6 +732,8 @@ const reporteVentasDetalle = async (req, res, next) => {
         estado: t.estado, cajero: t.usuario_apertura?.nombre ?? '',
       })),
       total_ventas: ventas.reduce((s, v) => s + parseFloat(v.total), 0),
+      total_credito: ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + parseFloat(v.total), 0),
+      abonos_total:  abonosTotal,
       num_ventas:   ventas.length,
       transacciones,
       desglose_vendedores: construirDesgloseVendedores(ventas),

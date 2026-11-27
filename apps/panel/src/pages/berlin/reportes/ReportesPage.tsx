@@ -44,6 +44,7 @@ interface DesgloseArea {
 interface DetalleVentas {
   desde: string; hasta: string; num_turnos: number
   total_ventas: number; num_ventas: number
+  total_credito?: number; abonos_total?: number
   transacciones: VentaDia[]
   desglose_vendedores: DesgloseVendedor[]
   desglose_estaciones: DesgloseArea[]
@@ -247,8 +248,10 @@ function ModalVentasDia({ onClose, desdeInicial, hastaInicial }: { onClose: () =
     ['7 días', sumarDias(hoy, -6), hoy],
     ['Este mes', `${hoy.substring(0, 7)}-01`, hoy],
   ]
-  const totalVentas  = ventas.reduce((s, v) => s + v.total, 0)
-  const totalCredito = ventas.filter(v => v.metodo_pago === 'credito').reduce((s, v) => s + v.total, 0)
+  // "Total ventas" = contado + abonos recibidos; lo vendido a crédito no suma hasta cobrarse
+  const totalCredito = detalle?.total_credito ?? 0
+  const totalAbonos  = detalle?.abonos_total ?? 0
+  const totalVentas  = (detalle?.total_ventas ?? 0) - totalCredito + totalAbonos
 
   const [sortCol,  setSortCol]  = useState<SortCol>('ticket')
   const [sortAsc,  setSortAsc]  = useState(false)
@@ -348,6 +351,12 @@ function ModalVentasDia({ onClose, desdeInicial, hastaInicial }: { onClose: () =
       'Saldo':     v.saldo_pendiente ?? 0,
     }))
     const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([
+      { Concepto: 'Total ventas (recibido)',      Valor: totalVentas },
+      { Concepto: 'Ventas de contado',            Valor: totalVentas - totalAbonos },
+      { Concepto: 'Abonos crédito',               Valor: totalAbonos },
+      { Concepto: 'Vendido a crédito (no suma)',  Valor: totalCredito },
+    ]), 'Resumen')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Transacciones')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((detalle?.desglose_vendedores ?? []).map(d => ({
       Cajero: d.nombre, 'No. ventas': d.num_ventas, Total: d.total,
@@ -391,8 +400,11 @@ ${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nom
 <div class="c">${etiquetaRango}</div>
 <div class="c">${detalle?.num_turnos ?? 0} turno(s) · ${ventas.length} transacciones</div>
 <div class="sep2"></div>
-<div class="row b"><span>Total ventas</span><span class="amt">${fmt(detalle?.total_ventas ?? 0)}</span></div>
+<div class="row b"><span>Total ventas</span><span class="amt">${fmt(totalVentas)}</span></div>
+${totalAbonos > 0 ? `<div class="row"><span>&nbsp;&nbsp;De contado</span><span class="amt">${fmt(totalVentas - totalAbonos)}</span></div><div class="row"><span>&nbsp;&nbsp;Abonos credito</span><span class="amt">${fmt(totalAbonos)}</span></div>` : ''}
+${totalCredito > 0 ? `<div class="row"><span>Vendido a credito (no suma)</span><span class="amt">${fmt(totalCredito)}</span></div>` : ''}
 <div class="sep"></div>
+${totalCredito > 0 ? '<p>(Cajeros y areas incluyen ventas a credito)</p>' : ''}
 <p class="b">VENTAS POR CAJERO — POS / MESAS</p>${cajeros}
 <div class="sep"></div>
 <p class="b">DESPACHO POR AREA</p>${areas}
@@ -413,7 +425,8 @@ ${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nom
             <p className="text-[11px] text-gray-500 mt-0.5">
               {etiquetaRango}
               {' · '}{detalle?.num_turnos ?? 0} turno(s) · {ventas.length} transacciones · Total: {fmt(totalVentas)}
-              {totalCredito > 0 && <span className="text-blue-400 ml-2">· Crédito: {fmt(totalCredito)}</span>}
+              {totalAbonos > 0 && <span className="text-amber-400 ml-2">· Abonos: {fmt(totalAbonos)}</span>}
+              {totalCredito > 0 && <span className="text-blue-400 ml-2">· A crédito (no suma): {fmt(totalCredito)}</span>}
             </p>
           </div>
           <button onClick={onClose}
@@ -456,6 +469,7 @@ ${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nom
         ) : tab === 'cajero' ? (
           <div className="flex-1 overflow-auto p-4 space-y-2">
             {(detalle?.desglose_vendedores ?? []).length === 0 && <p className="text-sm text-gray-600 text-center py-12">Sin ventas en este rango</p>}
+            {totalCredito > 0 && <p className="text-[11px] text-gray-500">Incluye ventas a crédito.</p>}
             {(detalle?.desglose_vendedores ?? []).map(d => (
               <div key={d.vendedor_id ?? 'sin'} className="bg-brand-dark rounded-xl p-3 border border-white/5">
                 <div className="flex justify-between font-bold text-sm">
@@ -470,6 +484,7 @@ ${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nom
         ) : tab === 'area' ? (
           <div className="flex-1 overflow-auto p-4 space-y-3">
             {(detalle?.desglose_estaciones ?? []).length === 0 && <p className="text-sm text-gray-600 text-center py-12">Sin ventas en este rango</p>}
+            {totalCredito > 0 && <p className="text-[11px] text-gray-500">Incluye ventas a crédito.</p>}
             {(detalle?.desglose_estaciones ?? []).map(e => (
               <div key={e.id} className="bg-brand-dark rounded-xl p-3 border border-white/5">
                 <div className="flex justify-between font-bold text-sm uppercase">
@@ -601,7 +616,7 @@ ${e.items.map(it => `<div class="row"><span>&nbsp;&nbsp;${it.cantidad}x ${it.nom
               <tfoot className="border-t-2 border-white/10 bg-brand-dark/40">
                 <tr>
                   <td className="px-4 py-3 text-xs font-bold text-gray-400">
-                    {filtradas.length} de {ventas.length} transacciones
+                    {filtradas.length} de {ventas.length} transacciones · Facturado
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-brand-teal tabular-nums">
                     {fmt(filtradas.reduce((s, v) => s + v.total, 0))}

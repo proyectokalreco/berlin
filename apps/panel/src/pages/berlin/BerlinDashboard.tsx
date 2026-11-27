@@ -501,10 +501,10 @@ export default function BerlinDashboard() {
           mostrarKpiCaja && mostrarKpiVentas ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'
         }`}>
           {mostrarKpiVentas && (
-            <KpiCard icon={TrendingUp}  iconColor={FUCHSIA}    label="Ventas del día"  value={fmt(ventasRes?.total_ventas ?? 0)} />
+            <KpiCard icon={TrendingUp}  iconColor={FUCHSIA}    label="Ventas del día"  value={fmt(ventasRes?.cobrado ?? ventasRes?.total_ventas ?? 0)} />
           )}
           {mostrarKpiVentas && (ventasRes?.credito ?? 0) > 0 && (
-            <KpiCard icon={Banknote}    iconColor="#D99439"    label="Cobrado hoy (sin crédito)" value={fmt(ventasRes?.cobrado ?? 0)} />
+            <KpiCard icon={Banknote}    iconColor="#D99439"    label="Vendido a crédito (no suma)" value={fmt(ventasRes?.credito ?? 0)} />
           )}
           {mostrarKpiVentas && (
             <KpiCard icon={CheckCircle} iconColor="#4ADE80"    label="Transacciones"   value={ventasRes?.num_ventas ?? 0} />

@@ -218,7 +218,7 @@ export default function FacturacionPage() {
   // ── Exportar Excel ────────────────────────────────────────────
   const exportarExcel = () => {
     const resumenSheet = XLSX.utils.json_to_sheet([
-      { Concepto: 'Total ventas',    Valor: resumen.total },
+      { Concepto: 'Total facturado', Valor: resumen.total },
       { Concepto: 'Transacciones',   Valor: resumen.count },
       { Concepto: 'Efectivo',        Valor: resumen.efectivo },
       { Concepto: 'Pago Electrónico', Valor: resumen.transferencia },
@@ -265,7 +265,7 @@ export default function FacturacionPage() {
 <div class="c"><p class="b">RESUMEN DE FACTURACION</p><p class="sm">${labelRango}</p></div>
 <div class="sep2"></div>
 <div class="row b"><span>Transacciones:</span><span>${resumen.count}</span></div>
-<div class="row b" style="font-size:15px"><span>TOTAL VENTAS:</span><span>${fmt(resumen.total)}</span></div>
+<div class="row b" style="font-size:15px"><span>TOTAL FACTURADO:</span><span>${fmt(resumen.total)}</span></div>
 <div class="sep"></div>
 <div class="row sm"><span>Efectivo:</span><span>${fmt(resumen.efectivo)}</span></div>
 <div class="row sm"><span>Pago Electronico:</span><span>${fmt(resumen.transferencia)}</span></div>
@@ -419,7 +419,7 @@ export default function FacturacionPage() {
               <TrendingUp size={14} className="text-violet-400"/>
             </div>
             <div>
-              <p className="text-[10px] text-gray-500">Total ventas</p>
+              <p className="text-[10px] text-gray-500">Total facturado</p>
               <p className="text-sm font-bold text-white tabular-nums">{fmt(resumen.total)}</p>
             </div>
           </div>
